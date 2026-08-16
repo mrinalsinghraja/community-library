@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: this workflow only ever reads the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Obviously fake, and only ever used against the throwaway service container
+  # below. Real values live in GitHub and Vercel secrets, never in this file.
+  AUTH_SECRET: ci-only-secret-value-that-is-long-enough-32
+  NEXT_PUBLIC_APP_URL: http://localhost:3000
+  EMAIL_PROVIDER: console
+
+jobs:
+  verify:
+    name: Typecheck, lint and test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: library_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/library_test?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/library_test?schema=public
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/library_test?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      # Proves schema.prisma is valid on its own terms.
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      # Applies the real migration SQL — including the hand-written constraints
+      # and partial indexes that Prisma's schema language cannot express.
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      # Fails if schema.prisma and the migration history have drifted apart.
+      # Empty output means they agree.
+      - name: Check for migration drift
+        run: |
+          DRIFT=$(npx prisma migrate diff \
+            --from-schema-datasource prisma/schema.prisma \
+            --to-schema-datamodel prisma/schema.prisma \
+            --script | grep -v '^--' | grep -v '^$' || true)
+          if [ -n "$DRIFT" ]; then
+            echo "Schema drift detected between schema.prisma and the applied migrations:"
+            echo "$DRIFT"
+            exit 1
+          fi
+          echo "No drift."
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Database tests
+        run: npm run test:db
+
+      - name: Production build
+        run: npm run build
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Gitleaks needs history to scan past commits, not just the tip.
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

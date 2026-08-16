@@ -1,0 +1,884 @@
+// Community Children's Library Platform — data model
+// See docs/DATABASE.md for the narrative explanation and docs/BLUEPRINT.md §6-§7.
+//
+// Conventions:
+//   * every tenant-scoped table carries libraryId, from the first migration
+//   * tables and columns are snake_case; Prisma fields stay camelCase
+//   * ids are UUIDv7 (time-sortable) generated client-side — no DB extension needed
+//   * all timestamps are timestamptz, stored UTC, rendered in library timezone
+//   * business rules live in library_settings, never in column defaults that pretend to be policy
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserKind {
+  STAFF
+  MEMBER
+  GUARDIAN
+}
+
+/// ARCHIVED is the terminal state for a departed member: personal fields are
+/// redacted but historical loan rows survive for library records. See DATABASE.md.
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+  ARCHIVED
+}
+
+enum RegistrationStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+/// Consent is recorded per purpose so a guardian can withdraw photo storage
+/// without withdrawing the account itself.
+enum ConsentType {
+  CHILD_ACCOUNT_CREATION
+  CHILD_PHOTO_STORAGE
+  GUARDIAN_EMAIL_NOTIFICATIONS
+}
+
+enum ConsentStatus {
+  GRANTED
+  WITHDRAWN
+  SUPERSEDED
+}
+
+/// How the guardian's consent reached us. Stronger verification methods can be
+/// added here later without touching the registration workflow.
+enum ConsentMethod {
+  GUARDIAN_ONLINE_FORM
+  LIBRARIAN_RECORDED_IN_PERSON
+}
+
+enum CatalogueVisibility {
+  MEMBER_ONLY
+  PUBLIC
+}
+
+/// RESERVED exists so the reservation workflow can be added later without a
+/// migration. No Version 1 code path sets it.
+enum CopyStatus {
+  AVAILABLE
+  BORROWED
+  RESERVED
+  LOST
+  DAMAGED
+  ARCHIVED
+}
+
+enum CopyCondition {
+  NEW
+  GOOD
+  FAIR
+  WORN
+}
+
+enum AcquisitionType {
+  RESIDENT_DONATION
+  PURCHASE
+  TRANSFER
+}
+
+/// Chosen by the donor at intake. Governs every public rendering of the credit.
+enum DonorDisplayConsent {
+  NAMED
+  APARTMENT_ONLY
+  ANONYMOUS
+}
+
+/// Deliberately has no OVERDUE member: overdue is derived from dueAt < now(),
+/// never stored, so no failed job can leave it stale.
+enum LoanStatus {
+  ACTIVE
+  RETURNED
+  LOST
+  WRITTEN_OFF
+}
+
+enum LoanEventType {
+  ISSUE
+  RENEW
+  RETURN
+  MARK_LOST
+  MARK_DAMAGED
+  ADJUST_DUE
+}
+
+enum RenewalRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELLED
+}
+
+enum AuthTokenType {
+  ACTIVATION
+  PASSWORD_RESET
+}
+
+enum AnnouncementAudience {
+  ALL
+  MEMBERS
+  STAFF
+}
+
+enum EmailStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+/// PRIVATE objects are never served from a public URL. Child photographs are
+/// always PRIVATE; generic avatars are static assets and need no row at all.
+enum MediaVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy and configuration
+// ---------------------------------------------------------------------------
+
+model Community {
+  id          String    @id @default(uuid(7))
+  name        String
+  slug        String    @unique
+  addressLine String?   @map("address_line")
+  city        String?
+  country     String    @default("India")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  libraries   Library[]
+
+  @@map("community")
+}
+
+model Library {
+  id          String   @id @default(uuid(7))
+  communityId String   @map("community_id")
+  name        String
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  community Community       @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  settings  LibrarySettings?
+
+  users                AppUser[]
+  roles                Role[]
+  guardians            Guardian[]
+  registrationRequests RegistrationRequest[]
+  consentRecords       ConsentRecord[]
+  categories           BookCategory[]
+  bookTitles           BookTitle[]
+  bookCopies           BookCopy[]
+  donations            Donation[]
+  loans                Loan[]
+  auditLogs            AuditLog[]
+  announcements        Announcement[]
+  emailEvents          EmailEvent[]
+  loginAttempts        LoginAttempt[]
+  mediaObjects         MediaObject[]
+  codeSequences        CodeSequence[]
+
+  @@index([communityId])
+  @@map("library")
+}
+
+/// Every configurable business rule lives here. Application code reads these
+/// through getLibrarySettings() and never hard-codes an equivalent literal.
+model LibrarySettings {
+  libraryId String @id @map("library_id")
+
+  // Membership
+  ageMin Int @default(5) @map("age_min")
+  ageMax Int @default(14) @map("age_max")
+
+  // Borrowing
+  borrowingPeriodDays      Int     @default(14) @map("borrowing_period_days")
+  maxActiveLoans           Int     @default(2) @map("max_active_loans")
+  maxRenewals              Int     @default(1) @map("max_renewals")
+  renewalPeriodDays        Int     @default(7) @map("renewal_period_days")
+  renewalBlockedWhenReserved Boolean @default(true) @map("renewal_blocked_when_reserved")
+  blockOnOverdueDays       Int     @default(7) @map("block_on_overdue_days")
+  overdueReminderOffsets   Int[]   @default([-2, 0, 3, 7]) @map("overdue_reminder_offsets")
+
+  // Identifiers
+  copyCodePrefix   String @default("LIB") @map("copy_code_prefix")
+  copyCodePadding  Int    @default(4) @map("copy_code_padding")
+  memberCodePrefix String @default("LIB-R") @map("member_code_prefix")
+  memberCodePadding Int   @default(4) @map("member_code_padding")
+
+  // Visibility and privacy
+  catalogueVisibility CatalogueVisibility @default(MEMBER_ONLY) @map("catalogue_visibility")
+  donorDisplayDefault DonorDisplayConsent @default(NAMED) @map("donor_display_default")
+
+  // Branding
+  logoUrl        String? @map("logo_url")
+  faviconUrl     String? @map("favicon_url")
+  primaryColor   String  @default("#1F6F5C") @map("primary_color")
+  secondaryColor String  @default("#E4572E") @map("secondary_color")
+  welcomeMessage String? @map("welcome_message")
+
+  // Contact and policy copy
+  contactEmail          String? @map("contact_email")
+  contactPhone          String? @map("contact_phone")
+  rulesMarkdown         String? @map("rules_markdown")
+  donationPolicyMarkdown String? @map("donation_policy_markdown")
+
+  // Consent
+  consentVersion String @default("2026-08-v1") @map("consent_version")
+
+  // System
+  timezone                 String  @default("Asia/Kolkata")
+  dateFormat               String  @default("d MMM yyyy") @map("date_format")
+  emailEnabled             Boolean @default(false) @map("email_enabled")
+  overdueRemindersEnabled  Boolean @default(false) @map("overdue_reminders_enabled")
+
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedById String?  @map("updated_by_id")
+
+  library Library @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+
+  @@map("library_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Identity, roles and permissions
+// ---------------------------------------------------------------------------
+
+/// One row per person who can sign in. A child's identity is memberCode or
+/// username — never an email address, because children in this age range
+/// mostly do not have one. Guardians are contactable but do not sign in in v1.
+model AppUser {
+  id          String     @id @default(uuid(7))
+  libraryId   String     @map("library_id")
+  kind        UserKind
+  displayName String     @map("display_name")
+  email       String?
+  username    String?
+  passwordHash String?   @map("password_hash")
+  status      UserStatus @default(INVITED)
+
+  mustSetPassword  Boolean   @default(true) @map("must_set_password")
+  lastLoginAt      DateTime? @map("last_login_at") @db.Timestamptz(6)
+  failedLoginCount Int       @default(0) @map("failed_login_count")
+  lockedUntil      DateTime? @map("locked_until") @db.Timestamptz(6)
+
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdById String?  @map("created_by_id")
+
+  library       Library        @relation(fields: [libraryId], references: [id], onDelete: Restrict)
+  memberProfile MemberProfile?
+  userRoles     UserRole[]
+  sessions      Session[]
+  authTokens    AuthToken[]
+  guardianLinks GuardianMember[]
+
+  loans            Loan[]           @relation("LoanBorrower")
+  loansIssued      Loan[]           @relation("LoanIssuedBy")
+  loansReturned    Loan[]           @relation("LoanReturnedBy")
+  loanEvents       LoanEvent[]
+  renewalRequests  RenewalRequest[] @relation("RenewalRequester")
+  renewalDecisions RenewalRequest[] @relation("RenewalDecider")
+  auditLogs        AuditLog[]
+  donationsGiven   Donation[]       @relation("DonationDonor")
+  donationsRecorded Donation[]      @relation("DonationRecorder")
+  mediaUploaded    MediaObject[]
+  reviewedRequests RegistrationRequest[] @relation("RegistrationReviewer")
+  recordedConsents ConsentRecord[]  @relation("ConsentRecorder")
+
+  @@unique([libraryId, email], map: "app_user_library_email_key")
+  @@unique([libraryId, username], map: "app_user_library_username_key")
+  @@index([libraryId, kind, status])
+  @@map("app_user")
+}
+
+/// Roles are rows, not code branches. Adding JUNIOR_LIBRARIAN later is a seed
+/// change plus a permission mapping — no application code changes.
+model Role {
+  id          String  @id @default(uuid(7))
+  libraryId   String? @map("library_id")
+  key         String
+  name        String
+  description String?
+  /// System roles cannot be renamed or deleted from the admin UI.
+  isSystem    Boolean @default(true) @map("is_system")
+  /// Seeded but not assignable yet (used for JUNIOR_LIBRARIAN in v1).
+  isAssignable Boolean @default(true) @map("is_assignable")
+  sortOrder   Int     @default(100) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  library         Library?         @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@unique([libraryId, key], map: "role_library_key_key")
+  @@map("role")
+}
+
+model Permission {
+  key         String @id
+  category    String
+  description String
+
+  rolePermissions RolePermission[]
+
+  @@map("permission")
+}
+
+model RolePermission {
+  roleId        String @map("role_id")
+  permissionKey String @map("permission_key")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  @@id([roleId, permissionKey])
+  @@map("role_permission")
+}
+
+model UserRole {
+  userId      String   @map("user_id")
+  roleId      String   @map("role_id")
+  grantedById String?  @map("granted_by_id")
+  grantedAt   DateTime @default(now()) @map("granted_at") @db.Timestamptz(6)
+
+  user AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_role")
+}
+
+/// The child's library card. Split from app_user so that login identity and
+/// library-card data have separate lifecycles and separate access rules.
+model MemberProfile {
+  userId    String @id @map("user_id")
+  libraryId String @map("library_id")
+
+  memberCode  String    @map("member_code")
+  dateOfBirth DateTime  @map("date_of_birth") @db.Date
+  apartment   String
+  avatarKey   String?   @map("avatar_key")
+  photoMediaId String?  @unique @map("photo_media_id")
+  joinedAt    DateTime  @default(now()) @map("joined_at") @db.Timestamptz(6)
+  /// Librarian-only notes. Never exposed to any member-facing surface.
+  staffNotes  String?   @map("staff_notes")
+
+  user       AppUser      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photoMedia MediaObject? @relation(fields: [photoMediaId], references: [id], onDelete: SetNull)
+
+  @@unique([libraryId, memberCode], map: "member_profile_library_code_key")
+  @@index([libraryId, apartment])
+  @@map("member_profile")
+}
+
+/// A guardian is a contactable adult, not a borrower. Their contact details sit
+/// behind the member.view_contact permission and never render on a child screen.
+model Guardian {
+  id        String  @id @default(uuid(7))
+  libraryId String  @map("library_id")
+  fullName  String  @map("full_name")
+  email     String
+  phone     String
+  apartment String
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  library        Library          @relation(fields: [libraryId], references: [id], onDelete: Restrict)
+  memberLinks    GuardianMember[]
+  consentRecords ConsentRecord[]
+
+  @@unique([libraryId, email], map: "guardian_library_email_key")
+  @@index([libraryId, apartment])
+  @@map("guardian")
+}
+
+model GuardianMember {
+  guardianId   String  @map("guardian_id")
+  memberUserId String  @map("member_user_id")
+  relationship String  @default("guardian")
+  isPrimary    Boolean @default(true) @map("is_primary")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  guardian Guardian @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+  member   AppUser  @relation(fields: [memberUserId], references: [id], onDelete: Cascade)
+
+  @@id([guardianId, memberUserId])
+  @@index([memberUserId])
+  @@map("guardian_member")
+}
+
+// ---------------------------------------------------------------------------
+// Registration and consent
+// ---------------------------------------------------------------------------
+
+model RegistrationRequest {
+  id        String             @id @default(uuid(7))
+  libraryId String             @map("library_id")
+  status    RegistrationStatus @default(PENDING)
+
+  childName     String   @map("child_name")
+  childDob      DateTime @map("child_dob") @db.Date
+  apartment     String
+  guardianName  String   @map("guardian_name")
+  guardianEmail String   @map("guardian_email")
+  guardianPhone String   @map("guardian_phone")
+  avatarKey     String?  @map("avatar_key")
+  photoMediaId  String?  @map("photo_media_id")
+
+  submittedAt DateTime  @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  reviewedAt  DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  reviewedById String?  @map("reviewed_by_id")
+  /// Internal note. Never sent verbatim to the guardian.
+  reviewNote  String?   @map("review_note")
+
+  createdMemberUserId String? @unique @map("created_member_user_id")
+
+  /// Truncated, salted hash only — never a raw IP. Retained for abuse handling.
+  submittedIpHash String? @map("submitted_ip_hash")
+
+  library    Library         @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  reviewedBy AppUser?        @relation("RegistrationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  photoMedia MediaObject?    @relation(fields: [photoMediaId], references: [id], onDelete: SetNull)
+  consents   ConsentRecord[]
+
+  @@index([libraryId, status, submittedAt])
+  @@map("registration_request")
+}
+
+/// A first-class consent ledger, not a boolean. Rows are append-only in spirit:
+/// a withdrawal sets withdrawnAt and status, it never deletes the grant.
+/// See docs/SECURITY.md — the wording and verification strength still require
+/// legal review before production launch.
+model ConsentRecord {
+  id        String        @id @default(uuid(7))
+  libraryId String        @map("library_id")
+  type      ConsentType
+  status    ConsentStatus @default(GRANTED)
+  method    ConsentMethod @default(GUARDIAN_ONLINE_FORM)
+
+  /// Version of the consent wording that was actually shown when granted.
+  consentVersion String @map("consent_version")
+  /// Verbatim snapshot of the text the guardian agreed to, so a later wording
+  /// change can never rewrite history.
+  consentTextSnapshot String @map("consent_text_snapshot")
+
+  guardianId            String? @map("guardian_id")
+  memberUserId          String? @map("member_user_id")
+  registrationRequestId String? @map("registration_request_id")
+
+  grantedAt   DateTime  @default(now()) @map("granted_at") @db.Timestamptz(6)
+  withdrawnAt DateTime? @map("withdrawn_at") @db.Timestamptz(6)
+  /// Staff member who recorded an in-person consent; null for online forms.
+  recordedById String?  @map("recorded_by_id")
+
+  /// Salted hash only. Justified as evidence that a specific submission occurred.
+  ipHash        String? @map("ip_hash")
+  userAgentHash String? @map("user_agent_hash")
+
+  library             Library              @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  guardian            Guardian?            @relation(fields: [guardianId], references: [id], onDelete: SetNull)
+  registrationRequest RegistrationRequest? @relation(fields: [registrationRequestId], references: [id], onDelete: SetNull)
+  recordedBy          AppUser?             @relation("ConsentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([libraryId, type, status])
+  @@index([memberUserId])
+  @@index([guardianId])
+  @@map("consent_record")
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue
+// ---------------------------------------------------------------------------
+
+model BookCategory {
+  id        String  @id @default(uuid(7))
+  libraryId String  @map("library_id")
+  name      String
+  slug      String
+  icon      String?
+  sortOrder Int     @default(100) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+
+  library    Library     @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  bookTitles BookTitle[]
+
+  @@unique([libraryId, slug], map: "book_category_library_slug_key")
+  @@map("book_category")
+}
+
+/// Bibliographic truth. One row per work, however many physical copies exist.
+model BookTitle {
+  id          String   @id @default(uuid(7))
+  libraryId   String   @map("library_id")
+  title       String
+  authors     String[]
+  publisher   String?
+  isbn13      String?
+  isbn10      String?
+  language    String   @default("English")
+  description String?
+  ageMin      Int?     @map("age_min")
+  ageMax      Int?     @map("age_max")
+  categoryId  String?  @map("category_id")
+  coverMediaId String? @map("cover_media_id")
+
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdById String?  @map("created_by_id")
+
+  library    Library       @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  category   BookCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  coverMedia MediaObject?  @relation(fields: [coverMediaId], references: [id], onDelete: SetNull)
+  copies     BookCopy[]
+
+  @@index([libraryId, categoryId])
+  @@index([libraryId, isbn13])
+  @@map("book_title")
+}
+
+/// A physical object on a shelf, with its own permanent code, condition and
+/// history. Codes are never reused, even after archiving.
+model BookCopy {
+  id        String          @id @default(uuid(7))
+  libraryId String          @map("library_id")
+  titleId   String          @map("title_id")
+  copyCode  String          @map("copy_code")
+  status    CopyStatus      @default(AVAILABLE)
+  condition CopyCondition   @default(GOOD)
+  acquisitionType AcquisitionType @default(RESIDENT_DONATION) @map("acquisition_type")
+
+  shelfLocation String?   @map("shelf_location")
+  acquiredAt    DateTime  @default(now()) @map("acquired_at") @db.Timestamptz(6)
+  archivedAt    DateTime? @map("archived_at") @db.Timestamptz(6)
+  notes         String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  library  Library   @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  title    BookTitle @relation(fields: [titleId], references: [id], onDelete: Restrict)
+  donation Donation?
+  loans    Loan[]
+
+  @@unique([libraryId, copyCode], map: "book_copy_library_code_key")
+  @@index([libraryId, status])
+  @@index([titleId])
+  @@map("book_copy")
+}
+
+/// Attached to a copy, not a title: the community gave this particular book.
+/// displayConsent governs every public rendering. There is deliberately no
+/// aggregate/count column anywhere — gratitude, not competition.
+model Donation {
+  id        String @id @default(uuid(7))
+  libraryId String @map("library_id")
+  copyId    String @unique @map("copy_id")
+
+  donorName      String              @map("donor_name")
+  donorApartment String?             @map("donor_apartment")
+  donorUserId    String?             @map("donor_user_id")
+  displayConsent DonorDisplayConsent @default(NAMED) @map("display_consent")
+  donatedAt      DateTime            @default(now()) @map("donated_at") @db.Timestamptz(6)
+  note           String?
+
+  recordedById String?  @map("recorded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  library    Library  @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  copy       BookCopy @relation(fields: [copyId], references: [id], onDelete: Cascade)
+  donorUser  AppUser? @relation("DonationDonor", fields: [donorUserId], references: [id], onDelete: SetNull)
+  recordedBy AppUser? @relation("DonationRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([libraryId, donatedAt])
+  @@map("donation")
+}
+
+// ---------------------------------------------------------------------------
+// Circulation
+// ---------------------------------------------------------------------------
+
+/// Current state of one borrowing. A partial unique index on (copy_id) WHERE
+/// status = 'ACTIVE' makes a double issue impossible at the database level —
+/// see the migration SQL. Overdue is NOT a column: it is dueAt < now().
+model Loan {
+  id           String     @id @default(uuid(7))
+  libraryId    String     @map("library_id")
+  copyId       String     @map("copy_id")
+  memberUserId String     @map("member_user_id")
+  status       LoanStatus @default(ACTIVE)
+
+  issuedAt     DateTime  @default(now()) @map("issued_at") @db.Timestamptz(6)
+  issuedById   String?   @map("issued_by_id")
+  dueAt        DateTime  @map("due_at") @db.Timestamptz(6)
+  returnedAt   DateTime? @map("returned_at") @db.Timestamptz(6)
+  returnedById String?   @map("returned_by_id")
+  renewalCount Int       @default(0) @map("renewal_count")
+
+  library    Library @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  copy       BookCopy @relation(fields: [copyId], references: [id], onDelete: Restrict)
+  member     AppUser  @relation("LoanBorrower", fields: [memberUserId], references: [id], onDelete: Restrict)
+  issuedBy   AppUser? @relation("LoanIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
+  returnedBy AppUser? @relation("LoanReturnedBy", fields: [returnedById], references: [id], onDelete: SetNull)
+
+  events          LoanEvent[]
+  renewalRequests RenewalRequest[]
+
+  @@index([libraryId, status, dueAt])
+  @@index([memberUserId, status])
+  @@index([copyId])
+  @@map("loan")
+}
+
+/// Append-only history. Renewals and due-date adjustments add rows; they never
+/// overwrite the story of what happened.
+model LoanEvent {
+  id     String        @id @default(uuid(7))
+  loanId String        @map("loan_id")
+  type   LoanEventType
+
+  occurredAt   DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  actorUserId  String?   @map("actor_user_id")
+  previousDueAt DateTime? @map("previous_due_at") @db.Timestamptz(6)
+  newDueAt     DateTime? @map("new_due_at") @db.Timestamptz(6)
+  note         String?
+
+  loan  Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  actor AppUser? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([loanId, occurredAt])
+  @@map("loan_event")
+}
+
+/// A child may ask to keep a book longer; a librarian decides. Children never
+/// mutate a loan directly in v1.
+model RenewalRequest {
+  id     String               @id @default(uuid(7))
+  loanId String               @map("loan_id")
+  status RenewalRequestStatus @default(PENDING)
+
+  requestedById String   @map("requested_by_id")
+  requestedAt   DateTime @default(now()) @map("requested_at") @db.Timestamptz(6)
+  decidedById   String?  @map("decided_by_id")
+  decidedAt     DateTime? @map("decided_at") @db.Timestamptz(6)
+  decisionNote  String?  @map("decision_note")
+
+  loan        Loan    @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  requestedBy AppUser @relation("RenewalRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  decidedBy   AppUser? @relation("RenewalDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([loanId, status])
+  @@map("renewal_request")
+}
+
+/// Allocator for human-facing codes (MJCL-0001, MJCL-R0042).
+/// Allocation is a single atomic `UPDATE ... RETURNING`, which takes a row lock
+/// for the duration of the statement. Two librarians adding books at the same
+/// moment therefore cannot receive the same number — there is no read-then-write
+/// window to race. Codes are never reused, even after a copy is archived.
+model CodeSequence {
+  libraryId String   @map("library_id")
+  /// "BOOK_COPY" or "MEMBER".
+  kind      String
+  nextValue Int      @default(1) @map("next_value")
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  library Library @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+
+  @@id([libraryId, kind])
+  @@map("code_sequence")
+}
+
+// ---------------------------------------------------------------------------
+// Sessions, tokens and platform tables
+// ---------------------------------------------------------------------------
+
+/// Server-side session records. The cookie carries an opaque random handle;
+/// only its SHA-256 hash is stored here, so a database dump yields no usable
+/// sessions. Deleting rows for a user revokes their access on the next request.
+model Session {
+  id        String @id @default(uuid(7))
+  userId    String @map("user_id")
+  tokenHash String @unique @map("token_hash")
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt    DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  /// Absolute expiry — a session dies at this moment however active it is.
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(6)
+  /// Idle expiry — refreshed on activity, always <= expiresAt.
+  idleExpiresAt DateTime  @map("idle_expires_at") @db.Timestamptz(6)
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  userAgentHash String? @map("user_agent_hash")
+  ipHash        String? @map("ip_hash")
+
+  user AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("session")
+}
+
+/// Single-use, time-limited activation and password-reset tokens. Only the hash
+/// is stored; the raw token exists solely inside the emailed link.
+model AuthToken {
+  id     String        @id @default(uuid(7))
+  userId String        @map("user_id")
+  type   AuthTokenType
+
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(6)
+
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdById String?  @map("created_by_id")
+
+  user AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([expiresAt])
+  @@map("auth_token")
+}
+
+/// Backs login throttling without requiring Redis. Identifier and IP are stored
+/// as salted hashes, never in the clear.
+model LoginAttempt {
+  id             String   @id @default(uuid(7))
+  libraryId      String?  @map("library_id")
+  identifierHash String   @map("identifier_hash")
+  ipHash         String?  @map("ip_hash")
+  succeeded      Boolean
+  attemptedAt    DateTime @default(now()) @map("attempted_at") @db.Timestamptz(6)
+
+  library Library? @relation(fields: [libraryId], references: [id], onDelete: SetNull)
+
+  @@index([identifierHash, attemptedAt])
+  @@index([ipHash, attemptedAt])
+  @@map("login_attempt")
+}
+
+/// Written in the same transaction as the change it describes.
+/// Never contains passwords, tokens, hashes or secrets.
+model AuditLog {
+  id        String @id @default(uuid(7))
+  libraryId String @map("library_id")
+
+  actorUserId String? @map("actor_user_id")
+  /// Denormalised label so the log stays readable after an account is archived.
+  actorLabel  String  @map("actor_label")
+  action      String
+  entityType  String  @map("entity_type")
+  entityId    String? @map("entity_id")
+  metadata    Json?
+  ipHash      String? @map("ip_hash")
+
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  library Library  @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  actor   AppUser? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([libraryId, occurredAt])
+  @@index([libraryId, entityType, entityId])
+  @@index([actorUserId])
+  @@map("audit_log")
+}
+
+model Announcement {
+  id        String               @id @default(uuid(7))
+  libraryId String               @map("library_id")
+  title     String
+  bodyMarkdown String            @map("body_markdown")
+  audience  AnnouncementAudience @default(ALL)
+
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(6)
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz(6)
+  createdById String?   @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  library Library @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+
+  @@index([libraryId, audience, publishedAt])
+  @@map("announcement")
+}
+
+/// Delivery log so "did the guardian get the activation link?" is answerable.
+model EmailEvent {
+  id        String      @id @default(uuid(7))
+  libraryId String      @map("library_id")
+  recipient String
+  template  String
+  subject   String
+  status    EmailStatus @default(QUEUED)
+
+  providerMessageId String? @map("provider_message_id")
+  error             String?
+  relatedEntityType String? @map("related_entity_type")
+  relatedEntityId   String? @map("related_entity_id")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  sentAt    DateTime? @map("sent_at") @db.Timestamptz(6)
+
+  library Library @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+
+  @@index([libraryId, createdAt])
+  @@index([relatedEntityType, relatedEntityId])
+  @@map("email_event")
+}
+
+/// Tracks every uploaded object so private media can be authorized before it is
+/// served. Child photographs are always PRIVATE and reachable only through
+/// /api/media/[id] after an ownership or permission check.
+model MediaObject {
+  id         String          @id @default(uuid(7))
+  libraryId  String          @map("library_id")
+  visibility MediaVisibility @default(PRIVATE)
+
+  /// Opaque storage key. Never derived from the uploaded filename.
+  storageKey  String  @unique @map("storage_key")
+  /// Only set for PUBLIC objects.
+  publicUrl   String? @map("public_url")
+  mimeType    String  @map("mime_type")
+  byteSize    Int     @map("byte_size")
+  width       Int?
+  height      Int?
+  checksumSha256 String @map("checksum_sha256")
+  purpose     String
+
+  uploadedById String?  @map("uploaded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  library    Library  @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  uploadedBy AppUser? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  memberProfile       MemberProfile?
+  registrationRequests RegistrationRequest[]
+  bookTitles          BookTitle[]
+
+  @@index([libraryId, purpose])
+  @@map("media_object")
+}

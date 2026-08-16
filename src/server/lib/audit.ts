@@ -1,0 +1,154 @@
+import "server-only";
+
+import type { Prisma } from "@prisma/client";
+
+import { prisma } from "@/server/db";
+
+/**
+ * Audit logging.
+ *
+ * Rule: every state change writes an audit row inside the same transaction as
+ * the change itself. If the change rolls back, so does the record of it; if the
+ * change commits, the record cannot be missing.
+ */
+
+export const AUDIT_ACTIONS = {
+  // Authentication
+  LOGIN_SUCCEEDED: "auth.login.succeeded",
+  LOGIN_FAILED: "auth.login.failed",
+  LOGOUT: "auth.logout",
+  PASSWORD_CHANGED: "auth.password.changed",
+  PASSWORD_RESET_REQUESTED: "auth.password_reset.requested",
+  PASSWORD_RESET_COMPLETED: "auth.password_reset.completed",
+  ACCOUNT_ACTIVATED: "auth.account.activated",
+  SESSIONS_REVOKED: "auth.sessions.revoked",
+
+  // Users and access
+  USER_CREATED: "user.created",
+  USER_SUSPENDED: "user.suspended",
+  USER_REACTIVATED: "user.reactivated",
+  USER_DEACTIVATED: "user.deactivated",
+  ROLE_GRANTED: "user.role.granted",
+  ROLE_REVOKED: "user.role.revoked",
+  ROLE_PERMISSIONS_CHANGED: "role.permissions.changed",
+
+  // Registration
+  REGISTRATION_SUBMITTED: "registration.submitted",
+  REGISTRATION_APPROVED: "registration.approved",
+  REGISTRATION_REJECTED: "registration.rejected",
+  CONSENT_RECORDED: "consent.recorded",
+  CONSENT_WITHDRAWN: "consent.withdrawn",
+
+  // Catalogue
+  BOOK_TITLE_CREATED: "book.title.created",
+  BOOK_TITLE_UPDATED: "book.title.updated",
+  BOOK_COPY_CREATED: "book.copy.created",
+  BOOK_COPY_UPDATED: "book.copy.updated",
+  BOOK_COPY_ARCHIVED: "book.copy.archived",
+  DONATION_RECORDED: "donation.recorded",
+
+  // Circulation
+  LOAN_ISSUED: "loan.issued",
+  LOAN_RETURNED: "loan.returned",
+  LOAN_RENEWED: "loan.renewed",
+  LOAN_MARKED_LOST: "loan.marked_lost",
+
+  // Configuration
+  SETTINGS_UPDATED: "settings.updated",
+  BRANDING_UPDATED: "branding.updated",
+} as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
+
+/**
+ * Keys that must never reach the audit log, whatever a caller passes.
+ * The log is read by administrators and exported during incidents; it is not a
+ * place for anything that could authenticate someone.
+ */
+const FORBIDDEN_METADATA_KEYS = [
+  "password",
+  "passwordhash",
+  "password_hash",
+  "newpassword",
+  "currentpassword",
+  "token",
+  "tokenhash",
+  "token_hash",
+  "secret",
+  "authsecret",
+  "auth_secret",
+  "apikey",
+  "api_key",
+  "sessiontoken",
+  "session_token",
+  "cookie",
+  "authorization",
+  "smtppassword",
+  "smtp_password",
+  "databaseurl",
+  "database_url",
+];
+
+/**
+ * Strips anything that looks like a credential, recursively. This is a
+ * belt-and-braces guard: callers are expected not to pass secrets, and this
+ * ensures a careless call site cannot create a breach.
+ */
+export function redactMetadata(value: unknown, depth = 0): Prisma.InputJsonValue | undefined {
+  if (depth > 6) return "[truncated]";
+  if (value === null || value === undefined) return undefined;
+
+  if (Array.isArray(value)) {
+    return value.map((item) => redactMetadata(item, depth + 1) ?? null) as Prisma.InputJsonValue;
+  }
+
+  if (typeof value === "object") {
+    const output: Record<string, Prisma.InputJsonValue> = {};
+    for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+      const normalised = key.toLowerCase().replace(/[^a-z_]/g, "");
+      if (FORBIDDEN_METADATA_KEYS.includes(normalised)) {
+        output[key] = "[redacted]";
+        continue;
+      }
+      const cleaned = redactMetadata(raw, depth + 1);
+      if (cleaned !== undefined) output[key] = cleaned;
+    }
+    return output;
+  }
+
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "bigint") return value.toString();
+
+  return value as Prisma.InputJsonValue;
+}
+
+export interface AuditInput {
+  libraryId: string;
+  action: AuditAction;
+  entityType: string;
+  entityId?: string | null;
+  /** Null for anonymous actions such as a public registration submission. */
+  actorUserId?: string | null;
+  /** Denormalised so the log stays readable after an account is archived. */
+  actorLabel: string;
+  metadata?: Record<string, unknown>;
+  ipHash?: string | null;
+}
+
+type Db = Prisma.TransactionClient | typeof prisma;
+
+/** Writes one audit row. Pass the transaction client when inside a transaction. */
+export async function recordAudit(db: Db, input: AuditInput): Promise<void> {
+  await db.auditLog.create({
+    data: {
+      libraryId: input.libraryId,
+      action: input.action,
+      entityType: input.entityType,
+      entityId: input.entityId ?? null,
+      actorUserId: input.actorUserId ?? null,
+      actorLabel: input.actorLabel,
+      metadata: input.metadata ? redactMetadata(input.metadata) : undefined,
+      ipHash: input.ipHash ?? null,
+    },
+  });
+}

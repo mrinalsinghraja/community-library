@@ -501,7 +501,7 @@ Enforced in the service as an explicit transition table, not scattered `if` stat
 
 **Search:** Postgres full-text over title + authors, plus trigram similarity for the misspellings that are guaranteed with this audience ("grufalo" → *The Gruffalo*). No external search service.
 
-**Catalogue visibility** is a setting (`public` | `members_only`). Book data contains no child data, so `public` is safe and helps the community browse before joining — but it's your call (§25).
+**Catalogue visibility** is a setting (`PUBLIC` | `MEMBER_ONLY`), defaulting to `MEMBER_ONLY` for this deployment (see §25.3 and ADR-007).
 
 **QR readiness:** `copy_code` is already the scan payload. A future scanner screen resolves `copy_code → copy → issue/return`, requiring zero schema change. v1 accepts typed codes.
 
@@ -587,7 +587,7 @@ The daily cron at **08:30 IST** does one pass: due-soon nudges, overdue nudges o
 | Audit | Every mutation logged in the same transaction as the change; passwords, tokens and hashes never appear in metadata |
 | Dependencies | Dependabot + `npm audit` in CI |
 | Data minimisation | We collect child name, DOB, apartment, optional photo — nothing else. No analytics, no third-party scripts, no tracking pixels on any child-facing page |
-| Backups | Neon PITR on free tier (verify retention window at setup); plus a weekly `pg_dump` documented in `docs/OPERATIONS.md` for a copy you control |
+| Backups | **Verified 2026-08-17: Neon free-tier point-in-time restore is 6 hours only.** Too thin to rely on, so a scheduled `pg_dump` you control is REQUIRED, not optional — see `docs/OPERATIONS.md` |
 
 **Deliberately not built:** custom crypto of any kind. Tokens are `crypto.randomBytes`, hashing is argon2id, sessions are Auth.js.
 
@@ -807,8 +807,14 @@ The login field accepts either `MJCL-R042` or a simple username chosen by the pa
 **2. Member password policy — 6 characters minimum, no complexity rules.**
 Checked against a common-password blocklist, no character-class requirements, show/hide toggle on every entry field. Compensating controls: 5 failures → 15-minute lock with escalation, per-IP hourly cap, short sessions on shared devices. **Staff accounts are unaffected and remain strict: 12 characters minimum, zxcvbn score ≥ 3.**
 
-**3. Catalogue visibility — public, and configurable.**
-`library_settings.catalogue_visibility` defaults to `public`. Book data contains no child data; borrower identity is never present in any public response. An admin can switch the whole catalogue to `members_only` without a deploy.
+**3. Catalogue visibility — members only by default, and configurable.**
+`library_settings.catalogue_visibility` defaults to `MEMBER_ONLY`.
+
+> **Revised 2026-08-17 (Phase 0 instruction).** This originally read "public by
+> default", on the grounds that book data contains no child data. The owner
+> directed that the shelf stays behind the front door for this deployment. Both
+> values remain available and a Super Admin can switch without a deploy; only
+> the default changed. See ADR-007.
 
 **4. Circulation — librarian-only issue and return.**
 A physical book changes hands at the desk, so the desk records it. Children cannot issue, return or renew directly. Children may raise a **renewal request** (`renewal_request` table), which appears on the desk dashboard for one-tap approval. Self-checkout is explicitly out of scope for v1 and noted in the roadmap.
@@ -846,4 +852,9 @@ Confirmed change from the original brief; reasoning in §2.1. Region `ap-southea
 
 ---
 
-**§25 decisions are confirmed. Awaiting go-ahead to begin Phase 0.**
+**§25 decisions are confirmed. Phase 0 is complete — see `docs/PHASE-0.md`.**
+
+Three further decisions were made during implementation and are recorded as
+ADRs: Next.js 16 rather than 15 (ADR-004), the catalogue default above
+(ADR-007), and opaque server-side sessions after discovering that the Auth.js
+Credentials provider cannot use native database sessions (ADR-009).
