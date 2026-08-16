@@ -100,13 +100,24 @@ jobs:
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.24.3
     steps:
       - uses: actions/checkout@v4
         with:
-          # Gitleaks needs history to scan past commits, not just the tip.
+          # Full history: a secret that was committed and later removed is still
+          # a leaked secret.
           fetch-depth: 0
 
-      - name: Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The gitleaks-action wrapper scans the push range `<before>^..<after>`,
+      # which fails on a repository's first push because the initial commit has
+      # no parent — it exits 1 while reporting "no leaks found". Running the
+      # binary directly over full history is both deterministic and stricter.
+      - name: Install gitleaks
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /tmp gitleaks
+          /tmp/gitleaks version
+
+      - name: Scan full history for secrets
+        run: /tmp/gitleaks detect --source . --redact --verbose --exit-code 1
