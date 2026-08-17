@@ -40,7 +40,11 @@ those are HMACs keyed with it. Rotate deliberately.
 | `SETUP_TOKEN` | unset | Enables a one-time `/setup` route while the database has zero users. Prefer `npm run create-admin`. Unset it afterwards |
 | `PASSWORD_BREACH_CHECK` | unset (off) | `true` checks new passwords against Have I Been Pwned using k-anonymity — only a 5-character hash prefix leaves the server, never the password. Fails open with a 2.5s timeout, so a family can always finish setting up an account. It is an outbound request from a child-facing form, which is why it is opt-in |
 
-## Email (declared now, used from Phase 5)
+## Email
+
+Used since Phase 1 for activation, verification and password recovery, and since
+Phase 4 for circulation reminders. `EMAIL_PROVIDER=console` — the development
+default — writes to `.mail/` and cannot reach a real address.
 
 | Variable | Notes |
 |---|---|

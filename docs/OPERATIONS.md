@@ -10,13 +10,29 @@ which may not be the person who built it.
 Vercel Cron calls `GET /api/cron/daily` at 03:00 UTC (08:30 Asia/Kolkata),
 authenticated with `CRON_SECRET`.
 
-It currently does housekeeping only: deletes expired sessions, spent activation
-and reset tokens, and login-attempt rows older than 30 days. Overdue reminders
-join it in a later phase.
+**Housekeeping**, first: expired sessions, spent activation and reset tokens,
+login-attempt rows older than 30 days, lapsed verification challenges, and the
+media sweep.
+
+**Then reminders**, since Phase 4: due-soon and overdue notes to guardians, if
+`overdue_reminders_enabled` is on. They run last and inside a `try` that cannot
+fail the rest — a mail server having a bad morning must not stop the library's
+own housekeeping. The response says what was sent:
+
+```json
+"reminders": { "enabled": true, "due": 3, "sent": 2,
+               "failed": 0, "alreadySent": 1, "noRecipient": 0 }
+```
+
+`alreadySent` is normal and not a warning: it means the job already covered
+those occurrences, which is exactly what the duplicate guard is for. **Running
+this endpoint twice is safe**, including at the same instant — see
+`docs/NOTIFICATIONS.md`.
 
 **If it fails to run, nothing breaks.** Overdue status is derived from
 `due_at < now()` at read time, never stored, so a missed run leaves a few dead
-rows and nothing else.
+rows and one morning's reminders unsent. Those occurrences are not caught up
+retroactively; the next configured offset comes round.
 
 Check it manually:
 
@@ -221,6 +237,71 @@ SELECT c.copy_code, t.title, u.display_name AS reader,
 The desk's **Late** filter at `/desk/loans?filter=overdue` runs the same
 comparison. There is no overdue column to consult and none to repair — the
 answer is computed when you ask, so it cannot be stale.
+
+### "Did the reminder actually go out?"
+
+```sql
+SELECT n.claimed_at, n.kind, n.offset_days, n.status,
+       c.copy_code, u.display_name AS reader,
+       e.recipient, e.error
+  FROM loan_notification n
+  JOIN loan l ON l.id = n.loan_id
+  JOIN book_copy c ON c.id = l.copy_id
+  JOIN app_user u ON u.id = l.member_user_id
+  LEFT JOIN email_event e ON e.id = n.email_event_id
+ ORDER BY n.claimed_at DESC LIMIT 50;
+```
+
+`SENT` means a provider accepted it. `FAILED` means it did not, and `e.error`
+says why — **that occurrence is not retried**, by design (ADR-029); the next
+configured offset is the next chance. `QUEUED` on an old row means the job died
+between claiming and sending, which is rare and worth mentioning if you see it
+more than once.
+
+Nothing here is the source of truth for anything. Deleting every row in this
+table would cause the next run to re-send reminders, and would change nothing
+about any book.
+
+### "More than one pending renewal request"
+
+**The situation.** Migration 7 refuses to build
+`renewal_request_one_pending_per_loan` because a loan already holds two open
+requests. It names the loans and stops; it does not pick one to delete.
+
+This should be unreachable — the table was unused before Phase 4 — but the
+principle is the same as migration 6's (ADR-027): a child asked twice, and which
+of those asks stands is not a deployment's decision.
+
+**What to do.** Look at them, and cancel the ones that should not stand, as a
+person, with your own hands:
+
+```sql
+SELECT r.id, r.requested_at, c.copy_code, u.display_name
+  FROM renewal_request r
+  JOIN loan l ON l.id = r.loan_id
+  JOIN book_copy c ON c.id = l.copy_id
+  JOIN app_user u ON u.id = l.member_user_id
+ WHERE r.status = 'PENDING'
+ ORDER BY r.requested_at;
+
+-- Keep the earliest; withdraw the rest.
+UPDATE renewal_request SET status = 'CANCELLED', decided_at = now()
+ WHERE id = '<the-later-one>';
+```
+
+Then tell Prisma the failed attempt is over, and re-run:
+
+```bash
+npx prisma migrate resolve --rolled-back 20260817220000_phase4_notifications_and_renewal_requests
+npx prisma migrate deploy
+```
+
+**The `resolve --rolled-back` step is required and easy to miss.** A migration
+that fails is recorded as failed, and `migrate deploy` refuses to do anything at
+all until that record is cleared — including migrations that have nothing to do
+with it. This is safe here precisely because the guard runs first and the
+migration is all-or-nothing: nothing was applied, so there is nothing to undo
+before saying so. The same applies to migration 6's stranded-copy guard.
 
 ### "Something is wrong and I need to know who did what"
 

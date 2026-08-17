@@ -203,11 +203,22 @@ enum LoanEventType {
   CORRECT
 }
 
+/// PENDING → APPROVED · DECLINED · CANCELLED, and nothing else. A decided
+/// request is final: a child who wants to ask again asks again, which is a new
+/// row, because "the librarian said no on Tuesday" is part of what happened.
 enum RenewalRequestStatus {
   PENDING
   APPROVED
   DECLINED
   CANCELLED
+}
+
+/// What a reminder was about. Derived from the loan's due date at send time and
+/// stored so the same occurrence can never be claimed twice — it is not a state
+/// the loan carries, and nothing reads it to decide whether a book is late.
+enum LoanNotificationKind {
+  DUE_SOON
+  OVERDUE
 }
 
 enum AuthTokenType {
@@ -275,6 +286,7 @@ model Library {
   bookCopies           BookCopy[]
   donations            Donation[]
   loans                Loan[]
+  loanNotifications    LoanNotification[]
   auditLogs            AuditLog[]
   announcements        Announcement[]
   emailEvents          EmailEvent[]
@@ -330,7 +342,16 @@ model LibrarySettings {
   /// owner's decision, not a default the code should assume. Changing this
   /// value today does nothing at all. Nothing reads it; a test says so.
   blockOnOverdueDays       Int     @default(7) @map("block_on_overdue_days")
-  /// NOT IMPLEMENTED. Phase 3 sends no notifications of any kind.
+  /// When reminders are sent, as whole days from a loan's due date.
+  ///
+  /// Negative is before the date and positive is after it, so the default
+  /// [-2, 0, 3, 7] means: two days before it is due, on the day, then three and
+  /// seven days after. A library that wants no nudges after the date sets
+  /// [-2, 0]; one that wants nothing at all turns `overdue_reminders_enabled`
+  /// off. Duplicates and ordering do not matter — each value is one occurrence,
+  /// claimed once per loan per due date.
+  ///
+  /// Implemented in Phase 4. See docs/NOTIFICATIONS.md.
   overdueReminderOffsets   Int[]   @default([-2, 0, 3, 7]) @map("overdue_reminder_offsets")
 
   // Identifiers
@@ -374,7 +395,17 @@ model LibrarySettings {
   // System
   timezone                 String  @default("Asia/Kolkata")
   dateFormat               String  @default("d MMM yyyy") @map("date_format")
+  /// NOT IMPLEMENTED. Sketched as a master switch over all outbound mail, and
+  /// deliberately still unwired: it defaults to false, and a false that silently
+  /// stopped activation links would lock families out of the library with no
+  /// visible cause. Whether this deployment wants such a switch — and what it
+  /// should do to a registration already in flight — is the owner's decision.
+  /// Which provider is configured is what decides whether mail leaves the
+  /// server today, and `console` cannot reach anybody.
   emailEnabled             Boolean @default(false) @map("email_enabled")
+  /// Whether the daily job sends due-soon and overdue reminders. Off by
+  /// default: a library must turn its own reminders on, having decided that
+  /// writing to guardians is what it wants. Implemented in Phase 4.
   overdueRemindersEnabled  Boolean @default(false) @map("overdue_reminders_enabled")
 
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -898,6 +929,7 @@ model Loan {
 
   events          LoanEvent[]
   renewalRequests RenewalRequest[]
+  notifications   LoanNotification[]
 
   @@index([libraryId, status, dueAt])
   @@index([memberUserId, status])
@@ -927,6 +959,13 @@ model LoanEvent {
 
 /// A child may ask to keep a book longer; a librarian decides. Children never
 /// mutate a loan directly in v1.
+///
+/// **At most one PENDING request per loan**, enforced by the partial unique
+/// index `renewal_request_one_pending_per_loan` (migration 7). A partial index
+/// is not expressible here, so it lives in raw SQL and in prisma/sql/ — which
+/// also means `prisma migrate dev` will drop it if it ever regenerates this
+/// migration. Approving a request never edits this row's history: the decision
+/// fields are written once and the request is then final.
 model RenewalRequest {
   id     String               @id @default(uuid(7))
   loanId String               @map("loan_id")
@@ -944,6 +983,56 @@ model RenewalRequest {
 
   @@index([loanId, status])
   @@map("renewal_request")
+}
+
+/// One reminder that was claimed for one loan.
+///
+/// This table exists for exactly one reason: **the daily job runs every day and
+/// a family must not hear about the same book twice.** The unique key is the
+/// occurrence — this loan, this due date, this many days from it — so a second
+/// run on the same day, or two runs at the same instant, collide on the
+/// constraint instead of writing a second email.
+///
+/// `dueAt` is part of that key on purpose. When a loan is renewed its due date
+/// moves, which retires every occurrence belonging to the old date: the job
+/// computes offsets from the loan's *current* due date, so the old date's
+/// reminders can never come up again, and the new date's are unclaimed.
+///
+/// Nothing reads this table to decide anything about a loan. Overdue is still
+/// derived from `due_at < now()`; a row here is a record that a message was
+/// attempted, and a day when the job does not run leaves the library's account
+/// of its books exactly as true as it was.
+///
+/// No recipient address is stored. Who was written to belongs in `email_event`,
+/// once, and a second copy of a guardian's address here would be a second thing
+/// to have to delete when a family leaves.
+model LoanNotification {
+  id        String @id @default(uuid(7))
+  libraryId String @map("library_id")
+  loanId    String @map("loan_id")
+
+  kind LoanNotificationKind
+  /// The due date this reminder was about, as it stood when the job ran.
+  dueAt DateTime @map("due_at") @db.Timestamptz(6)
+  /// Which occurrence: whole days from the due date, negative before it.
+  /// -2 is "due in two days", 0 is "due today", 7 is "a week past".
+  offsetDays Int @map("offset_days")
+
+  /// QUEUED means claimed but not yet confirmed sent — the state a crash
+  /// leaves behind. A failed reminder is not retried; see docs/NOTIFICATIONS.md.
+  status       EmailStatus @default(QUEUED)
+  claimedAt    DateTime    @default(now()) @map("claimed_at") @db.Timestamptz(6)
+  sentAt       DateTime?   @map("sent_at") @db.Timestamptz(6)
+  /// The delivery record, which is where the recipient and any provider error
+  /// live. Null when the message was never handed to a provider.
+  emailEventId String?     @map("email_event_id")
+
+  library Library @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  loan    Loan    @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@unique([loanId, dueAt, offsetDays], map: "loan_notification_occurrence_key")
+  @@index([libraryId, claimedAt])
+  @@map("loan_notification")
 }
 
 /// Allocator for human-facing codes (LIB-B0001 for a book, LIB-R0042 for a card).

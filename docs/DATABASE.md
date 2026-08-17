@@ -291,6 +291,37 @@ what caught a duplicate index name here: `member_profile_code_lower_idx` already
 existed from migration 1, better scoped as `(library_id, lower(member_code))`,
 and the redundant new one only collided on a clean install.
 
+### Migration 7 — reminders and renewal requests
+
+`20260817220000_phase4_notifications_and_renewal_requests`. Mostly generated;
+three additions.
+
+**1. A guard first, again.** The new partial unique index says a loan may have at
+most one `PENDING` renewal request. If a database somehow already holds two, the
+migration names the loans and stops rather than choosing one to delete — a child
+asked twice, and which ask stands is not a deployment's decision (the same
+principle as migration 6, ADR-027). On every real database this does nothing:
+the table had never been written to. The runbook is in `docs/OPERATIONS.md`,
+"More than one pending renewal request".
+
+**2. Two indexes Prisma cannot express.** `renewal_request_one_pending_per_loan`
+is partial; `loan_notification_occurrence_key` is a plain unique index and *is*
+in the schema, but the partial one is not and never will be. Both are also kept
+in `prisma/sql/006_notifications_and_renewals.sql`. **If `prisma migrate dev`
+ever regenerates this migration, the partial index is lost** — and with it the
+guarantee that one tap cannot become two requests.
+
+**3. The new permission is inserted by the migration**, not left to the seed.
+`loan.request_renewal` is what a reader holds to ask, so a library that ran
+`migrate deploy` without re-running the seed would otherwise upgrade to a
+Phase 4 that no child can use. Written idempotently (`ON CONFLICT DO NOTHING`),
+granted to `MEMBER` and `SUPER_ADMIN` only, and re-derived by the seed on every
+run.
+
+`loan_notification` carries **no recipient column**. Who was written to lives in
+`email_event`, once — a second copy of a guardian's address would be a second
+thing to have to clear when a family leaves.
+
 ### ⚠ The gotcha that will bite you
 
 `prisma migrate dev` **drops raw indexes it can introspect but cannot find in

@@ -92,8 +92,19 @@ library to anyone.
 `EMAIL_FROM` should be a real, monitored address. `EMAIL_REPLY_TO` can point at
 the librarian.
 
-## 6. Not built yet
+## 6. Circulation reminders
 
-Due-date reminders and overdue nudges (Phase 4, when loans exist); in-app
-notifications; WhatsApp. The daily cron already exists and is the natural home
-for the first two.
+Due-soon reminders and overdue nudges were built in **Phase 4** and run in the
+daily cron. Two templates — `loan_due_soon` and `loan_overdue` — both to the
+guardian, both governed by `overdue_reminders_enabled` (off by default).
+
+They are the only mail this system sends that nobody asked for by taking an
+action, which is why the duplicate-suppression design is worth reading before
+changing anything: **`docs/NOTIFICATIONS.md`**.
+
+## 7. Not built yet
+
+In-app notifications; WhatsApp; SMS; return confirmations; any message about a
+renewal request being decided. The blueprint's pluggable `NotificationService`
+is not built either — there is one channel, and an abstraction with nothing to
+hold is a shape, not a design.

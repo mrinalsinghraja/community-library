@@ -95,6 +95,17 @@ export const AUDIT_ACTIONS = {
   LOAN_CORRECTED: "loan.corrected",
   LOAN_MARKED_LOST: "loan.marked_lost",
 
+  // Renewal requests. A child asking is itself an event worth keeping: it is
+  // the only action in this application a reader can take that a librarian is
+  // expected to answer, and "did anyone ever reply?" has to be answerable.
+  // The refusal is here for the same reason `loan.issue.refused` is — an
+  // approval that the rules turned down is the interesting one.
+  RENEWAL_REQUESTED: "renewal_request.created",
+  RENEWAL_REQUEST_APPROVED: "renewal_request.approved",
+  RENEWAL_REQUEST_DECLINED: "renewal_request.declined",
+  RENEWAL_REQUEST_CANCELLED: "renewal_request.cancelled",
+  RENEWAL_REQUEST_REFUSED: "renewal_request.refused",
+
   // Configuration
   SETTINGS_UPDATED: "settings.updated",
   BRANDING_UPDATED: "branding.updated",

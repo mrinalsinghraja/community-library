@@ -804,6 +804,21 @@ Six phases, each ending at something demonstrable. Sequential, roughly 2–3 wor
 
 **Scope discipline:** anything not in the brief's §48 list is written to `FUTURE_ROADMAP.md`, not built.
 
+> **The delivered sequence differs from this table, and the delivered one is
+> authoritative.** Identity and Members were built together, a Phase 1.1 was
+> inserted for child photographs and guardian verification, and everything after
+> shifted down by one. What actually shipped:
+>
+> | 0 Foundation | 1 Identity | 1.1 Privacy & guardian verification | 2 Catalogue | 3 Circulation | 4 Notifications & renewal requests |
+> |---|---|---|---|---|---|
+>
+> Production polish — settings and branding admin, reports, announcements, the
+> a11y sweep, the production checklist, the deployment — remains, and is not
+> numbered until it is scoped. See `docs/PHASE-4.md` §1.
+>
+> `FUTURE_ROADMAP.md` was never created. Deferred scope has been recorded in each
+> phase document's "deliberately does not include" section instead.
+
 ---
 
 ## 25. Decisions — Confirmed by Owner (2026-08-16)

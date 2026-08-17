@@ -78,13 +78,29 @@ describe("role definitions", () => {
      * books. The corollary is the trap — because every reader holds it, a staff
      * screen may never be guarded by it. See the circulation tests.
      */
-    expect(permissionsForRole(ROLE_KEYS.MEMBER)).toEqual(["book.view", "loan.view"]);
+    expect(permissionsForRole(ROLE_KEYS.MEMBER)).toEqual([
+      "book.view",
+      "loan.view",
+      // Phase 4. Asking is not deciding: it writes a row that says a child
+      // would like to keep a book, and changes nothing about the book, the
+      // date, or the loan until a librarian answers.
+      "loan.request_renewal",
+    ]);
   });
 
-  it("gives a member no way to change anything", () => {
+  it("gives a member no way to change a loan", () => {
+    /*
+     * The rule is not "readers hold only .view keys" — that was true until a
+     * child could ask for something. The rule is that no permission a reader
+     * holds can move a due date, hand out a book, take one back, or rewrite
+     * what the library says happened. Those four are the whole of circulation's
+     * write surface, and a reader holds none of them.
+     */
     const member = permissionsForRole(ROLE_KEYS.MEMBER);
-    for (const permission of member) {
-      expect(permission.endsWith(".view")).toBe(true);
+    const mutations = ["loan.issue", "loan.return", "loan.renew", "loan.correct"];
+
+    for (const mutation of mutations) {
+      expect(member).not.toContain(mutation);
     }
   });
 

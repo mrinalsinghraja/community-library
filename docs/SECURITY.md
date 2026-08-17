@@ -82,6 +82,27 @@ data, advertising identifiers.
   return identical responses.
 - A private photograph never outlives the row pointing at it, and an abandoned
   upload never becomes unreachable bytes (ADR-019).
+- **The one action a child can take writes one row and moves nothing.** A
+  renewal request is keyed by the book code printed on the book and resolved
+  against the session's own loans (ADR-031) — there is no loan id, member id or
+  library id in any reader-facing form, so there is nothing to tamper with. Every
+  miss returns the same sentence, whether the code is fictional, somebody else's,
+  or already returned.
+- A child never sees another child's request, another child's decision, or a
+  librarian's note about their own. The note is the library's record; the child's
+  screen shows one kind sentence.
+
+### Reminders
+
+- Mail goes to the **guardian**, never to the child — children in this library
+  have no email address.
+- One child and one book per message. No other family appears in any message.
+- **No link.** Nothing to click and nothing to log into: a reminder carrying a
+  login link is one more link for somebody to imitate.
+- The reminder claim row stores **no address**. Who was written to lives in
+  `email_event`, once, so a family leaving means one place to clear.
+- Writing to guardians is off until a library turns it on
+  (`overdue_reminders_enabled`, default false).
 
 ## 4. Authentication controls
 

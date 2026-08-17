@@ -267,6 +267,10 @@ describe("configuration that is not implemented", () => {
       "borrowingPeriodDays",
       "maxActiveLoans",
       "maxRenewals",
+      // Both arrived in Phase 4, when reminders were implemented, and left the
+      // dormant list in the same change.
+      "overdueReminderOffsets",
+      "overdueRemindersEnabled",
       "renewalPeriodDays",
       "timezone",
     ]);

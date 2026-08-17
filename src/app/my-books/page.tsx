@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { RenewalRequest } from "@/app/my-books/renewal-request";
 import { BookCover } from "@/components/library/book-cover";
 import { PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
@@ -48,7 +49,7 @@ export default async function MyBooksPage() {
   // answer for them. Send them where their books actually are.
   if (!loans) redirect("/desk/loans");
 
-  const { active, history, limit } = loans;
+  const { active, history, limit, renewalPeriodDays } = loans;
 
   return (
     <PublicShell branding={branding} signedIn>
@@ -81,7 +82,12 @@ export default async function MyBooksPage() {
         ) : (
           <ul className="mt-8 grid gap-5 sm:grid-cols-2">
             {active.map((loan) => (
-              <ActiveBookCard key={loan.code} loan={loan} timezone={settings.timezone} />
+              <ActiveBookCard
+                key={loan.code}
+                loan={loan}
+                timezone={settings.timezone}
+                renewalPeriodDays={renewalPeriodDays}
+              />
             ))}
           </ul>
         )}
@@ -140,7 +146,15 @@ export default async function MyBooksPage() {
   );
 }
 
-function ActiveBookCard({ loan, timezone }: { loan: ReaderLoanCard; timezone: string }) {
+function ActiveBookCard({
+  loan,
+  timezone,
+  renewalPeriodDays,
+}: {
+  loan: ReaderLoanCard;
+  timezone: string;
+  renewalPeriodDays: number;
+}) {
   const badge = readerLoanBadge(loan, timezone);
   const sentence = readerDueSentence(loan, timezone);
 
@@ -188,6 +202,20 @@ function ActiveBookCard({ loan, timezone }: { loan: ReaderLoanCard; timezone: st
         {loan.donorAcknowledgement ? (
           <p className="mt-1 text-base text-ink-soft">{loan.donorAcknowledgement}</p>
         ) : null}
+
+        {/*
+          Asking to keep it. The child can ask; the librarian decides — nothing
+          on this screen changes a due date, and the card goes on saying the
+          date the library actually holds until somebody at the desk agrees.
+        */}
+        <RenewalRequest
+          code={loan.code}
+          title={loan.title}
+          state={loan.renewalState}
+          canAsk={loan.canAskToKeep}
+          blockedReason={loan.askBlockedReason}
+          renewalPeriodDays={renewalPeriodDays}
+        />
       </div>
     </Card>
   );

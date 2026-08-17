@@ -360,6 +360,8 @@ writes `14`, `2` or `1` into a business decision.
 | `renewal_period_days` | 7 | **14** |
 | `allow_renewal_when_overdue` | false | **false** |
 | `timezone` | Asia/Kolkata | **Asia/Kolkata** |
+| `overdue_reminders_enabled` | false | **false — nothing is sent until this is turned on** |
+| `overdue_reminder_offsets` | [-2, 0, 3, 7] | **[-2, 0, 3, 7]** |
 
 `renewal_period_days` differs from the platform default on purpose: 14 makes one
 renewal double the loan, matching the worked example above. It is a judgement,
@@ -379,7 +381,11 @@ has no effect whatsoever.**
 |---|---|
 | `block_on_overdue_days` | Would refuse to lend to a child with something this many days overdue. That turns a late book into a closed door for a nine-year-old, and whether this library wants that is the owner's decision — not a default the code should assume. |
 | `renewal_blocked_when_reserved` | There are no reservations in Version 1, so there is no state for it to describe. |
-| `overdue_reminder_offsets` | Phase 3 sends no notifications of any kind. |
+| `email_enabled` | Sketched as a master switch over all outbound mail. It defaults to false, and a false that quietly stopped activation links would lock families out of the library with nothing on screen to explain it. What decides whether mail leaves this server today is which provider is configured. |
+
+`overdue_reminder_offsets` was on this list through Phase 3 and is not any more:
+Phase 4 sends reminders, so it now decides when they go out. That is the only
+way a key leaves this list — implemented, in the same change.
 
 Two permissions are in the same position: **`loan.override_rules`** and
 **`loan.mark_lost`** are seeded, grantable, and read by nothing. A copy's status
@@ -431,7 +437,8 @@ than which caller happened to win.
 | `loan.view` | Super Admin, Librarian, Junior Librarian, **and every Reader** |
 | `loan.issue` | Super Admin, Librarian, Junior Librarian |
 | `loan.return` | Super Admin, Librarian, Junior Librarian |
-| `loan.renew` | Super Admin, Librarian, Junior Librarian |
+| `loan.renew` | Super Admin, Librarian, Junior Librarian — and it is also what answers a reader's request (ADR-030) |
+| `loan.request_renewal` | **Every Reader**, and Super Admin. Permits asking about your own loan; decides nothing |
 | `loan.correct` | Super Admin, Librarian |
 | `loan.override_rules` | Super Admin, Librarian — **dormant: granting it changes nothing** |
 | `loan.mark_lost` | Super Admin, Librarian — **dormant: granting it changes nothing** |
@@ -451,9 +458,16 @@ The reader's own view is safe for a structural reason as well as a permission
 one: `listOwnLoans()` **takes no member id at all**. It reads the session. There
 is no "whose loans?" parameter to get wrong and no id in a URL to increment.
 
-Readers hold **no circulation mutation permission**. A child never issues,
-returns, renews or cancels anything, in this phase or any other. A unit test
-asserts every permission a member holds ends in `.view`.
+Readers hold **none of circulation's four write permissions** — `loan.issue`,
+`loan.return`, `loan.renew`, `loan.correct`. A child never issues, returns,
+renews or cancels anything, in this phase or any other, and a unit test asserts
+exactly that.
+
+Since Phase 4 a reader does hold `loan.request_renewal`, and it is worth being
+precise about why that is not an exception: asking writes a row that says a
+child would like to keep a book, and changes nothing about the book, the date or
+the loan until a librarian answers. The rule was never "readers hold only
+`.view` keys" — it is that nothing a reader holds can move a due date.
 
 ### Junior Librarian
 
@@ -515,23 +529,48 @@ being corrected.
 
 ## 15. Notifications
 
-**None are sent in Phase 3.** The architecture is ready for due-soon, overdue and
-return-confirmation messages — `overdue_reminder_offsets`,
-`overdue_reminders_enabled` and the existing email provider abstraction are all
-in place — but no circulation template exists and nothing is dispatched. Adding
-them means writing templates against `EmailService`, and development continues to
-use the existing local mail transport.
+**Since Phase 4, the library sends two things:** a due-soon reminder and an
+overdue nudge, both to the guardian, both governed by
+`overdue_reminders_enabled` (off by default) and `overdue_reminder_offsets`
+(`[-2, 0, 3, 7]` days from the due date).
 
-The daily maintenance job is not, and must never become, the source of truth for
-overdue. It may one day send reminders; the answer to "is this late?" stays a
-read-time derivation.
+Full detail in **`docs/NOTIFICATIONS.md`**. The two rules that belong here:
 
-## 16. What Phase 3 deliberately does not include
+**The daily job is not, and must never become, the source of truth for
+overdue.** It sends reminders; the answer to "is this late?" stays
+`status = 'ACTIVE' AND due_at < now()`, derived at read time. A morning when
+the job does not run leaves one set of messages unsent and the library's account
+of its books exactly as true as it was.
+
+**A reminder cannot change a loan.** The notification path writes only
+`loan_notification` and `email_event`. No due date, no status, no renewal count,
+no borrower, and not even a `loan_event` — a reminder is not something that
+happened to the loan. A test asserts every one of those after a send.
+
+## 16. Asking to keep a book
+
+**Since Phase 4, a child can ask; a librarian still decides.** Children do not
+renew — BLUEPRINT §25.4 is unchanged — but "you cannot renew" and "you cannot
+ask" are different rules, and only the first was ever intended.
+
+A request is the smallest possible write: a row saying somebody asked. **Until
+a librarian answers, the loan is exactly as it was** — same due date, same
+renewal count, no new event.
+
+Approving it runs `renewLockedLoan`, the same function the desk's Keep-longer
+button runs, in one transaction with the decision (ADR-030). Every rule in §8
+is re-checked at that moment against the loan as it stands then, because a
+request raised on Monday can be answered on Wednesday, by which time the book
+may be late.
+
+Full detail in **`docs/RENEWAL_REQUESTS.md`**.
+
+## 17. What circulation deliberately does not include
 
 Reservations, waiting lists, holds, fines, late fees, payments, ratings, reviews,
 reading challenges, recommendations, social features, a parent dashboard,
-notifications, barcode scanning, RFID, and external library integrations.
+barcode scanning, RFID, and external library integrations.
 
-`renewal_request` — the table that would let a child *ask* to keep a book longer
-— exists from Phase 0 and remains unused. Renewal in Phase 3 is a librarian
-action at the desk. Wiring the request flow is a later decision, not an omission.
+No email is sent when a renewal request is decided: the child sees it on their
+own screen, and a message to a parent about a fortnight's extension would be
+noise.

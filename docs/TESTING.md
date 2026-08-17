@@ -266,6 +266,54 @@ states, issued against and renewed against. Only `ACTIVE` lends. The unit suite
 asserts the allowlist has exactly one member, so widening it is a visible act
 rather than a side effect of adding a state to the enum.
 
+## What the Phase 4 suites prove
+
+**Reminders** (19, `tests/database/notifications.test.ts`) — the right guardian
+is written to, with the due-soon wording before the date and the overdue wording
+after it; a loan whose date is not a configured offset produces nothing; a
+returned, cancelled, deactivated or archived case produces nothing; a suspended
+reader is still written to, because a paused account is usually paused *because*
+a book has not come back and a note is this library's only remedy.
+
+Then the part that matters most. **The same day twice sends once.** **Two jobs
+at the same instant send once** — genuinely parallel, which is the case the
+unique index exists for. **A renewal retires the old date's reminders** and
+leaves the new date's available, tested by moving the clock rather than the
+data, so the two due dates are genuinely different. A failed delivery is
+recorded as `FAILED` on both the claim and the delivery log, and **is not
+retried** — asserted deliberately, because that trade-off is a decision
+(ADR-029) and not an accident.
+
+And the invariant: after a send, the loan's status, due date, renewal count,
+borrower, the copy's status and the loan's event count are all unchanged. **A
+reminder is not something that happened to the loan.** One test also asserts the
+claim row contains no recipient address anywhere in it.
+
+**Renewal requests** (33, `tests/database/renewal-requests.test.ts`) — a child
+asks and the loan does not move: same due date, same renewal count, no `RENEW`
+event. Another child's book, a fictional code and an already-returned book all
+produce the *identical* sentence, so probing codes teaches nothing. A second
+reader's screen never contains the first's request. A reader cannot decide
+anything, and a librarian has no shelf of their own to ask about.
+
+Two taps at the same instant produce one request. **Two librarians approving at
+the same instant produce one approval, one renewal and one `RENEW` event**; an
+approve racing a decline resolves to exactly one, and the loan's renewal count
+matches whichever won. A desk renewal that consumes the allowance while a
+request is open makes the approval fail — and the request stays `PENDING`, with
+a `renewal_request.refused` audit row, because declining is a decision a person
+makes.
+
+The rules are asserted twice over, once at ask time and once at decision time,
+including a loan that goes overdue in between: the desk still sees the request,
+with the reason it cannot be granted printed beside it rather than the row
+silently vanishing.
+
+**Wording** (unit) — the sentence a guardian reads is asserted never to contain
+*overdue*, *fine*, *fee*, *penalty*, *charge*, *owe*, *urgent*, *immediately*,
+*must* or *failure*, and never to count days late. The child's refusals are
+asserted never to name an account state.
+
 ## What the database suite proves
 
 **The double-issue guard** — two concurrent `Promise.allSettled` inserts of the
@@ -283,8 +331,9 @@ CHECK constraint and turn a page load into a 500).
 
 **Child isolation** — a reader reaches their own record; asking for another
 child's id raises `NOT_FOUND`, identically to asking for an id that does not
-exist at all; a reader's permissions resolve to exactly `book.view`; a grant of
-the non-assignable Junior Librarian role confers nothing.
+exist at all; a reader's permissions resolve to exactly `book.view`,
+`loan.view` and `loan.request_renewal` and nothing more; a grant of the
+non-assignable Junior Librarian role confers nothing.
 
 **Constraints** — every CHECK described in `DATABASE.md` §3 has a test, both
 that it rejects the bad case and that valid data still passes.

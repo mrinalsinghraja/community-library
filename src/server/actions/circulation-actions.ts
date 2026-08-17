@@ -3,11 +3,15 @@
 import { revalidatePath } from "next/cache";
 
 import { isCondition } from "@/lib/catalogue";
+import { RENEWAL_REQUEST_MESSAGES } from "@/lib/circulation";
 import { toFriendlyMessage, ValidationError } from "@/server/lib/errors";
 import {
   cancelLoan,
+  cancelOwnRenewalRequest,
+  decideRenewalRequest,
   issueBook,
   renewLoan,
+  requestRenewal,
   returnBook,
 } from "@/server/services/circulation-service";
 
@@ -57,6 +61,7 @@ function revalidateCirculation(): void {
   revalidatePath("/desk");
   revalidatePath("/desk/circulation");
   revalidatePath("/desk/loans");
+  revalidatePath("/desk/renewals");
   revalidatePath("/admin/books");
   revalidatePath("/books");
   revalidatePath("/my-books");
@@ -130,6 +135,76 @@ export async function renewLoanAction(
     await renewLoan({ loanId: String(formData.get("loanId") ?? "") });
     revalidateCirculation();
     return { status: "success", message: "Kept for longer. The new date is on the row." };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+/**
+ * A child asks to keep a book.
+ *
+ * The form sends a **book code** — the one printed on the book they are
+ * holding — and nothing else. No loan id, no member id, no library id. The
+ * service resolves it against the signed-in child's own active loans, so a code
+ * belonging to somebody else's loan finds nothing, and there is no field here
+ * that could be edited into another child's record.
+ */
+export async function requestRenewalAction(
+  _previous: CirculationFormState,
+  formData: FormData,
+): Promise<CirculationFormState> {
+  try {
+    await requestRenewal({ code: String(formData.get("code") ?? "") });
+    revalidateCirculation();
+    return { status: "success", message: RENEWAL_REQUEST_MESSAGES.pending };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+export async function cancelRenewalRequestAction(
+  _previous: CirculationFormState,
+  formData: FormData,
+): Promise<CirculationFormState> {
+  try {
+    await cancelOwnRenewalRequest({ code: String(formData.get("code") ?? "") });
+    revalidateCirculation();
+    return { status: "success", message: RENEWAL_REQUEST_MESSAGES.cancelled };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+/**
+ * A librarian answers a request.
+ *
+ * The decision arrives as a form value and is narrowed here to the two words
+ * the service accepts — anything else is a decline, which is the safe direction
+ * for a value that arrived over the wire: a malformed submit can never extend a
+ * loan by accident.
+ */
+export async function decideRenewalRequestAction(
+  _previous: CirculationFormState,
+  formData: FormData,
+): Promise<CirculationFormState> {
+  try {
+    const decision = String(formData.get("decision") ?? "") === "APPROVE" ? "APPROVE" : "DECLINE";
+
+    const result = await decideRenewalRequest({
+      requestId: String(formData.get("requestId") ?? ""),
+      decision,
+      reason: String(formData.get("reason") ?? ""),
+    });
+
+    revalidateCirculation();
+
+    return {
+      status: "success",
+      message:
+        result.decision === "APPROVE"
+          ? `${result.title} stays with ${result.readerName} for longer.`
+          : `${result.readerName} has been told about ${result.title}.`,
+    };
   } catch (error) {
     return toErrorState(error);
   }

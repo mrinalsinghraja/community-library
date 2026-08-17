@@ -4,17 +4,27 @@ import { prisma } from "@/server/db";
 import { pruneExpiredSessions } from "@/server/auth/session-store";
 import { pruneOldLoginAttempts } from "@/server/lib/rate-limit";
 import { sweepPendingMedia } from "@/server/services/media-service";
+import {
+  sendCirculationReminders,
+  type ReminderRunResult,
+} from "@/server/services/notification-service";
 
 /**
  * Daily housekeeping.
  *
- * Phase 0 scope is hygiene only: expired sessions, spent tokens, and stale
- * throttling rows. Overdue reminders join this job in a later phase.
+ * Hygiene first — expired sessions, spent tokens, stale throttling rows,
+ * unclaimed uploads — and then, since Phase 4, the one thing this job does that
+ * somebody outside the building notices: due-soon and overdue reminders.
  *
- * Nothing here decides anything. Overdue status in particular is always derived
+ * **Nothing here decides anything about a book.** Overdue is always derived
  * from `due_at < now()` at read time, so a day when this job fails to run
- * cannot leave the library believing something untrue — it only leaves a few
- * dead rows behind.
+ * cannot leave the library believing something untrue. It leaves a few dead
+ * rows behind and one morning's reminders unsent, and both of those are
+ * visible: the run's result says what it did.
+ *
+ * The reminder pass is deliberately last and deliberately isolated. It is the
+ * only step that talks to a mail server, and a mail server having a bad morning
+ * must not stop the library's own housekeeping.
  */
 
 export interface MaintenanceResult {
@@ -25,6 +35,7 @@ export interface MaintenanceResult {
   mediaPurged: number;
   mediaFailed: number;
   mediaNeedsAttention: number;
+  reminders: ReminderRunResult;
 }
 
 /**
@@ -85,6 +96,22 @@ export async function runDailyMaintenance(): Promise<MaintenanceResult> {
    */
   const media = await sweepPendingMedia();
 
+  /*
+   * Reminders last, and never fatal.
+   *
+   * If this throws — a mail provider misconfigured, a template failing to
+   * render — the housekeeping above has already happened and its result is
+   * still worth returning. The error is logged, the run reports zero sent, and
+   * nobody's loan has changed, because this pass cannot write to one.
+   */
+  let reminders: ReminderRunResult;
+  try {
+    reminders = await sendCirculationReminders();
+  } catch (error) {
+    console.error("[maintenance] reminder pass failed:", error);
+    reminders = { enabled: true, due: 0, sent: 0, failed: 0, alreadySent: 0, noRecipient: 0 };
+  }
+
   return {
     expiredSessionsRemoved,
     spentTokensRemoved,
@@ -93,5 +120,6 @@ export async function runDailyMaintenance(): Promise<MaintenanceResult> {
     mediaPurged: media.purged,
     mediaFailed: media.failed,
     mediaNeedsAttention: media.needsAttention,
+    reminders,
   };
 }

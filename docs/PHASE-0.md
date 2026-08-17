@@ -111,7 +111,10 @@ those workflows need no migration later. No Version 1 code path uses them.
 4. **Consent wording is not legally reviewed.** See `SECURITY.md` §1. This is
    the single most important open item before real children's data is entered.
 5. **Email is not implemented.** Variables are declared and validated; delivery
-   is Phase 5. Activation therefore cannot be completed by email yet.
+   arrived in Phase 1, and circulation reminders in Phase 4. *(This limitation
+   was written during Phase 0 and is kept as the record of that moment. The
+   original text said "Phase 5", which the delivered sequence overtook; see
+   `docs/PHASE-4.md` §1.)*
 6. **No account-deletion workflow.** The schema supports archival; the flow is
    later work, and retention periods need community and legal input.
 7. **Not deployed.** No GitHub repository, Neon project or Vercel project has

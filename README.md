@@ -5,8 +5,9 @@ library. Built for readers aged roughly 5–14, run by volunteers, and designed 
 the children themselves can eventually operate it.
 
 **First deployment:** Mana Jardin Children's Library
-**Status:** Phase 1 complete — identity, registration and account lifecycle.
-See [`docs/PHASE-1.md`](docs/PHASE-1.md).
+**Status:** Phase 4 complete — identity, guardian verification, catalogue,
+circulation, and now reminders plus renewal requests.
+See [`docs/PHASE-4.md`](docs/PHASE-4.md).
 
 ---
 

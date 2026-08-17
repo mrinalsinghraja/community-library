@@ -684,3 +684,121 @@ minute: finish the activation, then lend the book.
 `tests/database/circulation.test.ts`, and all five are renewed against; the unit
 suite asserts the allowlist has exactly one member and that filtering every
 `UserStatus` through `memberMayBorrow` yields `["ACTIVE"]`.
+
+---
+
+## ADR-029 — A reminder is claimed before it is sent, keyed by the loan's own due date
+
+**Decision.** Every due-soon and overdue message is claimed as a row in
+`loan_notification` before it reaches an email provider, unique on
+`(loan_id, due_at, offset_days)`. The daily job derives which occurrence is due
+from the loan's **current** due date, in the library's timezone.
+
+**Why.** This library charges no fines and can compel nobody, so a polite note
+to a parent is quite literally the whole mechanism by which books come back. A
+reminder that arrives every morning is not a reminder — it is a thing people
+filter — and at that point the library has no mechanism at all. The daily cron
+runs every day and may run twice; duplicate suppression therefore cannot be an
+optimisation, it is the feature.
+
+**Why the insert is the lock.** A check-then-insert in application code has a
+window between the halves, and two Vercel cron invocations — or one cron and an
+operator running the job by hand — would both walk through it. Two inserts of
+the same occurrence cannot both commit, so the loser simply skips. Tested with
+genuinely parallel runs against real PostgreSQL.
+
+**Why `due_at` is in the key.** It is what makes renewal work with no
+cancellation logic anywhere. Renewing moves the due date, which retires every
+occurrence belonging to the old one and leaves the new date's occurrences
+unclaimed. Nothing has to remember to cancel a scheduled message, because
+nothing was ever scheduled — the job asks the loan, every morning, where it
+stands now.
+
+**Alternatives.** A `next_reminder_at` column on the loan (a stored schedule
+that a renewal must remember to update, and that a failed job leaves wrong); a
+provider-side dedupe key (moves a correctness guarantee outside the database and
+outside the tests); scanning `email_event` for a prior send (no constraint, so
+it races).
+
+**Cost.** A failed delivery is not retried: the occurrence is spent and the row
+reads `FAILED`. A family may miss one note. The alternative is worse — a
+provider that reports a failure it actually delivered would produce a second
+copy the next morning, and the desk's overdue list never depended on email
+anyway.
+
+**Verification.** `tests/database/notifications.test.ts` — the same day twice,
+two jobs at the same instant, a renewal in between, and an assertion after a run
+that the loan's status, due date, renewal count, borrower, book status and event
+history are all byte-for-byte unchanged.
+
+---
+
+## ADR-030 — Approving a renewal request runs the desk's own renewal, under `loan.renew`
+
+**Decision.** `decideRenewalRequest` calls `renewLockedLoan` — the same function
+the desk's Keep-longer button calls — inside one transaction with the decision,
+and is guarded by `loan.renew`. No new permission was introduced for deciding a
+request. A child holds `loan.request_renewal`, which permits asking only.
+
+**Why one code path.** A second implementation of renewal would be a second
+place for the renewal rules to live, and the two would drift: a rule added to
+one — the overdue policy, the allowance, an eligibility check — would silently
+not apply to the other. Extracting the core so both callers arrive at it holding
+the loan's lock costs one function and removes that whole class of bug.
+
+**Why not a separate permission.** Approving a request does exactly what the
+desk button does. `loan.decide_renewal_request` would name the same power twice,
+would be granted to exactly the same roles, and would eventually be granted to
+one of them and not the other by mistake. Junior Librarian already holds
+`loan.renew`, which is right: answering a child's question is desk work, and
+that is the role's whole purpose.
+
+**Why the rules are re-checked at decision time.** A request raised on Monday
+can be answered on Wednesday. The book may have gone overdue, the allowance may
+have been spent at the desk, the account may have been paused. The check when
+the child asks exists so they are told a knowable "no" immediately; the check at
+approval is the one that decides.
+
+**Why a refused approval leaves the request PENDING.** The librarian has learnt
+something the child could not know. Declining is a decision a person makes, with
+a note attached; marking it declined automatically would attribute that decision
+to nobody. A `renewal_request.refused` audit row records the attempt.
+
+**Cost.** `renewLockedLoan` takes a transaction client, an actor and a settings
+object rather than opening its own transaction, so a future caller could get the
+lock ordering wrong. There are two callers, both in the same file, and both
+arrive through `lockActiveLoan`.
+
+**Verification.** `tests/database/renewal-requests.test.ts` — parallel
+approvals, approve-versus-decline, a desk renewal racing an open request, and an
+overdue loan answered late. In every case: one renewal, one `RENEW` event, one
+decision.
+
+---
+
+## ADR-031 — A child's action is keyed by the book code, not by a loan id
+
+**Decision.** The reader-facing renewal actions take a `copy_code` — the string
+printed on the book — and resolve it against `member_user_id = the session`. No
+loan id, member id or library id appears in any reader-facing form.
+
+**Why.** It removes the question rather than answering it. There is no id on the
+page to increment, no ownership check to remember, and no field a curious
+nine-year-old can edit into somebody else's record — the same shape that makes
+`listOwnLoans` take no parameters at all (ADR-026's sibling reasoning). The code
+is also what the child is holding, so it is the natural thing for their screen
+to send.
+
+**One sentence for every miss.** A code that does not exist, one belonging to
+another child, and one already brought back all return *"We could not find that
+book on your shelf."* A child probing codes learns nothing about which are real
+or who has them.
+
+**Cost.** A book code is not unique across libraries in principle, so the lookup
+is scoped by library as well as by member — which it would have to be anyway.
+A child holding two copies of the same title cannot exist (two copies have two
+codes), so the resolution is unambiguous.
+
+**Verification.** `tests/database/renewal-requests.test.ts` — another child's
+book, a fictional code, and a returned book all produce the identical refusal,
+and a second reader's screen never contains the first's request.

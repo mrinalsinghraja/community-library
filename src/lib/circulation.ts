@@ -39,6 +39,10 @@ export const ACTIVE_CIRCULATION_SETTINGS = [
   "renewalPeriodDays",
   "allowRenewalWhenOverdue",
   "timezone",
+  // Both implemented in Phase 4, and both left this file's dormant list in the
+  // same change that gave them behaviour — which is the rule for that list.
+  "overdueRemindersEnabled",
+  "overdueReminderOffsets",
 ] as const;
 
 /**
@@ -47,9 +51,12 @@ export const ACTIVE_CIRCULATION_SETTINGS = [
  * They were laid down in Phase 0 from the blueprint's sketch of a full library
  * system. Phase 3 implemented circulation and deliberately did not give them
  * meaning: `blockOnOverdueDays` would turn a late book into a locked account
- * for a child, `renewalBlockedWhenReserved` describes reservations that do not
- * exist, and `overdueReminderOffsets` describes notifications this phase does
- * not send. Inventing behaviour for any of them would be inventing policy.
+ * for a child, and `renewalBlockedWhenReserved` describes reservations that do
+ * not exist. Inventing behaviour for either would be inventing policy.
+ *
+ * `overdueReminderOffsets` was on this list through Phase 3 and is not any
+ * more: Phase 4 sends reminders, so it now decides when they go out. That is
+ * the only way a key leaves this list — implemented, in the same change.
  *
  * The list exists so a settings screen — there is none yet — cannot render one
  * of these beside a working control and leave a librarian believing they have
@@ -61,7 +68,12 @@ export const ACTIVE_CIRCULATION_SETTINGS = [
 export const DORMANT_CIRCULATION_SETTINGS = [
   "blockOnOverdueDays",
   "renewalBlockedWhenReserved",
-  "overdueReminderOffsets",
+  // Sketched as a master switch over all outbound mail. Still unwired, and
+  // deliberately: it defaults to false, and a false that quietly stopped
+  // activation links would lock families out of the library with nothing on
+  // screen to explain it. What actually decides whether mail leaves this server
+  // is which provider is configured.
+  "emailEnabled",
 ] as const;
 
 export type DormantCirculationSetting = (typeof DORMANT_CIRCULATION_SETTINGS)[number];
@@ -297,6 +309,54 @@ export const CIRCULATION_MESSAGES = {
   renewalBlockedByOverdue:
     "This book is past its date, so it cannot be kept for longer. Bring it to the desk and it can go straight back out.",
 } as const;
+
+// ---------------------------------------------------------------------------
+// Asking to keep a book
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a child cannot ask to keep this one, in words written for the child.
+ *
+ * The same rules the desk enforces, said differently. A librarian reading
+ * "This book has already been kept for longer once" is being told a policy; a
+ * nine-year-old reading their own screen is being told what to do next, which
+ * is always the same thing — bring it back, ask at the desk, nobody is cross.
+ *
+ * Nothing here names an account state. A child whose account has been paused
+ * sees "Ask the librarian", not "SUSPENDED", for the same reason the desk sees
+ * one generic sentence: why an account is paused is a conversation with a
+ * family, not a label on a screen.
+ */
+export const RENEWAL_REQUEST_MESSAGES = {
+  invitation: "You can ask the librarian to keep this book for another",
+  pending: "You have asked to keep this one longer. The librarian will let you know.",
+  approved: "The librarian said yes! You can keep this one longer.",
+  declined: "The librarian would like this one back. Please bring it in.",
+
+  alreadyAsked: "You have already asked about this book. The librarian will see it.",
+  noRenewalsLeft: "You have already kept this one for longer once. Please bring it back.",
+  overdue: "This one was due back already. Please bring it in — you can borrow it again after.",
+  notYours: "We could not find that book on your shelf.",
+  accountUnavailable: "Please ask the librarian about your library card.",
+  noneToCancel: "There is nothing to cancel for this book.",
+  cancelled: "That is fine — we have taken your question away.",
+} as const;
+
+/** What a child is told about their own request, if they have one open. */
+export type ReaderRenewalState = "none" | "pending" | "approved" | "declined";
+
+/**
+ * The sentence offering the ask, built from configuration.
+ *
+ * A library that extends loans by seven days must not show a child the number
+ * fourteen, so the period is passed in from `library_settings` and never
+ * written here.
+ */
+export function renewalInvitation(renewalPeriodDays: number): string {
+  return renewalPeriodDays === 1
+    ? "You can ask the librarian to keep this book for one more day."
+    : `You can ask the librarian to keep this book for another ${renewalPeriodDays} days.`;
+}
 
 // ---------------------------------------------------------------------------
 // Paging

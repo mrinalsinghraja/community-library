@@ -7,7 +7,10 @@ import { ButtonLink } from "@/components/ui/button";
 import { requireAnyPermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe } from "@/server/lib/settings";
 import { countPendingRegistrations } from "@/server/services/registration-service";
-import { countDeskLoans } from "@/server/services/circulation-service";
+import {
+  countDeskLoans,
+  countPendingRenewalRequests,
+} from "@/server/services/circulation-service";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Library desk" };
@@ -37,12 +40,18 @@ export default async function DeskPage() {
       ? await countDeskLoans()
       : { active: 0, overdue: 0 };
 
+  // Children waiting for an answer. Counted only for whoever can give one.
+  const renewalAsks = actor.permissions.has("loan.renew")
+    ? await countPendingRenewalRequests()
+    : 0;
+
   return (
     <StaffShell
       branding={branding}
       actor={actor}
       pendingRegistrations={pending}
       overdueLoans={loans.overdue}
+      pendingRenewals={renewalAsks}
       title="Library desk"
     >
       <p className="text-lg text-ink-soft">
@@ -64,6 +73,24 @@ export default async function DeskPage() {
                     : loans.overdue === 1
                       ? "One is past its date."
                       : `${loans.overdue} are past their date.`}
+                </p>
+              </CardBody>
+            </Card>
+          </Link>
+        ) : null}
+
+        {actor.permissions.has("loan.renew") ? (
+          <Link href="/desk/renewals" className="no-underline">
+            <Card tone={renewalAsks > 0 ? "shelf" : "plain"} className="h-full">
+              <CardTitle icon="⏳">Asks to keep</CardTitle>
+              <CardBody>
+                <p className="font-display text-5xl font-extrabold text-ink">{renewalAsks}</p>
+                <p className="mt-1">
+                  {renewalAsks === 0
+                    ? "No one is asking."
+                    : renewalAsks === 1
+                      ? "A reader is waiting to hear back."
+                      : `${renewalAsks} readers are waiting to hear back.`}
                 </p>
               </CardBody>
             </Card>

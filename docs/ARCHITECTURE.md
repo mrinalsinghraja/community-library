@@ -174,9 +174,17 @@ but not on a book that is currently out. The edit form for such a book renders a
 read-only note instead of a status control, and the service refuses the change
 independently.
 
-`renewal_request` is the one model still exactly as Phase 0 left it, unused.
-Renewal in Phase 3 is a librarian action; letting a child *ask* is a later
-decision.
+**As of Phase 4, `renewal_request` is wired.** A child asks; a librarian decides;
+approving calls `renewLockedLoan`, the same function the desk's own button
+calls, in one transaction with the decision (ADR-030). There is exactly one
+renewal in this application and both paths run it — a rule added to renewal
+cannot be missed by the request path, because that path has no rules of its own.
+
+`notification-service.ts` is the third circulation-adjacent service and the most
+constrained: it reads loans and writes `loan_notification` and `email_event`,
+and touches nothing else. It cannot change a due date, a status or a borrower,
+which is what makes a mail server's bad morning unable to alter what the library
+believes about its books.
 
 **Two pure things live in `src/lib/catalogue.ts` rather than in either service:**
 `donorAcknowledgement()` and `Page<T>`. Both are needed by both sides — a child

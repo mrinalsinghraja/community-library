@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { DORMANT_CIRCULATION_SETTINGS } from "@/lib/circulation";
+import { ACTIVE_CIRCULATION_SETTINGS, DORMANT_CIRCULATION_SETTINGS } from "@/lib/circulation";
 import { DORMANT_PERMISSIONS, PERMISSIONS, type PermissionKey } from "@/lib/permissions";
 
 /**
@@ -50,6 +50,30 @@ describe("dormant settings", () => {
     );
 
     expect(readers).toEqual([]);
+  });
+
+  it("is disjoint from the settings that are live", () => {
+    // A name on both lists would mean the file contradicts itself, and one of
+    // the two statements would be a lie to whoever reads it next.
+    for (const setting of DORMANT_CIRCULATION_SETTINGS) {
+      expect(ACTIVE_CIRCULATION_SETTINGS as readonly string[]).not.toContain(setting);
+    }
+  });
+
+  it("does not leave an implemented setting on the dormant list", () => {
+    /*
+     * The reverse direction, and the one Phase 4 had to get right.
+     * `overdueReminderOffsets` was dormant through Phase 3 and now decides when
+     * reminders go out; leaving it labelled inert would have told a librarian
+     * that editing it does nothing, which would be false the moment they tried.
+     */
+    for (const setting of ACTIVE_CIRCULATION_SETTINGS) {
+      const readers = APPLICATION_SOURCE.filter((file) => file.text.includes(setting));
+      expect(
+        readers.length,
+        `${setting} is declared active but nothing in src/ outside the domain modules reads it`,
+      ).toBeGreaterThan(0);
+    }
   });
 
   it("has no configuration screen that could render one", () => {

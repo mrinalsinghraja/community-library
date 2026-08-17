@@ -11,9 +11,11 @@ import {
 import {
   CIRCULATION_MESSAGES,
   LOAN_PAGE_SIZES,
+  RENEWAL_REQUEST_MESSAGES,
   loanCondition,
   memberMayBorrow,
   type LoanFilter,
+  type ReaderRenewalState,
 } from "@/lib/circulation";
 import { calculateDueDate, calculateRenewedDueDate } from "@/lib/dates";
 import { prisma } from "@/server/db";
@@ -176,6 +178,12 @@ export interface ReaderLoanCard {
   returnedAt: Date | null;
   /** Already rendered as the donor chose. Never mentions who has the book. */
   donorAcknowledgement: string | null;
+  /** Where this child's own asking stands. Never anybody else's. */
+  renewalState: ReaderRenewalState;
+  /** True when "ask to keep it" should be offered on this book. */
+  canAskToKeep: boolean;
+  /** Why not, in the child's own words. Null when they can ask. */
+  askBlockedReason: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -747,74 +755,110 @@ export async function renewLoan(input: { loanId: string }): Promise<{ dueAt: Dat
 
   return prisma.$transaction(async (tx) => {
     const loan = await lockActiveLoan(tx, actor, input.loanId);
-
-    if (!memberMayBorrow(loan.reader_status)) {
-      throw new RuleViolationError(
-        `Member ${loan.member_user_id} is ${loan.reader_status} and may not renew`,
-        CIRCULATION_MESSAGES.readerUnavailable,
-      );
-    }
-
-    if (loan.renewal_count >= settings.maxRenewals) {
-      throw new RuleViolationError(
-        `Loan ${loan.id} has been renewed ${loan.renewal_count} times (max ${settings.maxRenewals})`,
-        CIRCULATION_MESSAGES.renewalLimitReached(settings.maxRenewals),
-      );
-    }
-
-    const overdue =
-      loanCondition({ status: "ACTIVE", dueAt: loan.due_at }, settings.timezone) === "overdue";
-    if (overdue && !settings.allowRenewalWhenOverdue) {
-      throw new RuleViolationError(
-        `Loan ${loan.id} is overdue and this library does not renew overdue loans`,
-        CIRCULATION_MESSAGES.renewalBlockedByOverdue,
-      );
-    }
-
-    const previousDueAt = loan.due_at;
-    const dueAt = calculateRenewedDueDate(
-      previousDueAt,
-      settings.renewalPeriodDays,
-      settings.timezone,
-    );
-    const occurredAt = new Date();
-
-    await tx.loan.update({
-      where: { id: loan.id },
-      // issued_at is untouched. A renewed loan is the same loan, kept longer.
-      data: { dueAt, renewalCount: { increment: 1 } },
-    });
-
-    await tx.loanEvent.create({
-      data: {
-        loanId: loan.id,
-        type: "RENEW",
-        occurredAt,
-        actorUserId: actor.userId,
-        previousDueAt,
-        newDueAt: dueAt,
-      },
-    });
-
-    await recordAudit(tx, {
-      libraryId: actor.libraryId,
-      action: AUDIT_ACTIONS.LOAN_RENEWED,
-      entityType: "loan",
-      entityId: loan.id,
-      actorUserId: actor.userId,
-      actorLabel: actor.displayName,
-      metadata: {
-        copyCode: loan.copy_code,
-        memberUserId: loan.member_user_id,
-        previousDueAt: previousDueAt.toISOString(),
-        dueAt: dueAt.toISOString(),
-        renewalNumber: loan.renewal_count + 1,
-        renewalPeriodDays: settings.renewalPeriodDays,
-      },
-    });
-
-    return { dueAt };
+    return renewLockedLoan(tx, actor, settings, loan, { source: "desk" });
   });
+}
+
+/**
+ * The renewal itself, given a loan whose row is already locked.
+ *
+ * Extracted so that approving a child's request can be the *same* renewal, not
+ * a second implementation of one. There are exactly two callers — the desk
+ * button above, and `decideRenewalRequest` below — and both arrive here holding
+ * the loan's lock, having read the same settings row. If the rules change, they
+ * change once.
+ *
+ * It does not open a transaction and it does not check a permission: both
+ * belong to the caller, which knows which authority it is acting under and
+ * which other rows it needs held. `loan.renew` is the permission behind both
+ * paths, because approving a request does precisely what the desk button does.
+ */
+async function renewLockedLoan(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  settings: { maxRenewals: number; renewalPeriodDays: number; allowRenewalWhenOverdue: boolean; timezone: string },
+  loan: LockedLoanRow,
+  options: { source: "desk" | "request"; requestId?: string },
+): Promise<{ dueAt: Date; previousDueAt: Date }> {
+  if (!memberMayBorrow(loan.reader_status)) {
+    throw new RuleViolationError(
+      `Member ${loan.member_user_id} is ${loan.reader_status} and may not renew`,
+      CIRCULATION_MESSAGES.readerUnavailable,
+    );
+  }
+
+  if (loan.renewal_count >= settings.maxRenewals) {
+    throw new RuleViolationError(
+      `Loan ${loan.id} has been renewed ${loan.renewal_count} times (max ${settings.maxRenewals})`,
+      CIRCULATION_MESSAGES.renewalLimitReached(settings.maxRenewals),
+    );
+  }
+
+  /*
+   * The overdue rule is re-evaluated HERE, at decision time, against the date
+   * as it stands now — never against whatever was true when a child pressed a
+   * button. A request raised on Monday for a book due Tuesday is refused if the
+   * librarian gets to it on Wednesday, because by Wednesday the book is late
+   * and the library's answer to a late book is to bring it in.
+   */
+  const overdue =
+    loanCondition({ status: "ACTIVE", dueAt: loan.due_at }, settings.timezone) === "overdue";
+  if (overdue && !settings.allowRenewalWhenOverdue) {
+    throw new RuleViolationError(
+      `Loan ${loan.id} is overdue and this library does not renew overdue loans`,
+      CIRCULATION_MESSAGES.renewalBlockedByOverdue,
+    );
+  }
+
+  const previousDueAt = loan.due_at;
+  const dueAt = calculateRenewedDueDate(
+    previousDueAt,
+    settings.renewalPeriodDays,
+    settings.timezone,
+  );
+  const occurredAt = new Date();
+
+  await tx.loan.update({
+    where: { id: loan.id },
+    // issued_at is untouched. A renewed loan is the same loan, kept longer.
+    data: { dueAt, renewalCount: { increment: 1 } },
+  });
+
+  await tx.loanEvent.create({
+    data: {
+      loanId: loan.id,
+      type: "RENEW",
+      occurredAt,
+      actorUserId: actor.userId,
+      previousDueAt,
+      newDueAt: dueAt,
+      // Says how this renewal came about. The event history is the library's
+      // account of what happened, and "the child asked and I agreed" is a
+      // different thing from "I extended it at the desk".
+      note: options.source === "request" ? "Approved from a reader's request." : null,
+    },
+  });
+
+  await recordAudit(tx, {
+    libraryId: actor.libraryId,
+    action: AUDIT_ACTIONS.LOAN_RENEWED,
+    entityType: "loan",
+    entityId: loan.id,
+    actorUserId: actor.userId,
+    actorLabel: actor.displayName,
+    metadata: {
+      copyCode: loan.copy_code,
+      memberUserId: loan.member_user_id,
+      previousDueAt: previousDueAt.toISOString(),
+      dueAt: dueAt.toISOString(),
+      renewalNumber: loan.renewal_count + 1,
+      renewalPeriodDays: settings.renewalPeriodDays,
+      source: options.source,
+      ...(options.requestId ? { renewalRequestId: options.requestId } : {}),
+    },
+  });
+
+  return { dueAt, previousDueAt };
 }
 
 // ---------------------------------------------------------------------------
@@ -895,6 +939,464 @@ export async function cancelLoan(input: { loanId: string; reason: string }): Pro
       },
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// Renewal requests — a child asks, a librarian decides
+// ---------------------------------------------------------------------------
+
+/**
+ * A pending request, as the desk sees it.
+ *
+ * Enough to decide and no more. There is no guardian name, no contact detail,
+ * no account status and no note about the family on this object — a librarian
+ * deciding whether a book can stay out another fortnight needs the child, the
+ * book, the date and the rule, and everything else would be somebody's private
+ * information travelling for no reason.
+ */
+export interface RenewalRequestRow {
+  requestId: string;
+  requestedAt: Date;
+  readerName: string;
+  memberCode: string;
+  title: string;
+  copyCode: string;
+  dueAt: Date;
+  renewalCount: number;
+  maxRenewals: number;
+  /** Null when it can be approved; otherwise why it cannot, in staff wording. */
+  blockedReason: string | null;
+}
+
+interface RenewalRequestListRow {
+  request_id: string;
+  requested_at: Date;
+  reader_name: string;
+  reader_status: UserStatus;
+  member_code: string;
+  title: string;
+  copy_code: string;
+  due_at: Date;
+  renewal_count: number;
+}
+
+/**
+ * The child's own active loan for a book they are holding, row locked.
+ *
+ * **Takes a copy code, not a loan id.** The code is printed on the book in the
+ * child's hand, which makes it the natural thing for their screen to send —
+ * and, more to the point, the query is scoped to `member_user_id = the session`
+ * so a code belonging to somebody else's loan resolves to nothing at all. There
+ * is no id here for a curious nine-year-old to change into another child's.
+ */
+async function lockOwnActiveLoanByCode(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  copyCode: string,
+): Promise<LockedLoanRow | null> {
+  const [loan] = await tx.$queryRaw<LockedLoanRow[]>`
+    SELECT l.id, l.copy_id, c.copy_code, l.member_user_id,
+           u.display_name AS reader_name, u.status AS reader_status,
+           t.title, l.status, l.issued_at, l.due_at, l.renewal_count
+      FROM loan l
+      JOIN book_copy c ON c.id = l.copy_id
+      JOIN book_title t ON t.id = c.title_id
+      JOIN app_user u ON u.id = l.member_user_id
+     WHERE l.library_id = ${actor.libraryId}
+       AND l.member_user_id = ${actor.userId}
+       AND l.status = 'ACTIVE'
+       AND lower(c.copy_code) = lower(${copyCode.trim()})
+     FOR UPDATE OF l
+  `;
+  return loan ?? null;
+}
+
+/**
+ * Why this loan cannot be extended right now, in the librarian's words.
+ *
+ * The same three rules `renewLockedLoan` enforces, asked without writing
+ * anything — so the desk can show a request it already knows will be refused,
+ * and say why, instead of offering an Approve button that throws.
+ */
+function renewalBlockedReason(
+  loan: { reader_status: UserStatus; renewal_count: number; due_at: Date },
+  settings: { maxRenewals: number; allowRenewalWhenOverdue: boolean; timezone: string },
+): string | null {
+  if (!memberMayBorrow(loan.reader_status)) return CIRCULATION_MESSAGES.readerUnavailable;
+  if (loan.renewal_count >= settings.maxRenewals) {
+    return CIRCULATION_MESSAGES.renewalLimitReached(settings.maxRenewals);
+  }
+  const overdue =
+    loanCondition({ status: "ACTIVE", dueAt: loan.due_at }, settings.timezone) === "overdue";
+  if (overdue && !settings.allowRenewalWhenOverdue) {
+    return CIRCULATION_MESSAGES.renewalBlockedByOverdue;
+  }
+  return null;
+}
+
+/**
+ * A child asks to keep a book longer.
+ *
+ * This is the only write in the whole application that a reader can cause, and
+ * it is carefully the smallest possible one: a row that says somebody asked.
+ * **No loan changes. No due date moves. No book changes status.** Until a
+ * librarian decides, the library's account of where the book is and when it is
+ * due is exactly what it was.
+ *
+ * The rules are checked here as well as at approval, so a child is told
+ * straight away rather than being left waiting for a "no" that was knowable
+ * immediately. They are checked again at approval because a Monday request can
+ * be answered on Wednesday, by which time the answer may have changed.
+ *
+ * One pending request per loan, enforced by a partial unique index. Two taps on
+ * a slow connection produce one request and one gentle sentence.
+ */
+export async function requestRenewal(input: { code: string }): Promise<{ title: string }> {
+  const actor = await requirePermission("loan.request_renewal");
+  const { settings } = await getCurrentLibrary();
+
+  // A librarian has no library card and no shelf of their own. Shaped as
+  // not-found rather than not-authorized: there is nothing here for them.
+  if (actor.kind !== "MEMBER") {
+    throw new NotFoundError(`User ${actor.userId} is not a member and has no loans of their own`);
+  }
+
+  const code = input.code.trim();
+  if (!code) {
+    throw new RuleViolationError("Renewal requested without a book code", RENEWAL_REQUEST_MESSAGES.notYours);
+  }
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const loan = await lockOwnActiveLoanByCode(tx, actor, code);
+      if (!loan) {
+        // Covers every miss with one sentence: no such book, somebody else's
+        // book, a book already brought back. A child probing codes learns
+        // nothing about which of those it was.
+        throw new RuleViolationError(
+          `No active loan of ${code} for member ${actor.userId}`,
+          RENEWAL_REQUEST_MESSAGES.notYours,
+        );
+      }
+
+      const blocked = renewalBlockedReason(loan, settings);
+      if (blocked) {
+        // Re-worded for the child. The desk's sentence explains a policy; this
+        // one says what to do next, and never names an account state.
+        throw new RuleViolationError(
+          `Loan ${loan.id} cannot be renewed: ${blocked}`,
+          readerBlockedSentence(loan, settings),
+        );
+      }
+
+      await tx.renewalRequest.create({
+        data: { loanId: loan.id, requestedById: actor.userId, status: "PENDING" },
+      });
+
+      await recordAudit(tx, {
+        libraryId: actor.libraryId,
+        action: AUDIT_ACTIONS.RENEWAL_REQUESTED,
+        entityType: "loan",
+        entityId: loan.id,
+        actorUserId: actor.userId,
+        actorLabel: actor.displayName,
+        metadata: { copyCode: loan.copy_code, dueAt: loan.due_at.toISOString() },
+      });
+
+      return { title: loan.title };
+    });
+  } catch (error) {
+    // The index refused a second open request. Not an error the child caused
+    // and not one they should see as one.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new ConflictError(
+        `Member ${actor.userId} already has a pending renewal request for ${code}`,
+        RENEWAL_REQUEST_MESSAGES.alreadyAsked,
+      );
+    }
+    throw error;
+  }
+}
+
+/** The child's version of a refusal: what to do, never which rule. */
+function readerBlockedSentence(
+  loan: { reader_status: UserStatus; renewal_count: number; due_at: Date },
+  settings: { maxRenewals: number; allowRenewalWhenOverdue: boolean; timezone: string },
+): string {
+  if (!memberMayBorrow(loan.reader_status)) return RENEWAL_REQUEST_MESSAGES.accountUnavailable;
+  if (loan.renewal_count >= settings.maxRenewals) return RENEWAL_REQUEST_MESSAGES.noRenewalsLeft;
+  return RENEWAL_REQUEST_MESSAGES.overdue;
+}
+
+/**
+ * A child changes their mind.
+ *
+ * Only their own, only while it is still pending, and it removes nothing: the
+ * request becomes CANCELLED and stays, because a librarian who saw it in the
+ * morning should be able to find out what happened to it.
+ */
+export async function cancelOwnRenewalRequest(input: { code: string }): Promise<void> {
+  const actor = await requirePermission("loan.request_renewal");
+  if (actor.kind !== "MEMBER") {
+    throw new NotFoundError(`User ${actor.userId} is not a member and has no requests of their own`);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const loan = await lockOwnActiveLoanByCode(tx, actor, input.code);
+    if (!loan) {
+      throw new RuleViolationError(
+        `No active loan of ${input.code} for member ${actor.userId}`,
+        RENEWAL_REQUEST_MESSAGES.notYours,
+      );
+    }
+
+    const [request] = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM renewal_request
+       WHERE loan_id = ${loan.id} AND status = 'PENDING'
+       FOR UPDATE
+    `;
+    if (!request) {
+      throw new RuleViolationError(
+        `No pending renewal request on loan ${loan.id}`,
+        RENEWAL_REQUEST_MESSAGES.noneToCancel,
+      );
+    }
+
+    await tx.renewalRequest.update({
+      where: { id: request.id },
+      data: { status: "CANCELLED", decidedById: actor.userId, decidedAt: new Date() },
+    });
+
+    await recordAudit(tx, {
+      libraryId: actor.libraryId,
+      action: AUDIT_ACTIONS.RENEWAL_REQUEST_CANCELLED,
+      entityType: "renewal_request",
+      entityId: request.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      metadata: { copyCode: loan.copy_code, cancelledByReader: true },
+    });
+  });
+}
+
+/**
+ * What is waiting for an answer.
+ *
+ * Guarded by `loan.renew` — the authority to extend a loan — and not by
+ * `loan.view`, which every reader holds. Scoped to the actor's own library
+ * through the loan, since a request row has no library of its own.
+ */
+export async function listPendingRenewalRequests(): Promise<RenewalRequestRow[]> {
+  const actor = await requirePermission("loan.renew");
+  const { settings } = await getCurrentLibrary();
+
+  const rows = await prisma.$queryRaw<RenewalRequestListRow[]>`
+    SELECT r.id AS request_id, r.requested_at,
+           u.display_name AS reader_name, u.status AS reader_status,
+           coalesce(m.member_code, '') AS member_code,
+           t.title, c.copy_code, l.due_at, l.renewal_count
+      FROM renewal_request r
+      JOIN loan l ON l.id = r.loan_id
+      JOIN book_copy c ON c.id = l.copy_id
+      JOIN book_title t ON t.id = c.title_id
+      JOIN app_user u ON u.id = l.member_user_id
+      LEFT JOIN member_profile m ON m.user_id = u.id
+     WHERE r.status = 'PENDING'
+       AND l.library_id = ${actor.libraryId}
+       AND l.status = 'ACTIVE'
+     ORDER BY r.requested_at ASC
+     LIMIT ${LOAN_PAGE_SIZES.desk}
+  `;
+
+  return rows.map((row) => ({
+    requestId: row.request_id,
+    requestedAt: row.requested_at,
+    readerName: row.reader_name,
+    memberCode: row.member_code,
+    title: row.title,
+    copyCode: row.copy_code,
+    dueAt: row.due_at,
+    renewalCount: row.renewal_count,
+    maxRenewals: settings.maxRenewals,
+    blockedReason: renewalBlockedReason(
+      { reader_status: row.reader_status, renewal_count: row.renewal_count, due_at: row.due_at },
+      settings,
+    ),
+  }));
+}
+
+/** For the desk's badge. Same scoping as the list, no rows carried. */
+export async function countPendingRenewalRequests(): Promise<number> {
+  const actor = await requirePermission("loan.renew");
+
+  const [row] = await prisma.$queryRaw<{ count: bigint }[]>`
+    SELECT count(*) AS count
+      FROM renewal_request r
+      JOIN loan l ON l.id = r.loan_id
+     WHERE r.status = 'PENDING'
+       AND l.library_id = ${actor.libraryId}
+       AND l.status = 'ACTIVE'
+  `;
+  return Number(row?.count ?? 0);
+}
+
+/**
+ * A librarian answers.
+ *
+ * Approving performs **the renewal**, through `renewLockedLoan` — the same code
+ * the desk's own button runs, in one transaction with the decision. There is no
+ * second way to extend a loan in this application, which is the point: a rule
+ * added to renewal cannot be missed by this path, because this path has no
+ * rules of its own.
+ *
+ * Order inside the transaction: lock the request, confirm it is still pending,
+ * lock the loan, re-check every rule against the loan as it is *now*, renew,
+ * then mark the request. Two librarians pressing Approve on the same request
+ * queue on the first lock; the second reads a request that is no longer PENDING
+ * and is refused. Neither a second renewal nor a second approval is reachable.
+ *
+ * A refused approval leaves the request PENDING, deliberately. The librarian
+ * has learnt something the child could not know — the book went overdue
+ * yesterday — and the honest next step is theirs: decline it with a reason, or
+ * take the book back. Silently marking it declined would attribute a decision
+ * to somebody who never made one.
+ */
+export async function decideRenewalRequest(input: {
+  requestId: string;
+  decision: "APPROVE" | "DECLINE";
+  reason?: string;
+}): Promise<{ decision: "APPROVE" | "DECLINE"; readerName: string; title: string; dueAt: Date | null }> {
+  const actor = await requirePermission("loan.renew");
+  const { settings } = await getCurrentLibrary();
+
+  const reason = (input.reason ?? "").trim();
+  if (input.decision === "DECLINE" && reason.length < 3) {
+    // A child gets told something, so somebody has to have written something.
+    throw new ValidationError(
+      { reason: "Please write a short note for the reader." },
+      "Renewal request declined without a reason",
+    );
+  }
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const [request] = await tx.$queryRaw<
+        { id: string; status: string; loan_id: string }[]
+      >`
+        SELECT r.id, r.status::text AS status, r.loan_id
+          FROM renewal_request r
+          JOIN loan l ON l.id = r.loan_id
+         WHERE r.id = ${input.requestId}
+           AND l.library_id = ${actor.libraryId}
+         FOR UPDATE OF r
+      `;
+
+      if (!request) {
+        throw new NotFoundError(
+          `Renewal request ${input.requestId} not found in library ${actor.libraryId}`,
+        );
+      }
+      if (request.status !== "PENDING") {
+        throw new RuleViolationError(
+          `Renewal request ${request.id} is ${request.status}, not PENDING`,
+          "Someone has already answered this one.",
+        );
+      }
+
+      const loan = await lockActiveLoan(tx, actor, request.loan_id);
+      const decidedAt = new Date();
+
+      if (input.decision === "DECLINE") {
+        await tx.renewalRequest.update({
+          where: { id: request.id },
+          data: {
+            status: "DECLINED",
+            decidedById: actor.userId,
+            decidedAt,
+            decisionNote: reason.slice(0, 500),
+          },
+        });
+
+        await recordAudit(tx, {
+          libraryId: actor.libraryId,
+          action: AUDIT_ACTIONS.RENEWAL_REQUEST_DECLINED,
+          entityType: "renewal_request",
+          entityId: request.id,
+          actorUserId: actor.userId,
+          actorLabel: actor.displayName,
+          metadata: {
+            copyCode: loan.copy_code,
+            memberUserId: loan.member_user_id,
+            reason: reason.slice(0, 500),
+          },
+        });
+
+        return {
+          decision: "DECLINE" as const,
+          readerName: loan.reader_name,
+          title: loan.title,
+          dueAt: null,
+        };
+      }
+
+      const renewed = await renewLockedLoan(tx, actor, settings, loan, {
+        source: "request",
+        requestId: request.id,
+      });
+
+      await tx.renewalRequest.update({
+        where: { id: request.id },
+        data: {
+          status: "APPROVED",
+          decidedById: actor.userId,
+          decidedAt,
+          decisionNote: reason ? reason.slice(0, 500) : null,
+        },
+      });
+
+      await recordAudit(tx, {
+        libraryId: actor.libraryId,
+        action: AUDIT_ACTIONS.RENEWAL_REQUEST_APPROVED,
+        entityType: "renewal_request",
+        entityId: request.id,
+        actorUserId: actor.userId,
+        actorLabel: actor.displayName,
+        metadata: {
+          copyCode: loan.copy_code,
+          memberUserId: loan.member_user_id,
+          previousDueAt: renewed.previousDueAt.toISOString(),
+          dueAt: renewed.dueAt.toISOString(),
+        },
+      });
+
+      return {
+        decision: "APPROVE" as const,
+        readerName: loan.reader_name,
+        title: loan.title,
+        dueAt: renewed.dueAt,
+      };
+    });
+  } catch (error) {
+    /*
+     * An approval the rules turned down is worth a row of its own, written
+     * outside the transaction that rolled back — same reasoning as a refused
+     * issue. It is the trace of a librarian trying to do something for a child
+     * and the library saying no, which is exactly what somebody asks about
+     * later.
+     */
+    if (error instanceof RuleViolationError || error instanceof ConflictError) {
+      await recordAudit(prisma, {
+        libraryId: actor.libraryId,
+        action: AUDIT_ACTIONS.RENEWAL_REQUEST_REFUSED,
+        entityType: "renewal_request",
+        entityId: input.requestId,
+        actorUserId: actor.userId,
+        actorLabel: actor.displayName,
+        metadata: { decision: input.decision, reason: error.message },
+      }).catch(() => undefined);
+    }
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1173,6 +1675,8 @@ export async function listOwnLoans(): Promise<{
   active: ReaderLoanCard[];
   history: ReaderLoanCard[];
   limit: number;
+  /** So the child's screen can say "another 14 days" without knowing the number. */
+  renewalPeriodDays: number;
 } | null> {
   const actor = await requireActor();
   if (!actor.permissions.has("loan.view")) {
@@ -1199,6 +1703,18 @@ export async function listOwnLoans(): Promise<{
       issuedAt: true,
       dueAt: true,
       returnedAt: true,
+      renewalCount: true,
+      /*
+       * The child's own most recent ask about this book, and only theirs — this
+       * is a nested read of rows belonging to a loan already filtered to
+       * `memberUserId = the session`. There is no path from here to another
+       * child's request.
+       */
+      renewalRequests: {
+        orderBy: { requestedAt: "desc" },
+        take: 1,
+        select: { status: true },
+      },
       copy: {
         select: {
           copyCode: true,
@@ -1211,7 +1727,36 @@ export async function listOwnLoans(): Promise<{
     },
   });
 
-  const cards: ReaderLoanCard[] = loans.map((loan) => ({
+  const cards: ReaderLoanCard[] = loans.map((loan) => {
+    const latestRequest = loan.renewalRequests.at(0)?.status ?? null;
+    const renewalState: ReaderRenewalState =
+      loan.status !== "ACTIVE" || latestRequest === null || latestRequest === "CANCELLED"
+        ? "none"
+        : latestRequest === "PENDING"
+          ? "pending"
+          : latestRequest === "APPROVED"
+            ? "approved"
+            : "declined";
+
+    /*
+     * Why they cannot ask, said the way their own screen says things.
+     *
+     * Account state is not consulted here and does not need to be: a paused
+     * account's sessions are revoked, so nobody reading this page is in one.
+     * `requestRenewal` checks it anyway, inside its transaction, because that
+     * is where the answer has to be right.
+     */
+    const overdue = loanCondition(loan, settings.timezone) === "overdue";
+    const askBlockedReason =
+      loan.status !== "ACTIVE"
+        ? null
+        : loan.renewalCount >= settings.maxRenewals
+          ? RENEWAL_REQUEST_MESSAGES.noRenewalsLeft
+          : overdue && !settings.allowRenewalWhenOverdue
+            ? RENEWAL_REQUEST_MESSAGES.overdue
+            : null;
+
+    return {
     code: loan.copy.copyCode,
     title: loan.copy.title.title,
     authors: loan.copy.title.authors,
@@ -1220,6 +1765,9 @@ export async function listOwnLoans(): Promise<{
     issuedAt: loan.issuedAt,
     dueAt: loan.dueAt,
     returnedAt: loan.returnedAt,
+    renewalState,
+    canAskToKeep: loan.status === "ACTIVE" && renewalState === "none" && askBlockedReason === null,
+    askBlockedReason,
     /*
      * The donor's thank-you, exactly as it appears on the book's own page.
      *
@@ -1230,12 +1778,14 @@ export async function listOwnLoans(): Promise<{
      * donors page has no borrower column to add one to.
      */
     donorAcknowledgement: donorAcknowledgement(loan.copy.donation),
-  }));
+    };
+  });
 
   return {
     active: cards.filter((card) => card.status === "ACTIVE"),
     history: cards.filter((card) => card.status === "RETURNED").slice(0, LOAN_PAGE_SIZES.reader),
     limit: settings.maxActiveLoans,
+    renewalPeriodDays: settings.renewalPeriodDays,
   };
 }
 

@@ -75,7 +75,20 @@ export const PERMISSIONS = {
   "loan.view": { category: "circulation", description: "See loans — your own, or the desk's" },
   "loan.issue": { category: "circulation", description: "Give a book to a reader" },
   "loan.return": { category: "circulation", description: "Take a book back" },
+  // Held by staff, and the authority behind BOTH ways a loan gets extended:
+  // renewing at the desk, and approving a child's request. Approving one does
+  // exactly what the desk button does, through exactly the same transaction, so
+  // a second permission would describe the same power twice and let the two
+  // drift apart. See ADR-030.
   "loan.renew": { category: "circulation", description: "Extend a loan" },
+  // Held by readers, and by readers only. It permits asking; it decides
+  // nothing. The service behind it takes no member id — ownership comes from
+  // the session — so this grant cannot be stretched into touching another
+  // child's loan.
+  "loan.request_renewal": {
+    category: "circulation",
+    description: "Ask a librarian to keep a book you have borrowed for longer",
+  },
   "loan.correct": {
     category: "circulation",
     description: "Repair a loan that went wrong — cancel a mis-issue, or close a loan the system missed",
@@ -210,7 +223,14 @@ const JUNIOR_LIBRARIAN_PERMISSIONS = [
  * no circulation *mutation* permission: a child never issues, returns, renews
  * or cancels anything, in this phase or any other.
  */
-const MEMBER_PERMISSIONS = ["book.view", "loan.view"] as const satisfies readonly PermissionKey[];
+const MEMBER_PERMISSIONS = [
+  "book.view",
+  "loan.view",
+  // Asking is not mutating a loan. A request changes nothing about the book,
+  // the date or the record until a librarian decides — which is the whole
+  // reason it is a request and not a renewal.
+  "loan.request_renewal",
+] as const satisfies readonly PermissionKey[];
 
 export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
   {

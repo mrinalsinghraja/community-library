@@ -51,11 +51,17 @@ interface DispatchOptions {
   relatedEntityId?: string;
 }
 
-async function dispatch(
+interface DispatchOutcome {
+  ok: boolean;
+  /** The `email_event` row. Callers that need to point at the attempt keep it. */
+  eventId: string;
+}
+
+async function dispatchWithEvent(
   message: EmailMessage,
   libraryId: string,
   options: DispatchOptions,
-): Promise<boolean> {
+): Promise<DispatchOutcome> {
   const event = await prisma.emailEvent.create({
     data: {
       libraryId,
@@ -87,7 +93,16 @@ async function dispatch(
     );
   }
 
-  return result.ok;
+  return { ok: result.ok, eventId: event.id };
+}
+
+/** The common case: did it go? */
+async function dispatch(
+  message: EmailMessage,
+  libraryId: string,
+  options: DispatchOptions,
+): Promise<boolean> {
+  return (await dispatchWithEvent(message, libraryId, options)).ok;
 }
 
 export const EmailService = {
@@ -311,6 +326,42 @@ export const EmailService = {
         template: TEMPLATE_IDS.ACCOUNT_REACTIVATED,
         relatedEntityType: "app_user",
         relatedEntityId: params.userId,
+      },
+    );
+  },
+
+  /**
+   * A due-soon reminder or an overdue nudge, to the guardian.
+   *
+   * Returns the delivery record's id as well as the outcome, because the daily
+   * job records which attempt each reminder was — the `loan_notification` row
+   * says an occurrence was claimed, and this says what happened to it.
+   *
+   * The loan id goes on the delivery record as the related entity, so "which
+   * book was this about?" is answerable later without the message body.
+   */
+  async sendLoanReminder(params: {
+    to: string;
+    subject: string;
+    sentence: string;
+    childName: string;
+    title: string;
+    copyCode: string;
+    openingNote?: string | null;
+    template: typeof TEMPLATE_IDS.LOAN_DUE_SOON | typeof TEMPLATE_IDS.LOAN_OVERDUE;
+    loanId: string;
+  }): Promise<{ ok: boolean; eventId: string }> {
+    const ctx = await context();
+    const rendered = templates.loanReminder(ctx, params);
+
+    return dispatchWithEvent(
+      { to: params.to, template: params.template, ...rendered },
+      ctx.libraryId,
+      {
+        to: params.to,
+        template: params.template,
+        relatedEntityType: "loan",
+        relatedEntityId: params.loanId,
       },
     );
   },

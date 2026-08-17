@@ -76,6 +76,8 @@ export const TEMPLATE_IDS = {
   ACCOUNT_SUSPENDED: "account_suspended",
   ACCOUNT_REACTIVATED: "account_reactivated",
   IMPORTANT_NOTIFICATION: "important_notification",
+  LOAN_DUE_SOON: "loan_due_soon",
+  LOAN_OVERDUE: "loan_overdue",
 } as const;
 
 export function registrationReceived(
@@ -372,6 +374,63 @@ export function accountReactivated(
       `${params.childName}'s account at ${context.libraryName} is active again. They can sign in as usual.`,
       "",
       "Happy reading!",
+    ].join("\n"),
+  };
+}
+
+/**
+ * A book is due back soon, or was due back and has not arrived.
+ *
+ * One template for both, because they are the same message at different points
+ * on the same timeline and splitting them would invite the second one to grow a
+ * sterner voice. What changes is the sentence, which is composed in
+ * `src/lib/notifications.ts` where the tone rules live and where a test can
+ * read it.
+ *
+ * What this message deliberately does NOT contain:
+ *
+ *   • any other child, any other family, any other book
+ *   • a count of days late, or any number a family could feel scored by
+ *   • a consequence, because there is none — this library charges no fines
+ *   • a link that does anything. There is no action to take on a screen; the
+ *     book comes back to a room, not to a URL, and a reminder carrying a login
+ *     link would be one more link for somebody to phish.
+ */
+export function loanReminder(
+  context: EmailContext,
+  params: {
+    subject: string;
+    /** The whole message, already worded by `reminderSentence`. */
+    sentence: string;
+    childName: string;
+    title: string;
+    copyCode: string;
+    /** Optional, and only if the library published one. */
+    openingNote?: string | null;
+  },
+): RenderedTemplate {
+  const heading = "A library book to come home";
+
+  const detail = `${params.title} (${params.copyCode})`;
+  const closing =
+    "There is nothing to pay and nothing to do online — just pop it in the bag on the next library day.";
+
+  const body =
+    paragraph(params.sentence) +
+    paragraph(`The book is ${detail}.`) +
+    paragraph(closing) +
+    (params.openingNote ? paragraph(params.openingNote) : "");
+
+  return {
+    subject: params.subject,
+    html: layout(context, heading, body),
+    text: [
+      params.sentence,
+      "",
+      `The book is ${detail}.`,
+      "",
+      closing,
+      ...(params.openingNote ? ["", params.openingNote] : []),
     ].join("\n"),
   };
 }
