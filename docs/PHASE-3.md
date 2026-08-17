@@ -260,6 +260,11 @@ typecheck.
 * **Returning a book from a filtered list gives no lingering confirmation** — the
   row simply leaves the "Out now" list, which is legible but quieter than the
   issue screen's message.
+* **There is no per-loan detail screen.** `getLoanForStaff()` exists and returns
+  a loan with its full event history; it is covered by tests but not yet wired to
+  a page. The desk surfaces what it needs inline — the due date, "kept longer
+  once", and the Brought-back filter — so this is a gap in depth rather than in
+  function.
 * **`loan.override_rules` does nothing.**
 * **One transient test failure was observed once** during a run concurrent with a
   dev-server rebuild, and did not reproduce across four subsequent full runs. Not
