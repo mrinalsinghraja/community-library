@@ -310,3 +310,85 @@ service that checks permissions independently.
 
 **Why it lives outside `@/server/authz`.** Services must never import routing.
 Keeping `redirect()` out of the authorization module preserves that.
+
+## ADR-017 — Guardian verification is a separate model from consent
+
+**Decision.** A new `guardian_verification` table, with its own methods, its own
+ordered strengths, and its own lifecycle. `consent_record` keeps recording what a
+family agreed to; it stops carrying any implication about who they are.
+
+**Why.** These answer different questions. Consent asks *"did a guardian agree,
+to what wording, when, and can they withdraw it?"*. Verification asks *"what
+evidence is there that the person who agreed is really the guardian?"*. A ticked
+box produces an excellent answer to the first and essentially none to the second.
+
+Modelled together, raising the verification bar later would mean rewriting
+consent history — a family who consented in August under wording v1 still
+consented under wording v1, whatever the library later decides about identity
+checks. Falsifying that to accommodate a policy change is not acceptable for a
+record whose entire purpose is to be evidence.
+
+**The visible consequence.** The registration queue shows two labelled states
+rather than one green tick. That screen decides whether a child gets an account,
+and it is the last place the two should be blurred.
+
+**What the database enforces.** Strength is a function of method, checked by
+`guardian_verification_strength_matches_method`. One wrong literal in a service
+could otherwise store "somebody ticked a box" as `IDENTITY_PROVIDER` and pass the
+production gate. The database refuses the row.
+
+## ADR-018 — Required verification strength is configuration, never a constant
+
+**Decision.** `library_settings.required_guardian_verification` decides what a
+deployment demands. Default `SELF_DECLARED`, which is a development default and
+is labelled as one.
+
+**Why.** Whether a given method satisfies "verifiable parental consent" is a
+legal question about a specific jurisdiction at a specific time. This software
+must not answer it. Hard-coding any method as sufficient would be exactly the
+claim the whole codebase is careful not to make.
+
+It also means raising the bar is an operational change — one UPDATE — rather than
+a deployment.
+
+**Checked twice, not once.** At approval and again at activation. The requirement
+can be raised while a request sits in the queue or while an activation email sits
+unread in an inbox, and when the bar goes up the accounts it went up for must not
+walk under it. Tested explicitly.
+
+**Absence of evidence is the weakest state.** An account with no verification
+record resolves to `NONE` and fails every requirement above `NONE`. The tempting
+bug is to treat "no records found" as "nothing to check"; there is a test whose
+only job is to keep that bug out.
+
+**Fail-closed where unimplemented.** Setting the requirement to
+`IDENTITY_PROVIDER` makes approval impossible, because nothing can currently
+produce that strength. Deliberate, and documented rather than hidden.
+
+## ADR-019 — The media row is the ledger; the bytes follow it
+
+**Decision.** `media_object.pending_deletion_at` makes every stored object either
+*claimed* or *scheduled for deletion*. Bytes are written before the row exists and
+deleted before the row is removed. A daily sweeper reconciles.
+
+**Why.** A database transaction and an object-store write cannot be made atomic.
+Rather than pretend otherwise with compensating logic that is wrong in the
+interesting cases, the design makes both failure directions harmless:
+
+- **Upload, then abandon the form.** The object was born with a deadline and
+  nobody cleared it, so the sweeper collects it. No orphan.
+- **Remove, then storage fails.** The row survives, still scheduled, and
+  `getAuthorizedMedia` already refuses anything pending deletion. The sweeper
+  retries. No unreachable bytes, and nothing readable that should not be.
+
+Row-first deletion was rejected: it leaves bytes nothing knows about, which for a
+private photograph of a child is the one outcome worth engineering against.
+
+**Consequence for replacement.** The profile re-points and the old object is
+scheduled in a single commit — transactional from the application's point of
+view. Only the byte cleanup is eventual, and it can only ever run late, never
+early, and never on an object something still points at.
+
+**Cost.** An object can outlive its usefulness by up to a day if the cron does not
+run. That is why the sweep is daily rather than weekly, and why removal and
+replacement also purge inline rather than relying on it.

@@ -20,6 +20,10 @@ import {
 } from "@/server/lib/rate-limit";
 import { getCurrentLibrary } from "@/server/lib/settings";
 import {
+  assertVerificationSufficient,
+  verificationStateForMember,
+} from "@/server/services/guardian-verification-service";
+import {
   consumeToken,
   inspectToken,
   mintToken,
@@ -148,6 +152,20 @@ export async function activateAccount(params: {
     where: { userId: user.id },
     select: { memberCode: true },
   });
+
+  // THE PRODUCTION SAFETY GATE (2 of 2).
+  //
+  // Approval already checked this, so reaching it here means the configured
+  // requirement was raised while the activation email sat in an inbox. An
+  // account created under the old bar must not walk through the new one: it
+  // stays INVITED until the verification is on record.
+  //
+  // Staff accounts are exempt — this gate is about the guardian of a child, and
+  // a staff member has no guardian.
+  if (user.kind === "MEMBER") {
+    const verification = await verificationStateForMember(user.id);
+    await assertVerificationSufficient(verification, `Activation of member ${user.id}`);
+  }
 
   await assertPasswordAcceptable(params.newPassword, audienceFor(user.kind), [
     user.displayName,

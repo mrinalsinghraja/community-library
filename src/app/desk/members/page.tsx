@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { MemberActions } from "@/app/desk/members/member-actions";
+import { PhotoActions } from "@/app/desk/members/photo-actions";
 import { MemberAvatar } from "@/components/library/avatar";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
 import { EmptyState } from "@/components/ui/states";
@@ -54,6 +55,7 @@ export default async function MembersPage({
 
   const members = await listMembers({ search: q });
   const canSeeContact = actor.permissions.has("member.view_contact");
+  const canManagePhoto = actor.permissions.has("member.manage_photo");
 
   return (
     <StaffShell branding={branding} actor={actor} title="Readers">
@@ -88,6 +90,11 @@ export default async function MembersPage({
                 <div className="flex items-center gap-3">
                   <MemberAvatar
                     avatarKey={member.memberProfile?.avatarKey}
+                    photoUrl={
+                      member.memberProfile?.photoMediaId
+                        ? `/api/media/${member.memberProfile.photoMediaId}`
+                        : null
+                    }
                     name={member.displayName}
                     size={40}
                   />
@@ -140,6 +147,14 @@ export default async function MembersPage({
                   canDeactivate={actor.permissions.has("member.deactivate")}
                   canReissue={actor.permissions.has("member.reset_password")}
                 />
+                {canManagePhoto ? (
+                  <div className="mt-2">
+                    <PhotoActions
+                      memberId={member.id}
+                      hasPhoto={Boolean(member.memberProfile?.photoMediaId)}
+                    />
+                  </div>
+                ) : null}
               </td>
             </tr>
           ))}

@@ -10,12 +10,41 @@
 > entered:
 >
 > 1. **The wording** in `src/lib/consent.ts`.
-> 2. **The strength of verification.** Version 1 records a guardian ticking a
->    box on a web form. India's Digital Personal Data Protection Act, 2023
->    requires *verifiable* parental consent, and a tickbox may not meet that bar.
+> 2. **The strength of guardian verification** — now a separate concern with its
+>    own document: **[`GUARDIAN_VERIFICATION.md`](GUARDIAN_VERIFICATION.md)**.
 >
-> The system is built so that a stronger method can be added without touching
-> the registration workflow — see §4.
+> **A ticked box is not verification, and this codebase no longer implies that it
+> is.** See §0.
+
+---
+
+## 0. Consent is not verification
+
+Phase 1 blurred these together. Phase 1.1 separates them permanently, in the
+schema, in the services, and on the librarian's screen.
+
+| | **Consent** — this document | **Guardian verification** — [that one](GUARDIAN_VERIFICATION.md) |
+|---|---|---|
+| Question | Did a guardian agree, to what wording, when — and can they withdraw it? | What evidence is there that the person who agreed is really the guardian? |
+| Table | `consent_record` | `guardian_verification` |
+| A tickbox gives you | A real, versioned, withdrawable record | Essentially nothing |
+
+A guardian can give perfectly good consent while the library has no idea who they
+are. That is the normal case for a web form. It is not a defect — it is a
+different axis, and collapsing the two into one green tick on the screen where a
+child's account is approved is precisely the mistake worth engineering against.
+
+The registration queue therefore shows two separate, explicitly labelled states:
+
+```
+CONSENT               Complete
+GUARDIAN VERIFICATION Missing   Self-declared only · needs Staff confirmed
+```
+
+Whether a given verification strength satisfies "verifiable parental consent"
+under the applicable law is a legal question. It is answered by a **setting**,
+`library_settings.required_guardian_verification`, never by a constant in code —
+so this software never hard-codes a claim about what the law requires.
 
 ---
 
@@ -77,34 +106,29 @@ against different text.
 The wording is community-agnostic — it says "the library", never a name — so the
 platform stays reusable and the branding lint rule holds.
 
-## 4. Verification methods, and room to grow
+## 4. How the consent reached us
 
 ```
 enum ConsentMethod {
-  WEB_FORM               // v1: a guardian ticked the box
+  WEB_FORM               // a guardian ticked the box
   EMAIL_CONFIRMATION     // + confirmed via an emailed link
-  ADMIN_VERIFIED         // a librarian confirmed the guardian in person
+  ADMIN_VERIFIED         // a librarian recorded it in person
   OTHER_VERIFIED_METHOD  // reserved
 }
 ```
 
-Adding a stronger method is a new enum value plus a new code path. It is not a
-schema change, not a registration rewrite, and not a migration of existing
-records — which is exactly the point of storing the method rather than assuming
-one.
+This records the **channel the agreement arrived through**. Since Phase 1.1 it is
+no longer doing double duty as a statement about identity — that moved to
+`guardian_verification`, which has its own methods, its own ordered strengths, a
+configurable production gate, and its own document.
 
-Two paths that would raise verification strength materially, if a review calls
-for it:
+Keep the two straight when reading a record:
 
-- **Email confirmation** — the guardian must click a link before the librarian
-  can approve. Cheap; already expressible.
-- **Librarian verification in person** — a community library has a real
-  advantage here: the librarian usually knows the family. Recording
-  `ADMIN_VERIFIED` with `recorded_by_id` is arguably stronger evidence than
-  anything a web form can produce.
+- `consent_record.method = WEB_FORM` → *the agreement came in over the web form*
+- `guardian_verification.method = SELF_DECLARED` → *and we did not check who sent it*
 
-**Identity documents are not collected and should not be added** without a
-specific, approved reason.
+**Identity documents are not collected and must not be added** without a
+specific, approved reason. Neither table has anywhere to put one, deliberately.
 
 ## 5. Withdrawal
 
@@ -122,6 +146,31 @@ follows for the account) is not built in Phase 1. The data model supports it and
   scripts anywhere in the application. The DPDP Act bars tracking and targeted
   advertising directed at children, and the simplest way to comply is to have
   none of it.
-- No consent "pre-ticked" — both boxes start empty and the form refuses to
-  submit without them.
+- No consent "pre-ticked" — every box starts empty and the form refuses to
+  submit without the required ones.
 - No claim, anywhere in the UI, that ticking a box makes anything legal.
+- No legal advice inside the application. The librarian's screen states what the
+  software recorded; it never tells anyone what the law requires of them.
+
+## 7. Where the Indian rules actually stand — 17 August 2026
+
+Stated in layers, because these are routinely blurred together:
+
+| Layer | Status |
+|---|---|
+| **Enacted law** | Digital Personal Data Protection Act, 2023 — passed 11 August 2023 |
+| **Notified rules** | DPDP Rules, 2025 — notified by MeitY, published 14 November 2025 |
+| **In force today** | Rules 1–2 and the Data Protection Board provisions (Rules 16–21), since 13 November 2025 |
+| **From 13 Nov 2026** | Rule 4 (Consent Managers) |
+| **From 13 May 2027** | The substantive obligations, **including Rule 10 on children's data and verifiable parental consent** |
+
+**So the verifiable-parental-consent obligation is enacted and notified, but not
+yet in force** — it commences 13 May 2027, roughly nine months from today. That
+is a reason to have the architecture ready. It is not a reason to claim
+compliance, and it is not a reason to delay the legal review, because the wording
+review is needed the moment a real child's data is entered — which can happen
+long before 2027.
+
+Verify these dates against the current MeitY materials before relying on them.
+Enforcement timelines have moved before. Detail, sources and the technical
+implications are in [`GUARDIAN_VERIFICATION.md`](GUARDIAN_VERIFICATION.md) §6.

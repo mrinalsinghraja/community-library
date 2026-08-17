@@ -112,6 +112,40 @@ export const EmailService = {
     );
   },
 
+  /**
+   * Asks the guardian to confirm it was really them. Sent only when the library
+   * requires EMAIL_CONFIRMED verification or stronger.
+   */
+  async sendGuardianVerification(params: {
+    to: string;
+    guardianName: string;
+    childName: string;
+    verificationToken: string;
+    expiresInHours: number;
+    registrationId: string;
+  }): Promise<boolean> {
+    const ctx = await context();
+    const rendered = templates.guardianVerification(ctx, {
+      guardianName: params.guardianName,
+      childName: params.childName,
+      // Same rule as every other link: the raw token lives in this email and
+      // nowhere else.
+      verificationUrl: `${ctx.appUrl}/verify/${params.verificationToken}`,
+      expiresInHours: params.expiresInHours,
+    });
+
+    return dispatch(
+      { to: params.to, template: TEMPLATE_IDS.GUARDIAN_VERIFICATION, ...rendered },
+      ctx.libraryId,
+      {
+        to: params.to,
+        template: TEMPLATE_IDS.GUARDIAN_VERIFICATION,
+        relatedEntityType: "registration_request",
+        relatedEntityId: params.registrationId,
+      },
+    );
+  },
+
   /** Registration approved *and* the account is ready — one email, one action. */
   async sendActivation(params: {
     to: string;

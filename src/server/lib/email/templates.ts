@@ -69,6 +69,7 @@ export const TEMPLATE_IDS = {
   REGISTRATION_APPROVED: "registration_approved",
   REGISTRATION_REJECTED: "registration_rejected",
   ACTIVATION: "activation",
+  GUARDIAN_VERIFICATION: "guardian_verification",
   STAFF_INVITATION: "staff_invitation",
   PASSWORD_RESET: "password_reset",
   PASSWORD_CHANGED: "password_changed",
@@ -150,6 +151,57 @@ export function activation(
       `This link works once and expires in ${params.expiresInDays} days.`,
       "",
       "Nobody at the library can see the secret word. If it is forgotten, we send a new link rather than telling you the old one.",
+    ].join("\n"),
+  };
+}
+
+/**
+ * Guardian verification — a different question from consent, and a different
+ * email from activation.
+ *
+ * Sent only when the library is configured to require an emailed confirmation.
+ * Its whole job is to establish that the person who filled in the form can read
+ * the inbox they gave us. It carries no library card number, no date of birth
+ * and nothing about the child beyond their first name, because until it is
+ * answered we do not yet know we are writing to the right adult.
+ */
+export function guardianVerification(
+  context: EmailContext,
+  params: {
+    guardianName: string;
+    childName: string;
+    verificationUrl: string;
+    expiresInHours: number;
+  },
+): RenderedTemplate {
+  const heading = "Please confirm you are the parent or guardian";
+  const body =
+    paragraph(`Dear ${params.guardianName},`) +
+    paragraph(
+      `Somebody registered ${params.childName} for ${context.libraryName} and gave this email address as the parent or guardian's. Before we set anything up, we would like to check that it was you.`,
+    ) +
+    button(params.verificationUrl, "Yes, that was me") +
+    paragraph(
+      `This link works once and expires in ${params.expiresInHours} hours. Nothing happens to the registration until you use it.`,
+    ) +
+    paragraph(
+      "If you were not expecting this, you do not need to do anything at all — please just let the librarian know, and we will close the registration.",
+    );
+
+  return {
+    subject: `Please confirm ${params.childName}'s library registration`,
+    html: layout(context, heading, body),
+    text: [
+      `Dear ${params.guardianName},`,
+      "",
+      `Somebody registered ${params.childName} for ${context.libraryName} and gave this email address as the parent or guardian's. Before we set anything up, we would like to check that it was you.`,
+      "",
+      "Confirm here:",
+      params.verificationUrl,
+      "",
+      `This link works once and expires in ${params.expiresInHours} hours.`,
+      "",
+      "If you were not expecting this, you do not need to do anything — please let the librarian know and we will close the registration.",
     ].join("\n"),
   };
 }

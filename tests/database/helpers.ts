@@ -16,7 +16,7 @@ export async function resetDatabase(): Promise<void> {
       auth_token, "session", media_object,
       renewal_request, loan_event, loan,
       donation, book_copy, book_title, book_category,
-      consent_record, registration_request,
+      guardian_verification, consent_record, registration_request,
       guardian_member, guardian, member_profile,
       user_role, role_permission, "role", app_user,
       code_sequence, library_settings, library, community, permission
@@ -119,6 +119,29 @@ export async function createMember(
         },
       },
       userRoles: { create: { roleId: role.id } },
+    },
+  });
+
+  /*
+   * Every member created through the real workflow carries a guardian
+   * verification record, because approval cannot happen without one. Fixtures
+   * must carry it too — otherwise they describe a member who could never have
+   * existed, and the activation gate rightly refuses them.
+   *
+   * A member with NO record at all resolves to strength NONE, which fails every
+   * requirement above NONE. That is deliberate: absence of evidence is the
+   * weakest possible state, not an exemption. See the explicit test for it in
+   * activation-and-reset.test.ts.
+   */
+  await db.guardianVerification.create({
+    data: {
+      libraryId,
+      memberUserId: user.id,
+      method: "SELF_DECLARED",
+      status: "VERIFIED",
+      strength: "SELF_DECLARED",
+      verificationVersion: "test",
+      verifiedAt: new Date(),
     },
   });
 

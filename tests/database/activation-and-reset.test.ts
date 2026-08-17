@@ -100,6 +100,27 @@ describe("activation tokens", () => {
     expect(await verifyPassword(updated.passwordHash!, "bluecatjumps")).toBe(true);
   });
 
+  it("refuses to activate an account that carries no guardian verification at all", async () => {
+    const { member, rawToken } = await createInvitedMember(
+      "No Evidence",
+      "noevidence@example.invalid",
+    );
+
+    // Strip the evidence, leaving an account that could not have been created by
+    // any real workflow. Absence of evidence is the WEAKEST state, not an
+    // exemption from the gate — a valid activation link must not be enough on
+    // its own to turn such an account on.
+    await db.guardianVerification.deleteMany({ where: { memberUserId: member.id } });
+
+    await expect(
+      activateAccount({ rawToken, newPassword: "bluecatjumps", requestIp: IP }),
+    ).rejects.toMatchObject({ code: "RULE_VIOLATION" });
+
+    const untouched = await db.appUser.findUniqueOrThrow({ where: { id: member.id } });
+    expect(untouched.status).toBe("INVITED");
+    expect(untouched.passwordHash).toBeNull();
+  });
+
   it("refuses the same token a second time", async () => {
     const { rawToken } = await createInvitedMember("Reuse Me", "act2@example.invalid");
 

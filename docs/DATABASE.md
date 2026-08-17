@@ -1,7 +1,7 @@
 # Database
 
-PostgreSQL via Prisma. 27 application tables plus Prisma's migration table,
-across two migrations.
+PostgreSQL via Prisma. 28 application tables plus Prisma's migration table,
+across three migrations.
 All timestamps are `timestamptz` stored in UTC; every business date decision is
 made in the library's configured timezone.
 
@@ -19,6 +19,7 @@ community ─1:N─ library ─1:1─ library_settings
                    │
                    ├─ guardian ─ guardian_member ─ app_user
                    ├─ registration_request ─ consent_record
+                   │                       └─ guardian_verification
                    │
                    ├─ book_category ─ book_title ─ book_copy ─1:1─ donation
                    │                                   └─ loan ─ loan_event
@@ -43,6 +44,12 @@ behind `member.view_contact`, which most staff screens never request.
 **`loan` vs `loan_event`.** The loan is current state; events are the immutable
 story. Renewals and due-date adjustments append rather than overwrite.
 
+**`consent_record` vs `guardian_verification`.** What a family agreed to, versus
+what evidence exists that they are who they say. A ticked box produces a genuine
+first and essentially no second. Merged, raising the verification bar later would
+mean rewriting consent history — and consent records exist to be evidence. See
+ADR-017.
+
 ## 3. What the database enforces on its own
 
 These live in `prisma/sql/001_constraints_and_indexes.sql`. They hold even if
@@ -60,6 +67,11 @@ in `tests/database/constraints.test.ts`.
 | Donor credit is renderable | `NAMED` needs a name; `APARTMENT_ONLY` needs an apartment |
 | Sessions cannot be born dead | `expires_at > created_at`, `idle_expires_at <= expires_at` |
 | Private media is never public | `PRIVATE` may not carry a `public_url` |
+| A tickbox cannot claim to be an identity check | `strength` must match `method` (`guardian_verification_strength_matches_method`) |
+| "Staff confirmed it" names the staff | `STAFF_VERIFIED` + `VERIFIED` requires `performed_by_id` |
+| Verification is about somebody | at least one of guardian / member / request |
+| A verification claiming to have happened records when | `VERIFIED` requires `verified_at` |
+| `evidence_note` cannot become a document store | capped at 500 characters |
 
 **Overdue is not a column.** It is derived as `due_at < now()` at read time, so
 no failed scheduled job can leave the library believing something untrue.
@@ -119,6 +131,22 @@ family agreed to. `ALTER TYPE … RENAME VALUE` preserves them.
 
 The lesson generalises: **when a migration touches an enum, read the generated
 SQL before applying it.**
+
+### Migration 3 — media lifecycle and guardian verification
+
+`20260817140000_phase1_1_media_lifecycle_and_guardian_verification` adds the
+`guardian_verification` table, three enums, two settings columns, and
+`media_object.pending_deletion_at` / `delete_attempts`.
+
+Prisma's generated SQL was clean this time — no `DROP INDEX`, checked before
+applying. The hand-written half is appended from
+`prisma/sql/003_verification_and_media_lifecycle.sql`.
+
+⚠️ **Migration directories are applied in lexicographic order, so the generated
+timestamp must sort after the previous migration.** The local clock produced
+`20260817013517`, which sorts *before* migration 2's `20260817120000` — renamed
+to `20260817140000`. Worth checking on any machine whose clock disagrees with the
+existing migration names.
 
 ### ⚠ The gotcha that will bite you
 

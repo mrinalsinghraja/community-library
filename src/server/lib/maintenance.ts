@@ -3,6 +3,7 @@ import "server-only";
 import { prisma } from "@/server/db";
 import { pruneExpiredSessions } from "@/server/auth/session-store";
 import { pruneOldLoginAttempts } from "@/server/lib/rate-limit";
+import { sweepPendingMedia } from "@/server/services/media-service";
 
 /**
  * Daily housekeeping.
@@ -20,6 +21,25 @@ export interface MaintenanceResult {
   expiredSessionsRemoved: number;
   spentTokensRemoved: number;
   oldLoginAttemptsRemoved: number;
+  expiredVerificationChallenges: number;
+  mediaPurged: number;
+  mediaFailed: number;
+  mediaNeedsAttention: number;
+}
+
+/**
+ * Expires guardian verification challenges nobody answered.
+ *
+ * The read path already treats a lapsed challenge as lapsed, so this is
+ * housekeeping rather than enforcement — but it also clears the token hash,
+ * which is what stops a very old link ever being matched again.
+ */
+export async function expireVerificationChallenges(): Promise<number> {
+  const { count } = await prisma.guardianVerification.updateMany({
+    where: { status: "PENDING", challengeExpiresAt: { lt: new Date() } },
+    data: { status: "EXPIRED", challengeTokenHash: null },
+  });
+  return count;
 }
 
 /**
@@ -40,11 +60,38 @@ export async function pruneAuthTokens(consumedRetentionDays = 7): Promise<number
 }
 
 export async function runDailyMaintenance(): Promise<MaintenanceResult> {
-  const [expiredSessionsRemoved, spentTokensRemoved, oldLoginAttemptsRemoved] = await Promise.all([
+  const [
+    expiredSessionsRemoved,
+    spentTokensRemoved,
+    oldLoginAttemptsRemoved,
+    expiredVerificationChallenges,
+  ] = await Promise.all([
     pruneExpiredSessions(),
     pruneAuthTokens(),
     pruneOldLoginAttempts(),
+    expireVerificationChallenges(),
   ]);
 
-  return { expiredSessionsRemoved, spentTokensRemoved, oldLoginAttemptsRemoved };
+  /*
+   * The media sweep is the reconciliation half of the photo lifecycle: it
+   * collects uploads nobody claimed and objects whose immediate deletion
+   * failed. Run last and on its own, because it talks to the object store and
+   * is the only step here that can be slow.
+   *
+   * It is a safety net, not the primary path — removal and replacement already
+   * delete the bytes inline. A day when this does not run leaves a private
+   * photograph in storage slightly longer, which is exactly why it is a daily
+   * job and not a weekly one.
+   */
+  const media = await sweepPendingMedia();
+
+  return {
+    expiredSessionsRemoved,
+    spentTokensRemoved,
+    oldLoginAttemptsRemoved,
+    expiredVerificationChallenges,
+    mediaPurged: media.purged,
+    mediaFailed: media.failed,
+    mediaNeedsAttention: media.needsAttention,
+  };
 }

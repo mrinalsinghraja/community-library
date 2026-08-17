@@ -37,6 +37,14 @@ export const PERMISSIONS = {
     description:
       "Change guardian contact details, including the email that receives recovery links",
   },
+  "member.manage_photo": {
+    category: "members",
+    description: "Replace or remove a child's photograph",
+  },
+  "guardian.verify": {
+    category: "members",
+    description: "Record that a guardian has been verified, and by what method",
+  },
 
   // --- Catalogue ------------------------------------------------------------
   "book.view": { category: "catalogue", description: "Browse the book catalogue" },
@@ -112,6 +120,8 @@ const LIBRARIAN_PERMISSIONS = [
   "member.deactivate",
   "member.reset_password",
   "guardian.edit",
+  "member.manage_photo",
+  "guardian.verify",
   "book.view",
   "book.create",
   "book.edit",
@@ -201,6 +211,10 @@ export const PERMISSIONS_FORBIDDEN_FOR_CHILD_STAFF: readonly PermissionKey[] = [
   "member.suspend",
   "member.deactivate",
   "guardian.edit",
+  // A child volunteer at the desk must never be able to handle another child's
+  // photograph or to assert that an adult has been verified.
+  "member.manage_photo",
+  "guardian.verify",
   "book.delete",
   "loan.override_rules",
   "settings.view",

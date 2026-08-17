@@ -168,9 +168,31 @@ async function seedDemoUsers(prisma: PrismaClient, libraryId: string): Promise<v
         memberUserId: member.id,
       },
     });
+
+    /*
+     * And the separate question of who that guardian was.
+     *
+     * Recorded as SELF_DECLARED, which is what a ticked box is worth and no
+     * more. Demo data that overstated its own verification would be the worst
+     * possible example to copy.
+     */
+    await prisma.guardianVerification.create({
+      data: {
+        libraryId,
+        method: "SELF_DECLARED",
+        status: "VERIFIED",
+        strength: "SELF_DECLARED",
+        verificationVersion: settings.guardianVerificationVersion,
+        verifiedAt: new Date(),
+        guardianId: guardian.id,
+        memberUserId: member.id,
+      },
+    });
   }
 
-  console.log("  ✓ demo users (1 super admin, 1 librarian, 1 reader + guardian + consent)");
+  console.log(
+    "  ✓ demo users (1 super admin, 1 librarian, 1 reader + guardian + consent + verification)",
+  );
 }
 
 const DEMO_BOOKS = [

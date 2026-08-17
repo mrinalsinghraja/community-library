@@ -20,23 +20,37 @@ scripts on any page.
 **What this codebase does NOT do, and cannot claim:**
 
 > **The consent wording in `src/lib/consent.ts` has not been reviewed
-> by a lawyer, and the strength of parental verification implemented here (a
-> guardian ticking a box on a web form) may not satisfy "verifiable parental
-> consent" as the applicable rules define it.**
+> by a lawyer, and the strength of parental verification a deployment configures
+> may not satisfy "verifiable parental consent" as the applicable rules define
+> it.**
 >
 > **Both the wording and the verification mechanism must be reviewed against the
 > current Indian requirements before this is used with real children's data.**
 
-The data model is deliberately shaped so that stronger verification can be added
-later without rewriting registration: `ConsentMethod` is an enum, and adding
-(for example) an in-person librarian confirmation or an out-of-band check is a
-new value plus a new code path, not a schema migration.
+**Consent and guardian verification are separate concerns** (ADR-017). Consent
+records what a family agreed to; `guardian_verification` records what evidence
+exists that they are who they say. A ticked box gives an excellent first and
+essentially no second, and since Phase 1.1 the software says so rather than
+implying otherwise — including a standing banner on the librarian's queue while
+the configured requirement is that weak.
 
-No government identity documents are collected, and none should be added without
-a specific, approved reason.
+How strong a verification a deployment demands is a **setting**
+(`library_settings.required_guardian_verification`), gated at both approval and
+activation. It is never a constant in code, because that would be this software
+answering a legal question it must not answer.
 
-Full detail, including the verification methods the model can already express:
-`CONSENT.md`.
+**Where the Indian rules stand, 17 August 2026:** the DPDP Act 2023 is enacted;
+the DPDP Rules 2025 were notified in November 2025; **Rule 10 on children's data
+commences 13 May 2027.** Enacted, notified, and not yet in force are three
+different things — see `GUARDIAN_VERIFICATION.md` §6. This is not a reason to
+delay the wording review, which is needed the moment a real child's data is
+entered.
+
+No government identity documents, Aadhaar numbers or KYC of any kind are
+collected, and none should be added without a specific, approved reason. Neither
+consent nor verification has a field to put one in, deliberately.
+
+Full detail: `CONSENT.md` and `GUARDIAN_VERIFICATION.md`.
 
 ## 2. Data minimisation
 
@@ -60,7 +74,14 @@ data, advertising identifiers.
   Junior Librarian role can never hold (asserted by test).
 - Child photographs are stored **private**, served only through an authorised
   route, and a database CHECK forbids a private object from carrying a public
-  URL. Avatars exist so no family feels obliged to upload a photo.
+  URL. Avatars exist so no family feels obliged to upload a photo, and a photo is
+  never the default. Full architecture: `MEDIA.md`.
+- A photograph is readable by the child themselves and by staff who need it, and
+  by nobody else. Every refusal is `404`, never `403` — a 403 would confirm the
+  id is real. Verified live: another child's id and an id that never existed
+  return identical responses.
+- A private photograph never outlives the row pointing at it, and an abandoned
+  upload never becomes unreachable bytes (ADR-019).
 
 ## 4. Authentication controls
 
@@ -100,6 +121,29 @@ Password policy differs by audience by design — see ADR-006.
 | Secrets | Environment variables only; `.env` gitignored; gitleaks in CI |
 | Audit | Every mutation logged in the same transaction; a recursive redactor strips anything resembling a credential |
 | Dependencies | Pinned; `npm ci` in CI |
+
+### Verified in Phase 1.1
+
+- Registration with and without a photograph, walked in a browser end to end.
+- Photo served only through `/api/media/[id]`: `200` for the librarian, `404`
+  signed out, `404` for a different child — byte-identical to an id that never
+  existed.
+- **A real header bug found by probing rather than reading.** `src/proxy.ts` was
+  overwriting the media route's `default-src 'none'; sandbox` with the *page*
+  CSP, so children's photographs were being served under the application's script
+  policy. `api/media` is now excluded from the proxy matcher; re-verified live.
+- Replace: profile re-pointed, old row **and** old bytes gone, exactly one file
+  on disk, both ids in the audit row.
+- Remove: profile cleared, avatar restored, zero rows, zero bytes, audited with
+  the actor and the reason.
+- Production gate closed and reopened live: with `STAFF_VERIFIED` required, the
+  queue showed `GUARDIAN VERIFICATION: Missing` and replaced Approve with
+  "Confirm the guardian"; after a named librarian recorded a confirmation it read
+  `Staff confirmed` and Approve returned.
+- An account stripped of its verification records cannot be activated even with a
+  valid activation link.
+- The database refuses to store a `SELF_DECLARED` method at `IDENTITY_PROVIDER`
+  strength.
 
 ### Verified in Phase 1
 
@@ -150,11 +194,18 @@ These are honest limitations, not oversights:
 8. **No archival/redaction step.** `DEACTIVATED` is the terminal state in
    practice. Retention periods need a community and legal decision, and none has
    been invented — see `ACCOUNT_LIFECYCLE.md` §5.
-9. **Photo upload is validated and tested but not exposed** in the registration
-   form, pending the consent review.
-10. **Guardian email changes are staff-only** with no second-approver
+9. **Guardian email changes are staff-only** with no second-approver
    requirement. Proportionate at this size; the audit trail is in place if the
    library later wants one — see `ACCOUNT_LIFECYCLE.md` §6.
+10. **`VERIFIED_IDENTITY_PROVIDER` is representable but not implemented.**
+   Configuring it would make approval impossible — a deliberate fail-closed, but
+   not a working option.
+11. **Email confirmation proves control of an inbox, not parenthood**, and
+   opening the emailed link is enough to complete it, so a prefetching mail
+   client could spend the token. Reasoning in `GUARDIAN_VERIFICATION.md` §7.
+12. **Verification never expires.** The model carries `expires_at` and the read
+   path honours it, but nothing sets it: the retention and reverification policy
+   is still an open question for the owner.
 
 ## 7. Reporting a problem
 

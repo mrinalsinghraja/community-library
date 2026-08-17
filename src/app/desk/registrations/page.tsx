@@ -7,6 +7,11 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ageInYears, formatInTimezone } from "@/lib/dates";
+import {
+  DEVELOPMENT_VERIFICATION_WARNING,
+  STRENGTH_LABELS,
+  isDevelopmentVerificationMode,
+} from "@/lib/guardian-verification";
 import { requirePermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { listRegistrations } from "@/server/services/registration-service";
@@ -39,6 +44,17 @@ export default async function RegistrationsPage() {
       pendingRegistrations={requests.length}
       title="New members"
     >
+      {/* The single most likely way this system causes harm is somebody
+          believing a ticked box was a check on who that person is. */}
+      {isDevelopmentVerificationMode(settings.requiredGuardianVerification) ? (
+        <p
+          role="status"
+          className="mb-6 rounded-[var(--radius-field)] bg-warn-wash px-5 py-4 text-base font-bold text-ink"
+        >
+          {DEVELOPMENT_VERIFICATION_WARNING}
+        </p>
+      ) : null}
+
       {requests.length === 0 ? (
         <EmptyState illustration="🎈" title="All new readers are up to date">
           When a family fills in the join form, their registration appears here.
@@ -48,15 +64,16 @@ export default async function RegistrationsPage() {
           {requests.map((request) => {
             const age = ageInYears(request.childDob, settings.timezone);
             const inRange = age >= settings.ageMin && age <= settings.ageMax;
-            const hasAccountConsent = request.consents.some(
-              (consent) => consent.type === "CHILD_ACCOUNT_CREATION" && consent.status === "GRANTED",
-            );
 
             return (
               <Card key={request.id} tone="shelf">
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
                   <MemberAvatar
                     avatarKey={request.avatarKey}
+                    // Served through the authorised route, never a direct URL.
+                    // A librarian holds registration.view, which is what that
+                    // route checks — nobody else can load these bytes.
+                    photoUrl={request.photoMediaId ? `/api/media/${request.photoMediaId}` : null}
                     name={request.childName}
                     size={64}
                     className="shrink-0"
@@ -71,10 +88,40 @@ export default async function RegistrationsPage() {
                       <StatusBadge tone={inRange ? "available" : "late"}>
                         {age} years old
                       </StatusBadge>
-                      <StatusBadge tone={hasAccountConsent ? "available" : "late"}>
-                        {hasAccountConsent ? "Consent given" : "No consent"}
-                      </StatusBadge>
                     </div>
+
+                    {/* Two separate questions, shown as two separate answers.
+                        A guardian can consent without us having any idea who
+                        they are, and this is the screen where confusing the two
+                        would do the damage. */}
+                    <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2">
+                      <div className="flex items-center gap-2">
+                        <dt className="text-base font-bold uppercase tracking-wide text-ink-soft">
+                          Consent
+                        </dt>
+                        <dd>
+                          <StatusBadge tone={request.consentComplete ? "available" : "late"}>
+                            {request.consentComplete ? "Complete" : "Missing"}
+                          </StatusBadge>
+                        </dd>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <dt className="text-base font-bold uppercase tracking-wide text-ink-soft">
+                          Guardian verification
+                        </dt>
+                        <dd className="flex items-center gap-2">
+                          <StatusBadge tone={request.verification.satisfied ? "available" : "late"}>
+                            {request.verification.satisfied ? "Complete" : "Missing"}
+                          </StatusBadge>
+                          <span className="text-base text-ink-soft">
+                            {STRENGTH_LABELS[request.verification.achieved]}
+                            {request.verification.satisfied
+                              ? ""
+                              : ` · needs ${STRENGTH_LABELS[request.verification.required]}`}
+                          </span>
+                        </dd>
+                      </div>
+                    </dl>
 
                     <dl className="mt-4 grid gap-x-6 gap-y-2 text-base sm:grid-cols-2">
                       <div>
@@ -110,7 +157,12 @@ export default async function RegistrationsPage() {
                   </div>
 
                   <div className="sm:w-64 sm:shrink-0">
-                    <ReviewActions registrationId={request.id} />
+                    <ReviewActions
+                      registrationId={request.id}
+                      verificationSatisfied={request.verification.satisfied}
+                      awaitingGuardian={request.verification.awaitingGuardian}
+                      canVerify={actor.permissions.has("guardian.verify")}
+                    />
                   </div>
                 </div>
               </Card>

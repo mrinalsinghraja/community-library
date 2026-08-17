@@ -75,6 +75,48 @@ enum ConsentMethod {
   OTHER_VERIFIED_METHOD
 }
 
+/// HOW an adult claiming to be the child's guardian was checked.
+///
+/// This is a separate axis from ConsentMethod. Consent answers "did a guardian
+/// agree, to what wording, when?". Verification answers "what evidence do we
+/// have that the person who agreed is the guardian?". A tickbox produces the
+/// first and almost none of the second, which is exactly why they are modelled
+/// apart — see docs/GUARDIAN_VERIFICATION.md.
+///
+/// SELF_DECLARED              somebody ticked a box on /join. No verification.
+/// EMAIL_CONFIRMATION         the guardian opened a single-use link we emailed.
+/// STAFF_VERIFIED             a named staff member confirmed the guardian.
+/// VERIFIED_IDENTITY_PROVIDER an external verified-identity service asserted it.
+/// OTHER                      a method a future legal review introduces.
+///
+/// These are TECHNICAL categories. None of them is a claim that the method
+/// satisfies any particular legal standard.
+enum GuardianVerificationMethod {
+  SELF_DECLARED
+  EMAIL_CONFIRMATION
+  STAFF_VERIFIED
+  VERIFIED_IDENTITY_PROVIDER
+  OTHER
+}
+
+/// Whether the method above actually completed. Ordered weakest to strongest so
+/// that a configured minimum can be compared with `>=` in SQL as well as in
+/// application code.
+enum GuardianVerificationStrength {
+  NONE
+  SELF_DECLARED
+  EMAIL_CONFIRMED
+  STAFF_VERIFIED
+  IDENTITY_PROVIDER
+}
+
+enum GuardianVerificationStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  REVOKED
+}
+
 enum CatalogueVisibility {
   MEMBER_ONLY
   PUBLIC
@@ -195,6 +237,7 @@ model Library {
   guardians            Guardian[]
   registrationRequests RegistrationRequest[]
   consentRecords       ConsentRecord[]
+  guardianVerifications GuardianVerification[]
   categories           BookCategory[]
   bookTitles           BookTitle[]
   bookCopies           BookCopy[]
@@ -254,6 +297,18 @@ model LibrarySettings {
 
   // Consent
   consentVersion String @default("2026-08-v1") @map("consent_version")
+
+  /// Guardian verification (distinct from consent — see GUARDIAN_VERIFICATION.md).
+  ///
+  /// The minimum verification strength a registration must reach before an
+  /// account may be approved and before it may become ACTIVE. Deliberately a
+  /// setting and not a constant: what the applicable law requires is a legal
+  /// question this software must not answer for a deployment.
+  ///
+  /// SELF_DECLARED is the DEVELOPMENT default. It means "a box was ticked" and
+  /// is not a claim of verification.
+  requiredGuardianVerification GuardianVerificationStrength @default(SELF_DECLARED) @map("required_guardian_verification")
+  guardianVerificationVersion  String                       @default("2026-08-v1") @map("guardian_verification_version")
 
   // System
   timezone                 String  @default("Asia/Kolkata")
@@ -326,6 +381,9 @@ model AppUser {
   mediaUploaded    MediaObject[]
   reviewedRequests RegistrationRequest[] @relation("RegistrationReviewer")
   recordedConsents ConsentRecord[]  @relation("ConsentRecorder")
+
+  guardianVerifications  GuardianVerification[] @relation("GuardianVerificationSubject")
+  verificationsPerformed GuardianVerification[] @relation("GuardianVerifier")
 
   @@unique([libraryId, email], map: "app_user_library_email_key")
   @@unique([libraryId, username], map: "app_user_library_username_key")
@@ -431,6 +489,7 @@ model Guardian {
   library        Library          @relation(fields: [libraryId], references: [id], onDelete: Restrict)
   memberLinks    GuardianMember[]
   consentRecords ConsentRecord[]
+  verifications  GuardianVerification[]
 
   @@unique([libraryId, email], map: "guardian_library_email_key")
   @@index([libraryId, apartment])
@@ -486,6 +545,7 @@ model RegistrationRequest {
   reviewedBy AppUser?        @relation("RegistrationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   photoMedia MediaObject?    @relation(fields: [photoMediaId], references: [id], onDelete: SetNull)
   consents   ConsentRecord[]
+  verifications GuardianVerification[]
 
   @@index([libraryId, status, submittedAt])
   @@map("registration_request")
@@ -530,6 +590,76 @@ model ConsentRecord {
   @@index([memberUserId])
   @@index([guardianId])
   @@map("consent_record")
+}
+
+/// Evidence about WHO gave the consent, kept apart from the consent itself.
+///
+/// A ConsentRecord says a guardian agreed to specific wording. A
+/// GuardianVerification says how confident the library is that the person who
+/// agreed is really the child's guardian. Merging the two would make it
+/// impossible to raise the verification bar later without rewriting consent
+/// history, and would let a tickbox masquerade as a verified identity.
+///
+/// Deliberately stores NO identity documents, NO Aadhaar or other government
+/// identifier, and NO scanned artefacts. `evidenceNote` is a short free-text
+/// note by a staff member ("spoke to her at the desk on Saturday") and a CHECK
+/// keeps it short enough that it cannot become a document store by habit.
+model GuardianVerification {
+  id        String                       @id @default(uuid(7))
+  libraryId String                       @map("library_id")
+  method    GuardianVerificationMethod
+  status    GuardianVerificationStatus   @default(PENDING)
+  /// What this method is worth. Derived from the method at creation time by
+  /// src/lib/guardian-verification.ts, then frozen: re-scoring an old record
+  /// because policy changed would rewrite history.
+  strength  GuardianVerificationStrength
+
+  /// Version of the verification policy in force when this was recorded.
+  verificationVersion String @map("verification_version")
+
+  /// Exactly one subject is required, enforced by a CHECK constraint. A
+  /// verification recorded during registration attaches to the request; once the
+  /// account exists it also carries the guardian and the member.
+  guardianId            String? @map("guardian_id")
+  memberUserId          String? @map("member_user_id")
+  registrationRequestId String? @map("registration_request_id")
+
+  requestedAt DateTime  @default(now()) @map("requested_at") @db.Timestamptz(6)
+  verifiedAt  DateTime? @map("verified_at") @db.Timestamptz(6)
+  /// Set when a method needs periodic reconfirmation. Null means no expiry.
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz(6)
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  /// The staff member who performed a STAFF_VERIFIED check. Required for that
+  /// method by a CHECK constraint: "a human confirmed it" is worthless without
+  /// which human.
+  performedById String? @map("performed_by_id")
+  /// Short staff note. NEVER an identity document reference.
+  evidenceNote  String? @map("evidence_note")
+
+  /// Single-use challenge for EMAIL_CONFIRMATION. Only the SHA-256 is stored,
+  /// exactly as for activation and reset tokens.
+  challengeTokenHash String?   @unique @map("challenge_token_hash")
+  challengeExpiresAt DateTime? @map("challenge_expires_at") @db.Timestamptz(6)
+  challengeAttempts  Int       @default(0) @map("challenge_attempts")
+
+  ipHash        String? @map("ip_hash")
+  userAgentHash String? @map("user_agent_hash")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  library             Library              @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  guardian            Guardian?            @relation(fields: [guardianId], references: [id], onDelete: SetNull)
+  member              AppUser?             @relation("GuardianVerificationSubject", fields: [memberUserId], references: [id], onDelete: Cascade)
+  registrationRequest RegistrationRequest? @relation(fields: [registrationRequestId], references: [id], onDelete: SetNull)
+  performedBy         AppUser?             @relation("GuardianVerifier", fields: [performedById], references: [id], onDelete: SetNull)
+
+  @@index([libraryId, status, strength])
+  @@index([registrationRequestId])
+  @@index([memberUserId])
+  @@index([guardianId])
+  @@map("guardian_verification")
 }
 
 // ---------------------------------------------------------------------------
@@ -902,6 +1032,27 @@ model MediaObject {
   uploadedById String?  @map("uploaded_by_id")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  /// The row is the ledger; the bytes follow it.
+  ///
+  /// A database transaction and an object-store write cannot be made atomic, so
+  /// this system never tries. Instead every object is born with a deadline and
+  /// nothing is ever deleted from storage while a live row still points at it:
+  ///
+  ///   * on upload  — set to "unclaimed after N minutes". Whatever claims the
+  ///     object (a registration request, a member profile) clears it in the same
+  ///     transaction that links it. An upload nobody claims is swept away.
+  ///   * on removal or replacement — set to now() inside the transaction that
+  ///     unlinks it, then the bytes are deleted immediately on a best-effort
+  ///     basis. If that fails, the sweeper retries; the row cannot be lost, so
+  ///     the bytes cannot become unreachable garbage.
+  ///
+  /// Consequence: a private child photograph never outlives its row, and a
+  /// failed request never leaves an object no query can find.
+  pendingDeletionAt DateTime? @map("pending_deletion_at") @db.Timestamptz(6)
+  /// Sweep attempts, so a permanently failing object is visible rather than
+  /// retried forever in silence.
+  deleteAttempts    Int       @default(0) @map("delete_attempts")
+
   library    Library  @relation(fields: [libraryId], references: [id], onDelete: Cascade)
   uploadedBy AppUser? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
 
@@ -910,5 +1061,6 @@ model MediaObject {
   bookTitles          BookTitle[]
 
   @@index([libraryId, purpose])
+  @@index([pendingDeletionAt])
   @@map("media_object")
 }

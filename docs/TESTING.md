@@ -1,7 +1,7 @@
 # Testing
 
-**188 tests** at the end of Phase 1: 84 unit, 104 against a real PostgreSQL.
-(Phase 0 ended at 110.)
+**252 tests** at the end of Phase 1.1: 107 unit, 145 against a real PostgreSQL.
+(Phase 0 ended at 110; Phase 1 at 188.)
 
 The guiding rule: **do not write tests that assert the mock works.** The most
 important guarantees in this system live in the database, so they are tested
@@ -76,6 +76,44 @@ against injection; the rejection email omits the internal reason; the suspension
 email omits why; the staff invitation does not tell a librarian their child is
 now a member.
 
+## What the Phase 1.1 suites prove
+
+**Guardian verification** (20, `tests/database/guardian-verification.test.ts`) —
+a submission creates two consent records *and* one verification record, and the
+verification calls a tickbox exactly what it is worth; the database refuses to
+store `SELF_DECLARED` at `IDENTITY_PROVIDER` strength, refuses a verification
+attached to nobody, and refuses a staff confirmation that does not name the staff
+member; the queue reports consent and verification as two independent states,
+including the case where consent is complete and verification is not; approval is
+refused when the requirement is unmet and the request **stays pending** with no
+account created; recording an in-person confirmation reopens it; raising the
+requirement after approval blocks activation, leaving the account `INVITED` with
+no password; the evidence moves onto the member and guardian at approval; the
+emailed challenge is single-use, expires, stores only a SHA-256, and its hash is
+cleared when spent so a replay matches nothing at all; a member cannot record a
+verification; a note is required and one long enough to hide a document in is
+refused.
+
+**Child photographs** (20, `tests/database/media-access.test.ts`) — a signed-out
+visitor, and any child who is not the subject, get `NotFound` and **the same
+answer as for an id that never existed**; the child themselves and a librarian
+can read it; an object pending deletion reads as gone; an ELF binary named
+`.jpg`, an oversized file and a traversal-shaped filename are all refused, and
+nothing reaches storage when validation fails; a media id that already belongs to
+somebody cannot be claimed by a new registration; removal clears the profile,
+deletes the row and the bytes, keeps the avatar and writes an audit row naming
+the object but not its key; a member without the permission is refused;
+replacement re-points the profile, removes the old row and bytes, and leaves the
+existing photo untouched when the new file is invalid; the member photo service
+refuses to reach a staff account; when the object store fails the row survives,
+scheduled, and the sweeper finishes the job; the sweeper collects unclaimed
+uploads, leaves claimed ones alone, and reports rather than retrying forever.
+
+**Verification policy** (unit) — the strength ordering is strictly increasing and
+an unknown value throws rather than scoring zero; a self-declaration never
+satisfies any real requirement; `OTHER` is worth nothing by default; and the
+development banner's wording is asserted so a later edit cannot soften it.
+
 ## What the database suite proves
 
 **The double-issue guard** — two concurrent `Promise.allSettled` inserts of the
@@ -122,6 +160,21 @@ Worth recording, because they justify the effort:
    exactly as intended. Each test now uses a distinct address, and the throttle
    gained its own test.
 
+## And in Phase 1.1
+
+6. **The existing suite caught the new activation gate immediately.** Four
+   Phase 1 tests broke because `createMember` built accounts with no verification
+   record at all — accounts no real workflow could produce. The right fix was the
+   fixture, not the rule: **absence of evidence is the weakest state, not an
+   exemption.** The helper now records a verification the way approval does, and
+   a dedicated test strips the records to prove a valid activation link alone is
+   not enough.
+7. **A header the code claimed but did not deliver.** The media route sets
+   `default-src 'none'; sandbox`, but `src/proxy.ts` was overwriting it with the
+   page CSP, so children's photographs were served under the application's script
+   policy. Found by probing the live response in the browser — reading the route
+   file would never have shown it. `api/media` is now excluded from the matcher.
+
 ## Running one file
 
 ```bash
@@ -148,10 +201,15 @@ otherwise `@` matches first, or `@/server/auth` swallows
 
 Honest gaps at the end of Phase 1:
 
-- **No browser end-to-end suite.** Both phases' flows were verified manually
-  against the running application — Phase 1 included the whole journey from
-  `/join` through approval, the emailed link, activation and child sign-in.
+- **No browser end-to-end suite.** Every phase's flows were verified manually
+  against the running application — Phase 1.1 included registration with and
+  without a photograph, the librarian's queue, photo replace and remove, the
+  production gate closing and reopening, and cross-child photo isolation.
   Playwright is the right next step now that there are real forms to drive.
+- **Images are not re-encoded or resized.** Metadata is stripped (see
+  `MEDIA.md`), but the pixel data is stored as uploaded, so a 5 MB photograph
+  stays 5 MB. Thumbnailing needs a native image library and has not been judged
+  worth the dependency at this scale.
 - **No automated accessibility assertions.** Contrast was measured numerically
   and recorded in `DESIGN_SYSTEM.md`; axe should run in CI once there are forms
   and tables worth scanning.

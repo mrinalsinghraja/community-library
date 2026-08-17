@@ -7,6 +7,9 @@ import { z } from "zod";
 import { CURRENT_CONSENT_TYPES, REQUIRED_CONSENT_TYPES, type ConsentTypeKey } from "@/lib/consent";
 import { isAvatarKey } from "@/lib/avatars";
 import { toFriendlyMessage, ValidationError, isAppError } from "@/server/lib/errors";
+import { getCurrentLibrary } from "@/server/lib/settings";
+import { storeChildPhoto } from "@/server/services/media-service";
+import { recordStaffVerification } from "@/server/services/guardian-verification-service";
 import {
   approveRegistration,
   markUnderReview,
@@ -42,6 +45,20 @@ const registrationSchema = z.object({
   /** Hidden field. A real person leaves it empty; a naive bot fills it in. */
   website: z.string().max(0).optional(),
 });
+
+/**
+ * Reads the optional photograph off the form.
+ *
+ * Returns null for the two shapes "no photo" arrives in: no field at all, and an
+ * empty `File` that browsers submit for an untouched file input. Neither is an
+ * error — Option C in the brief is a first-class choice, and the most common one
+ * this library expects.
+ */
+function photoFrom(formData: FormData): File | null {
+  const entry = formData.get("childPhoto");
+  if (!(entry instanceof File) || entry.size === 0) return null;
+  return entry;
+}
 
 export interface RegistrationFormState {
   status: "idle" | "success" | "error";
@@ -95,6 +112,49 @@ export async function submitRegistrationAction(
   const headerList = await headers();
   const forwarded = headerList.get("x-forwarded-for");
 
+  // The photograph is stored before the registration, and is claimed inside the
+  // registration's own transaction. If anything after this point fails, the
+  // object is never claimed and the sweeper removes it — see media-service.
+  let photoMediaId: string | null = null;
+  const photo = photoFrom(formData);
+
+  if (photo) {
+    if (!consentTypes.includes("CHILD_PHOTO_STORAGE")) {
+      return {
+        status: "error",
+        message: "Please agree to us storing the photo, or remove it and pick an avatar instead.",
+        fieldErrors: { photo: "We need your permission before we can keep a photo of your child." },
+      };
+    }
+
+    try {
+      const { library } = await getCurrentLibrary();
+      const stored = await storeChildPhoto({
+        libraryId: library.id,
+        bytes: new Uint8Array(await photo.arrayBuffer()),
+        // Read but not trusted: validation is done on the actual bytes.
+        declaredMimeType: photo.type,
+        originalFilename: photo.name,
+        uploadedById: null,
+      });
+      photoMediaId = stored.mediaId;
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        return {
+          status: "error",
+          message: error.friendlyMessage,
+          fieldErrors: { photo: error.fieldErrors?.file ?? "That picture could not be used." },
+        };
+      }
+      console.error("Child photo upload failed:", error);
+      return {
+        status: "error",
+        message: "We could not save that picture. You can carry on with an avatar instead.",
+        fieldErrors: { photo: "That picture could not be saved." },
+      };
+    }
+  }
+
   try {
     await submitRegistration({
       childName: parsed.data.childName,
@@ -104,7 +164,7 @@ export async function submitRegistrationAction(
       guardianEmail: parsed.data.guardianEmail,
       guardianPhone: parsed.data.guardianPhone,
       avatarKey: isAvatarKey(parsed.data.avatarKey) ? parsed.data.avatarKey : null,
-      photoMediaId: null,
+      photoMediaId,
       consentTypes,
       requestIp: forwarded?.split(",")[0]?.trim() ?? headerList.get("x-real-ip"),
       userAgent: headerList.get("user-agent"),
@@ -183,6 +243,33 @@ export async function rejectRegistrationAction(
     await rejectRegistration(id, reason);
     revalidatePath("/desk/registrations");
     return { status: "success", message: "Closed, and a gentle note has gone to the family." };
+  } catch (error) {
+    return { status: "error", message: toFriendlyMessage(error) };
+  }
+}
+
+/**
+ * A librarian records that they confirmed the guardian themselves.
+ *
+ * The path that lets a library require real verification without requiring
+ * every parent to have a working email — which, for a community library run out
+ * of a corner of a room, matters.
+ */
+export async function recordStaffVerificationAction(
+  _previous: DeskActionState,
+  formData: FormData,
+): Promise<DeskActionState> {
+  const id = String(formData.get("registrationId") ?? "");
+  const note = String(formData.get("evidenceNote") ?? "");
+
+  try {
+    await recordStaffVerification({
+      registrationRequestId: id,
+      method: "STAFF_VERIFIED",
+      evidenceNote: note,
+    });
+    revalidatePath("/desk/registrations");
+    return { status: "success", message: "Recorded — guardian verification is now complete." };
   } catch (error) {
     return { status: "error", message: toFriendlyMessage(error) };
   }

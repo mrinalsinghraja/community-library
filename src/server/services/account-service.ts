@@ -3,7 +3,7 @@ import "server-only";
 import type { UserStatus } from "@prisma/client";
 
 import { prisma } from "@/server/db";
-import { requirePermission, type Actor } from "@/server/authz";
+import { requireActor, requirePermission, type Actor } from "@/server/authz";
 import { revokeAllSessionsForUser } from "@/server/auth/session-store";
 import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
 import { EmailService } from "@/server/lib/email";
@@ -352,6 +352,29 @@ export async function updateGuardianContact(params: {
   });
 }
 
+/**
+ * The signed-in member's own library card.
+ *
+ * Takes no id, by design. Ownership comes from the session and there is nothing
+ * in the request to tamper with — the strongest form of the rule that a child
+ * reaches their own record and no other.
+ *
+ * Returns null for staff, who have no library card.
+ */
+export async function getOwnMemberCard(): Promise<{
+  memberCode: string;
+  avatarKey: string | null;
+  photoMediaId: string | null;
+} | null> {
+  const actor = await requireActor();
+  if (actor.kind !== "MEMBER") return null;
+
+  return prisma.memberProfile.findUnique({
+    where: { userId: actor.userId },
+    select: { memberCode: true, avatarKey: true, photoMediaId: true },
+  });
+}
+
 /** The member list for the desk. Contact details only if the actor may see them. */
 export async function listMembers(options: { search?: string } = {}) {
   const actor = await requirePermission("member.view");
@@ -380,7 +403,15 @@ export async function listMembers(options: { search?: string } = {}) {
       mustSetPassword: true,
       lastLoginAt: true,
       memberProfile: {
-        select: { memberCode: true, apartment: true, avatarKey: true, dateOfBirth: true },
+        select: {
+          memberCode: true,
+          apartment: true,
+          avatarKey: true,
+          dateOfBirth: true,
+          // The id only. The bytes come from /api/media/[id], which makes its
+          // own authorization decision for the person actually looking.
+          photoMediaId: true,
+        },
       },
       guardianLinks: {
         select: { guardian: { select: { id: true, fullName: true, email: true, phone: true } } },

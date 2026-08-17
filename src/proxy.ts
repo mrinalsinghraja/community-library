@@ -81,9 +81,16 @@ export const config = {
     /*
      * Everything except static assets and image optimisation, which need no
      * gate and would only pay the cost.
+     *
+     * `api/media` is excluded for a different reason: this middleware sets the
+     * page Content-Security-Policy on every response it touches, which would
+     * overwrite the far stricter `default-src 'none'; sandbox` that the media
+     * route sets on the bytes it serves. Serving a child's photograph under the
+     * *application's* script policy is not what that route intends, and it does
+     * its own authorization on every request, so it needs nothing from here.
      */
     {
-      source: "/((?!_next/static|_next/image|favicon.ico|avatars|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)",
+      source: "/((?!api/media|_next/static|_next/image|favicon.ico|avatars|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)",
       missing: [{ type: "header", key: "next-router-prefetch" }],
     },
   ],

@@ -48,6 +48,19 @@ export const AUDIT_ACTIONS = {
   // Guardians
   GUARDIAN_UPDATED: "guardian.updated",
 
+  // Guardian verification — kept distinct from consent actions on purpose:
+  // "a guardian agreed" and "we checked who they are" are different events.
+  VERIFICATION_RECORDED: "verification.recorded",
+  VERIFICATION_CHALLENGE_SENT: "verification.challenge.sent",
+  VERIFICATION_COMPLETED: "verification.completed",
+  VERIFICATION_FAILED: "verification.failed",
+  VERIFICATION_REVOKED: "verification.revoked",
+
+  // Child photographs. Every touch of a private child image is logged.
+  MEMBER_PHOTO_ADDED: "member.photo.added",
+  MEMBER_PHOTO_REPLACED: "member.photo.replaced",
+  MEMBER_PHOTO_REMOVED: "member.photo.removed",
+
   // Catalogue
   BOOK_TITLE_CREATED: "book.title.created",
   BOOK_TITLE_UPDATED: "book.title.updated",

@@ -22,8 +22,24 @@ import {
 } from "@/server/lib/rate-limit";
 import { getCurrentLibrary } from "@/server/lib/settings";
 import { mintToken, TOKEN_LIFETIME } from "@/server/lib/tokens";
+import {
+  claimUnclaimedChildPhoto,
+  purgeScheduledMedia,
+  scheduleMediaDeletion,
+} from "@/server/services/media-service";
+import {
+  assertVerificationSufficient,
+  attachVerificationsToMember,
+  beginVerificationForRegistration,
+  verificationStateForRequest,
+} from "@/server/services/guardian-verification-service";
 import { ageInYears } from "@/lib/dates";
-import { CONSENT_TEXTS, CURRENT_CONSENT_TYPES } from "@/lib/consent";
+import { CONSENT_TEXTS, CURRENT_CONSENT_TYPES, REQUIRED_CONSENT_TYPES } from "@/lib/consent";
+import {
+  VERIFICATION_CHALLENGE_HOURS,
+  highestStrength,
+  meetsRequiredStrength,
+} from "@/lib/guardian-verification";
 
 /**
  * Registration: submission by a guardian, review and decision by a librarian.
@@ -92,8 +108,14 @@ export async function submitRegistration(input: SubmitRegistrationInput): Promis
 
   const guardianEmail = input.guardianEmail.trim().toLowerCase();
 
+  type SubmissionResult = {
+    request: { id: string; childName: string; guardianName: string };
+    emailChallenge: { rawToken: string; expiresAt: Date } | null;
+  };
+  let submission: SubmissionResult;
+
   try {
-    await prisma.$transaction(async (tx) => {
+    submission = await prisma.$transaction(async (tx) => {
       const request = await tx.registrationRequest.create({
         data: {
           libraryId: library.id,
@@ -109,6 +131,16 @@ export async function submitRegistration(input: SubmitRegistrationInput): Promis
           submittedIpHash: input.requestIp ? hashIdentifier(input.requestIp) : null,
         },
       });
+
+      // The photograph, if there is one, is claimed in the same transaction that
+      // links it. Until this line it carries an "unclaimed" deadline, so a form
+      // that never arrives leaves nothing behind in storage.
+      if (input.photoMediaId) {
+        await claimUnclaimedChildPhoto(tx, {
+          mediaId: input.photoMediaId,
+          libraryId: library.id,
+        });
+      }
 
       // Consent is captured with the wording actually shown, so a later edit to
       // that wording cannot rewrite what this family agreed to.
@@ -149,41 +181,93 @@ export async function submitRegistration(input: SubmitRegistrationInput): Promis
         metadata: { version: settings.consentVersion, method: "WEB_FORM" },
       });
 
+      // Consent captured. Now the separate question of who that was: this
+      // records the self-declaration explicitly, and starts an emailed
+      // confirmation if the library's configured requirement calls for one.
+      const { emailChallenge } = await beginVerificationForRegistration(tx, {
+        libraryId: library.id,
+        registrationRequestId: request.id,
+        required: settings.requiredGuardianVerification,
+        verificationVersion: settings.guardianVerificationVersion,
+        ipHash: input.requestIp ? hashIdentifier(input.requestIp) : null,
+        userAgentHash: input.userAgent ? hashIdentifier(input.userAgent) : null,
+      });
+
+      await recordAudit(tx, {
+        libraryId: library.id,
+        action: AUDIT_ACTIONS.VERIFICATION_RECORDED,
+        entityType: "registration_request",
+        entityId: request.id,
+        actorUserId: null,
+        actorLabel: input.guardianName,
+        metadata: {
+          method: "SELF_DECLARED",
+          requiredStrength: settings.requiredGuardianVerification,
+          challengeSent: emailChallenge !== null,
+        },
+      });
+
       // Inside the transaction so a failed insert cannot leave a family with an
       // acknowledgement for a request that does not exist.
       await recordPublicFormSubmission(input.requestIp);
 
-      return request;
+      return {
+        request: {
+          id: request.id,
+          childName: request.childName,
+          guardianName: request.guardianName,
+        },
+        emailChallenge,
+      };
     });
   } catch (error) {
     // The database refuses a second open request for the same child and flat.
     // From outside, that is indistinguishable from success — otherwise the form
     // answers "is this child already registered?" for anyone who asks.
-    if (isUniqueViolation(error)) return;
+    if (isUniqueViolation(error)) {
+      // The photograph uploaded a moment ago now belongs to nothing. It is still
+      // unclaimed, so this removes it immediately rather than leaving a private
+      // picture of a child sitting in storage until the nightly sweep.
+      if (input.photoMediaId) await purgeScheduledMedia(input.photoMediaId);
+      return;
+    }
     throw error;
   }
 
-  const created = await prisma.registrationRequest.findFirst({
-    where: { libraryId: library.id, guardianEmail, status: "PENDING" },
-    orderBy: { submittedAt: "desc" },
-    select: { id: true, childName: true, guardianName: true },
+  await EmailService.sendRegistrationReceived({
+    to: guardianEmail,
+    guardianName: submission.request.guardianName,
+    childName: submission.request.childName,
+    registrationId: submission.request.id,
   });
 
-  if (created) {
-    await EmailService.sendRegistrationReceived({
+  // Sent after commit, deliberately: a mail server having a bad minute must not
+  // roll back a family's registration.
+  if (submission.emailChallenge) {
+    await EmailService.sendGuardianVerification({
       to: guardianEmail,
-      guardianName: created.guardianName,
-      childName: created.childName,
-      registrationId: created.id,
+      guardianName: submission.request.guardianName,
+      childName: submission.request.childName,
+      verificationToken: submission.emailChallenge.rawToken,
+      expiresInHours: VERIFICATION_CHALLENGE_HOURS,
+      registrationId: submission.request.id,
     });
   }
 }
 
-/** The librarian's queue. Only what the decision actually needs. */
+/**
+ * The librarian's queue. Only what the decision actually needs.
+ *
+ * Returns consent and guardian verification as two separate, explicitly
+ * labelled states. They are not the same question, and the screen that decides
+ * whether a child gets an account is the last place they should be blurred
+ * together.
+ */
 export async function listRegistrations(statuses: RegistrationStatus[] = ["PENDING", "UNDER_REVIEW"]) {
   const actor = await requirePermission("registration.view");
+  const { settings } = await getCurrentLibrary();
 
-  return prisma.registrationRequest.findMany({
+  const requests = await prisma.registrationRequest.findMany({
     where: { libraryId: actor.libraryId, status: { in: statuses } },
     orderBy: { submittedAt: "asc" },
     select: {
@@ -202,7 +286,44 @@ export async function listRegistrations(statuses: RegistrationStatus[] = ["PENDI
       consents: {
         select: { type: true, status: true, consentVersion: true, grantedAt: true },
       },
+      verifications: {
+        select: {
+          method: true,
+          status: true,
+          strength: true,
+          verifiedAt: true,
+          expiresAt: true,
+          evidenceNote: true,
+          performedBy: { select: { displayName: true } },
+        },
+        orderBy: { requestedAt: "asc" },
+      },
     },
+  });
+
+  const now = new Date();
+
+  return requests.map((request) => {
+    const achieved = highestStrength(
+      request.verifications
+        .filter((v) => v.status === "VERIFIED" && (!v.expiresAt || v.expiresAt > now))
+        .map((v) => v.strength),
+    );
+
+    return {
+      ...request,
+      consentComplete: REQUIRED_CONSENT_TYPES.every((type) =>
+        request.consents.some(
+          (consent) => consent.type === type && consent.status === "GRANTED",
+        ),
+      ),
+      verification: {
+        achieved,
+        required: settings.requiredGuardianVerification,
+        satisfied: meetsRequiredStrength(achieved, settings.requiredGuardianVerification),
+        awaitingGuardian: request.verifications.some((v) => v.status === "PENDING"),
+      },
+    };
   });
 }
 
@@ -278,6 +399,18 @@ export async function approveRegistration(registrationId: string): Promise<Appro
     );
   }
 
+  // THE PRODUCTION SAFETY GATE (1 of 2).
+  //
+  // No account is created until the guardian verification this library requires
+  // is on record. The request stays exactly where it is — PENDING or
+  // UNDER_REVIEW — so a librarian can come back to it once the parent has
+  // confirmed, or record an in-person confirmation themselves.
+  const verification = await verificationStateForRequest(
+    request.id,
+    settings.requiredGuardianVerification,
+  );
+  await assertVerificationSufficient(verification, `Approval of registration ${request.id}`);
+
   const result = await prisma.$transaction(async (tx) => {
     const memberCode = await allocateMemberCode(
       tx,
@@ -341,6 +474,13 @@ export async function approveRegistration(registrationId: string): Promise<Appro
     await tx.consentRecord.updateMany({
       where: { registrationRequestId: request.id },
       data: { memberUserId: member.id, guardianId: guardian.id },
+    });
+
+    // The verification evidence travels the same way, and for the same reason.
+    await attachVerificationsToMember(tx, {
+      registrationRequestId: request.id,
+      memberUserId: member.id,
+      guardianId: guardian.id,
     });
 
     await tx.registrationRequest.update({
@@ -454,6 +594,11 @@ export async function rejectRegistration(
       },
     });
 
+    // A closed request has no reason to keep a private photograph of a child.
+    // The request row keeps its reference until the sweeper clears the object,
+    // which is the point: the row is the ledger.
+    if (request.photoMediaId) await scheduleMediaDeletion(tx, request.photoMediaId);
+
     await recordAudit(tx, {
       libraryId: actor.libraryId,
       action: AUDIT_ACTIONS.REGISTRATION_REJECTED,
@@ -465,6 +610,8 @@ export async function rejectRegistration(
       metadata: { reason },
     });
   });
+
+  if (request.photoMediaId) await purgeScheduledMedia(request.photoMediaId);
 
   await EmailService.sendRegistrationRejected({
     to: request.guardianEmail,

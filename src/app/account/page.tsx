@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { MemberAvatar } from "@/components/library/avatar";
 import { PublicShell } from "@/components/layout/site-shell";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,7 @@ import { Callout } from "@/components/ui/states";
 import { signOutAction } from "@/server/actions/auth-actions";
 import { getActor } from "@/server/authz";
 import { getBrandingSafe } from "@/server/lib/settings";
+import { getOwnMemberCard } from "@/server/services/account-service";
 
 export const metadata: Metadata = { title: "My library" };
 
@@ -28,13 +30,36 @@ export default async function AccountPage() {
   // validity. This is the check that actually counts.
   if (!actor) redirect("/login?next=/account");
 
+  // Ownership from the session, never from the request. There is no id in the
+  // URL to tamper with here, and that is the point.
+  const profile = await getOwnMemberCard();
   const permissions = [...actor.permissions].sort();
 
   return (
     <PublicShell branding={branding} signedIn>
       <div className="mx-auto w-full max-w-4xl px-5 py-14 sm:px-8">
-        <p className="text-lg font-bold text-accent-ink">Signed in</p>
-        <h1 className="mt-2 text-4xl">Hello, {actor.displayName}! 👋</h1>
+        <div className="flex items-center gap-4">
+          {/*
+            The child's own card picture.
+
+            Showing a child their own photograph is deliberate. It is a picture
+            of them, they (or their parent) chose it, and it appears here and on
+            the librarian's screen and nowhere else. Hiding it from its own
+            subject would be strange to a nine-year-old and would protect
+            nobody — the protection that matters is that no OTHER child can load
+            these bytes, which /api/media/[id] enforces per request.
+          */}
+          <MemberAvatar
+            avatarKey={profile?.avatarKey}
+            photoUrl={profile?.photoMediaId ? `/api/media/${profile.photoMediaId}` : null}
+            name={actor.displayName}
+            size={72}
+          />
+          <div>
+            <p className="text-lg font-bold text-accent-ink">Signed in</p>
+            <h1 className="mt-1 text-4xl">Hello, {actor.displayName}! 👋</h1>
+          </div>
+        </div>
 
         {actor.mustSetPassword ? (
           <Callout tone="warn" title="Your account still needs a secret word" className="mt-6">

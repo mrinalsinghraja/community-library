@@ -29,7 +29,14 @@ export interface StorageDriver {
   delete(key: string): Promise<void>;
 }
 
-/** Where the local driver keeps files. Outside `public/`, deliberately. */
+/**
+ * Where the local driver keeps files. Outside `public/`, deliberately.
+ *
+ * Relative, so it resolves against the PROCESS working directory — normally the
+ * project root, but not if something starts `next dev` from elsewhere. Worth
+ * knowing when hunting for a development upload: the bytes follow the process,
+ * not the repository. Production uses the Blob driver and never touches this.
+ */
 export const LOCAL_STORAGE_DIR = ".storage";
 
 /**

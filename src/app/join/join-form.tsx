@@ -2,13 +2,12 @@
 
 import { useActionState, useState } from "react";
 
-import { MemberAvatar } from "@/components/library/avatar";
+import { PhotoPicker } from "@/components/library/photo-picker";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, TextInput } from "@/components/ui/field";
-import { AVATARS, DEFAULT_AVATAR_KEY } from "@/lib/avatars";
+import { DEFAULT_AVATAR_KEY } from "@/lib/avatars";
 import { CONSENT_LABELS, CONSENT_TEXTS, REQUIRED_CONSENT_TYPES, type ConsentTypeKey } from "@/lib/consent";
-import { cn } from "@/lib/cn";
 import {
   submitRegistrationAction,
   type RegistrationFormState,
@@ -35,6 +34,12 @@ export function JoinForm({
   const [state, formAction, pending] = useActionState(submitRegistrationAction, INITIAL);
   const [avatarKey, setAvatarKey] = useState<string>(DEFAULT_AVATAR_KEY);
   const [openConsent, setOpenConsent] = useState<ConsentTypeKey | null>(null);
+  /**
+   * Drives the photo consent tickbox. It appears only once a photo has actually
+   * been chosen: asking every family to agree to storing a photograph they never
+   * uploaded would be noise, and noise is how consent forms stop being read.
+   */
+  const [hasPhoto, setHasPhoto] = useState(false);
 
   if (state.status === "success") {
     return (
@@ -115,37 +120,17 @@ export function JoinForm({
       <Card>
         <h2 className="text-2xl">Pick a library card picture</h2>
         <p className="mt-2 text-ink-soft">
-          Let your child choose! You can add a photo later if you would like to — an avatar works
-          just as well and keeps things simple.
+          Let your child choose! An avatar works just as well as a photo and keeps things simple.
         </p>
 
-        <input type="hidden" name="avatarKey" value={avatarKey} />
-
-        <fieldset className="mt-6">
-          <legend className="sr-only">Choose an avatar</legend>
-          <div className="flex flex-wrap gap-3">
-            {AVATARS.map((avatar) => {
-              const selected = avatar.key === avatarKey;
-              return (
-                <button
-                  key={avatar.key}
-                  type="button"
-                  onClick={() => setAvatarKey(avatar.key)}
-                  aria-pressed={selected}
-                  className={cn(
-                    "rounded-full p-1 transition-transform",
-                    selected
-                      ? "ring-4 ring-primary-deep"
-                      : "ring-2 ring-transparent hover:ring-control-border",
-                  )}
-                >
-                  <MemberAvatar avatarKey={avatar.key} name={avatar.label} size={56} />
-                  <span className="sr-only">{avatar.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
+        <div className="mt-6">
+          <PhotoPicker
+            avatarKey={avatarKey}
+            onAvatarChange={setAvatarKey}
+            onPhotoChange={setHasPhoto}
+            error={fieldError("photo")}
+          />
+        </div>
       </Card>
 
       {/* ---------------------------------------------------------------- */}
@@ -194,10 +179,11 @@ export function JoinForm({
 
       {/* ---------------------------------------------------------------- */}
       <Card>
-        <h2 className="text-2xl">Your permission</h2>
+        <h2 className="text-2xl">Parent or guardian confirmation</h2>
         <p className="mt-2 text-ink-soft">
           Because this account is for a child, we need a parent or guardian to agree. You can read
-          exactly what you are agreeing to, and you can withdraw it at any time.
+          exactly what you are agreeing to, and you can change your mind at any time — just tell the
+          librarian.
         </p>
 
         {fieldError("consent") ? (
@@ -207,6 +193,44 @@ export function JoinForm({
         ) : null}
 
         <div className="mt-6 flex flex-col gap-5">
+          {/* Photo consent is its own record, and appears only when there is a
+              photo — so a family can later withdraw the photo without
+              withdrawing the membership. */}
+          {hasPhoto ? (
+            <div className="rounded-[var(--radius-field)] bg-surface-sunk p-4">
+              <label className="flex items-start gap-3 text-lg font-bold text-ink">
+                <input
+                  type="checkbox"
+                  name="consent.CHILD_PHOTO_STORAGE"
+                  required
+                  className="mt-1.5 h-6 w-6 shrink-0 accent-[var(--color-primary)]"
+                />
+                <span>{CONSENT_LABELS.CHILD_PHOTO_STORAGE}</span>
+              </label>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenConsent(
+                    openConsent === "CHILD_PHOTO_STORAGE" ? null : "CHILD_PHOTO_STORAGE",
+                  )
+                }
+                aria-expanded={openConsent === "CHILD_PHOTO_STORAGE"}
+                className="mt-2 ml-9 text-base font-bold text-primary-deep underline"
+              >
+                {openConsent === "CHILD_PHOTO_STORAGE"
+                  ? "Hide the full wording"
+                  : "Read the full wording"}
+              </button>
+
+              {openConsent === "CHILD_PHOTO_STORAGE" ? (
+                <p className="mt-3 ml-9 whitespace-pre-line rounded-lg bg-surface p-4 text-base text-ink-soft">
+                  {CONSENT_TEXTS.CHILD_PHOTO_STORAGE}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           {REQUIRED_CONSENT_TYPES.map((type) => (
             <div key={type} className="rounded-[var(--radius-field)] bg-surface-sunk p-4">
               <label className="flex items-start gap-3 text-lg font-bold text-ink">
