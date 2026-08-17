@@ -24,7 +24,8 @@
     "test:db": "vitest run --project database",
     "test:all": "vitest run",
     "test:coverage": "vitest run --project unit --coverage",
-    "verify": "npm run typecheck && npm run lint && npm run test"
+    "verify": "npm run typecheck && npm run lint && npm run test",
+    "reconcile:circulation": "tsx scripts/reconcile-circulation.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed/index.ts"

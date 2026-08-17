@@ -241,6 +241,31 @@ account-unavailable message is asserted to leak no reason. This library charges
 no fines, and the copy is the only place that promise is visible to the person it
 is a promise to.
 
+**Reconciliation** (17, `tests/database/circulation-reconciliation.test.ts`) — a
+copy that reads `BORROWED` with no borrower, which is the one state the system is
+built to make unreachable. Producing it takes disabling the invariant trigger for
+a single statement, because nothing in the application can. What the suite then
+proves is what *does not* happen: the migration's guard raises, names the book,
+and leaves the copy `BORROWED` — no reset to `AVAILABLE`, no loan, no loan event,
+no borrower. Two of the tests read the migration file itself and assert it
+contains no statement writing `book_copy` and no `INSERT INTO audit_log`, which
+is the guard against the silent repair being reintroduced by someone who finds
+the failed deploy annoying. The rest cover the three operator resolutions, each
+of which demands a name and a reason before it will do anything.
+
+**Dormant configuration** (9, `tests/unit/dormant-configuration.test.ts`) — walks
+every `.ts`/`.tsx` file under `src/` and asserts that nothing reads
+`block_on_overdue_days`, `renewal_blocked_when_reserved`,
+`overdue_reminder_offsets`, `loan.override_rules` or `loan.mark_lost`. They are
+labelled "not yet implemented", and this is what keeps the label true. One test
+runs the other way and asserts a working permission is never labelled dormant,
+because the reverse mistake misleads just as badly.
+
+**Member eligibility** (11 across the two circulation suites) — all five account
+states, issued against and renewed against. Only `ACTIVE` lends. The unit suite
+asserts the allowlist has exactly one member, so widening it is a visible act
+rather than a side effect of adding a state to the enum.
+
 ## What the database suite proves
 
 **The double-issue guard** — two concurrent `Promise.allSettled` inserts of the

@@ -606,3 +606,81 @@ reach `listLoansForStaff`, `countDeskLoans`, `searchReaders` or `searchCopies`.
 
 **Corollary.** Readers hold no circulation *mutation* permission at all. A test
 asserts every permission a member holds ends in `.view`.
+
+## ADR-027 — A deployment may not decide where a physical book is
+
+**Decision.** Migration 6 refuses to run while any copy reads `BORROWED` with no
+active loan. It installs `circulation_assert_no_stranded_copies()`, calls it
+first, and stops there. It does not reset the copy, does not create a loan, and
+writes nothing on the library's behalf. Resolving those books is an explicit,
+per-copy, audited act performed by a person through
+`npm run reconcile:circulation`, with three possible outcomes: on the shelf
+(`AVAILABLE`), a named child has it (a real loan, with the operator's dates), or
+whereabouts unknown (`LOST`).
+
+**Why.** The state is a question about the physical world — where is this book? —
+and a deployment has no way to answer it. Both automatic answers are assertions
+the software cannot support:
+
+* `AVAILABLE` says the book is on the shelf. It may be in a child's bag, and the
+  next reader is then promised a book nobody can hand them.
+* A loan says a particular child has it. Nothing in the database knows who, and
+  the invented borrower would sit in a real child's borrowing history
+  permanently, in a system whose whole premise is that history is not rewritten.
+
+Refusing is only viable because there is an honest third answer. `LOST` already
+exists in `CopyStatus`, is coherent with the invariant trigger, promises the book
+to nobody, and names no child. Without it an operator with a genuinely missing
+book would be forced to pick a lie.
+
+**What changed.** The first implementation of Phase 3 reset such copies inside
+the migration and wrote an audit row naming each one. That was a defensible
+handling of a known demo fixture and an indefensible deployment behaviour, and
+conflating the two was the actual error: development knew what that record was,
+production does not. The demo record is still reset — now by a person, using the
+same tool, having said so.
+
+**Cost.** An upgrade can fail on a database nobody has prepared, and the failure
+is at deploy time rather than at a desk. That is the trade being made: a
+deployment that stops is recoverable in minutes, and a book quietly declared
+available is discovered by a child who was promised it.
+
+**Verification.** `tests/database/circulation-reconciliation.test.ts` constructs
+the state by disabling the invariant trigger for one statement — nothing in the
+application can produce it — then asserts the guard raises, names the book,
+leaves the copy `BORROWED`, and creates no loan and no loan event. Two further
+tests read the migration file itself and assert it contains no statement writing
+`book_copy` and no `INSERT INTO audit_log`.
+
+## ADR-028 — Borrowing is an allowlist of one account state
+
+**Decision.** Only an `ACTIVE` member may borrow or renew. The rule is
+`BORROWING_ALLOWED_STATUSES = ["ACTIVE"]` in `src/lib/circulation.ts`, and it is
+enforced inside the issue and renew transactions after the member's row is
+locked — never by the screen.
+
+**Why written as an allowlist.** Phase 3 first shipped this as a denylist of
+`SUSPENDED`, `DEACTIVATED`, `ARCHIVED`, which let `INVITED` borrow. That was
+wrong on its merits — an invited account is one whose guardian has not completed
+activation, so nothing has yet confirmed the child is enrolled on the terms the
+family agreed to, and lending first is exactly the ordering a children's library
+should not adopt. But the shape was the deeper problem: a denylist has to be kept
+in step with the enum, and a state added later inherits the right to borrow by
+default. An allowlist fails the safe way — a new state cannot borrow until
+somebody argues for it in that file.
+
+**One sentence for every refusal.** "This library account is currently
+unavailable for borrowing." Which state a family is in is their business and a
+conversation; a desk screen that distinguished *invited* from *suspended* would
+narrate it to whoever is standing at the counter. A unit test asserts the
+sentence contains no state name.
+
+**Cost.** A librarian holding a book and a child who cannot borrow it gets no
+explanation from the message. They have a route to one — `/desk/members` shows
+"Waiting to set up" — and the remedy for the common case is theirs to apply in a
+minute: finish the activation, then lend the book.
+
+**Verification.** All five states are issued against in
+`tests/database/circulation.test.ts`, and all five are renewed against; the unit
+suite asserts the allowlist has exactly one member and that filtering every
+`UserStatus` through `memberMayBorrow` yields `["ACTIVE"]`.

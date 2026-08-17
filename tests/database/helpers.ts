@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type UserStatus } from "@prisma/client";
 
 import { DEFAULT_CATEGORIES } from "../../src/lib/catalogue";
 import { ROLE_DEFINITIONS } from "../../src/lib/permissions";
@@ -132,7 +132,9 @@ let memberCounter = 0;
 
 export async function createMember(
   libraryId: string,
-  overrides: { displayName?: string; username?: string; status?: "ACTIVE" | "SUSPENDED" } = {},
+  // Every account state, not a convenient subset: circulation's eligibility
+  // rule has to be provable for all five.
+  overrides: { displayName?: string; username?: string; status?: UserStatus } = {},
 ) {
   memberCounter += 1;
   const suffix = String(memberCounter).padStart(4, "0");

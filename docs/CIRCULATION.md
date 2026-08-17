@@ -109,7 +109,7 @@ librarian reading the screen and pressing the button.
 | Condition | What the desk is told |
 |---|---|
 | Librarian lacks `loan.issue` | Refused before any work is done |
-| Reader is SUSPENDED, DEACTIVATED or ARCHIVED | "This library account is currently unavailable for borrowing." |
+| Reader's account is anything but ACTIVE | "This library account is currently unavailable for borrowing." |
 | Copy is in another library | Not found — the id is not confirmed to exist |
 | Copy is BORROWED | "Someone just got there first — this book is already out." |
 | Copy is LOST | "This book is marked as missing. Find it and put it back on the shelf first." |
@@ -119,11 +119,37 @@ librarian reading the screen and pressing the button.
 
 Note what the account message does **not** say. Why an account is paused is the
 library's business and a conversation with the family; it is never a tooltip.
+Every refused state gets the same sentence, so the desk screen cannot be read
+backwards into a family's paperwork.
 
-**INVITED accounts may borrow.** A card is issued when a registration is
-approved; whether a guardian has since clicked an activation link decides
-whether the child can *sign in*, not whether they may take a book home. The
-librarian is standing in front of them.
+### Only ACTIVE members may borrow
+
+| Account state | May borrow | Why |
+|---|---|---|
+| `INVITED` | ❌ | Set up but not finished. The guardian has not completed activation, so nobody has yet confirmed this child is enrolled on the terms the family agreed to. |
+| `ACTIVE` | ✅ | The only state that lends. |
+| `SUSPENDED` | ❌ | Paused by the library. |
+| `DEACTIVATED` | ❌ | Switched off. |
+| `ARCHIVED` | ❌ | Gone from the library's active roll. |
+
+The rule is written as an **allowlist of one** in `src/lib/circulation.ts`, not
+as a list of blocked states, and the direction matters. A denylist has to be
+kept in step with the enum: add a state and forget the circulation rule, and the
+new state silently gains the right to take books home. An allowlist fails the
+safe way round — a new state cannot borrow until somebody decides it should, on
+purpose, in that file. A unit test asserts the list has exactly one member, and
+a database test issues against all five.
+
+It is enforced server-side, inside the transaction, after the member's row is
+locked — not in the desk's rendering. The desk's `canBorrow` flag exists so a
+librarian is told before they try; it is not what stops them.
+
+**INVITED changed in the Phase 3 correction.** It was briefly allowed, on the
+reasoning that a card is issued at approval and activation only governs signing
+in. That was the wrong way round for a children's library: it lends the book
+first and completes the family's paperwork afterwards. The remedy is quick and
+it belongs to the librarian standing there — finish the activation, then lend
+the book.
 
 ### The damaged rule
 
@@ -343,6 +369,38 @@ The loan-limit message is generated from the setting, so a library that lends
 four books gets a message that says four, and one that lends a single book gets a
 sentence that reads correctly in English.
 
+### Settings that exist and do nothing
+
+Three columns in `library_settings` came from the blueprint's sketch of a
+complete library system and have never been implemented. **Changing any of them
+has no effect whatsoever.**
+
+| Setting | Why it is dormant |
+|---|---|
+| `block_on_overdue_days` | Would refuse to lend to a child with something this many days overdue. That turns a late book into a closed door for a nine-year-old, and whether this library wants that is the owner's decision — not a default the code should assume. |
+| `renewal_blocked_when_reserved` | There are no reservations in Version 1, so there is no state for it to describe. |
+| `overdue_reminder_offsets` | Phase 3 sends no notifications of any kind. |
+
+Two permissions are in the same position: **`loan.override_rules`** and
+**`loan.mark_lost`** are seeded, grantable, and read by nothing. A copy's status
+and condition are changed through the catalogue under `book.edit`.
+
+They are listed as dormant in code — `DORMANT_CIRCULATION_SETTINGS` in
+`src/lib/circulation.ts`, `DORMANT_PERMISSIONS` in `src/lib/permissions.ts` — and
+their permission descriptions say "Not yet implemented" in as many words. Tests
+assert that nothing under `src/` reads any of them.
+
+There is **no settings screen in Version 1**, so none of these is currently
+rendered anywhere; a librarian cannot tick a box and go home believing the
+library behaves differently. The lists exist so that whoever builds that screen
+has to decide what to do about these fields rather than discovering the problem
+afterwards. A control that looks like a rule and is not one is worse than a
+missing feature: it is a promise the software breaks silently.
+
+Implementing one means defining its semantics, and those are the owner's to
+define. Take a name off the dormant list in the same change that makes it do
+something — a test fails if only one of the two happens.
+
 ## 11. Concurrency
 
 Two librarians on two tablets, a double-tapped button, a slow network retry. The
@@ -375,7 +433,8 @@ than which caller happened to win.
 | `loan.return` | Super Admin, Librarian, Junior Librarian |
 | `loan.renew` | Super Admin, Librarian, Junior Librarian |
 | `loan.correct` | Super Admin, Librarian |
-| `loan.override_rules` | Super Admin, Librarian — **seeded, not wired to anything in Phase 3** |
+| `loan.override_rules` | Super Admin, Librarian — **dormant: granting it changes nothing** |
+| `loan.mark_lost` | Super Admin, Librarian — **dormant: granting it changes nothing** |
 
 ### ⚠ `loan.view` may never guard a staff screen
 

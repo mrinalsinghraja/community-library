@@ -12,6 +12,7 @@ import {
   CIRCULATION_MESSAGES,
   LOAN_PAGE_SIZES,
   loanCondition,
+  memberMayBorrow,
   type LoanFilter,
 } from "@/lib/circulation";
 import { calculateDueDate, calculateRenewedDueDate } from "@/lib/dates";
@@ -73,19 +74,8 @@ import { getCurrentLibrary } from "@/server/lib/settings";
  */
 const CIRCULATION_DESK = ["loan.issue", "loan.return", "loan.renew"] as const;
 
-/**
- * Account states that stop a child borrowing.
- *
- * INVITED is deliberately absent. A card is issued when a registration is
- * approved; whether a guardian has since clicked an activation link decides
- * whether the child can *sign in*, not whether they may take a book home. The
- * librarian is standing in front of them.
- */
-const BORROWING_BLOCKED_STATUSES: readonly UserStatus[] = [
-  "SUSPENDED",
-  "DEACTIVATED",
-  "ARCHIVED",
-];
+// Who may borrow lives in src/lib/circulation.ts, as an allowlist of one:
+// ACTIVE. See `memberMayBorrow` there for why it is written that way round.
 
 // ---------------------------------------------------------------------------
 // Shapes
@@ -255,7 +245,7 @@ export async function searchReaders(search: string): Promise<ReaderPick[]> {
     memberUserId: row.member_user_id,
     displayName: row.display_name,
     memberCode: row.member_code,
-    canBorrow: !BORROWING_BLOCKED_STATUSES.includes(row.status),
+    canBorrow: memberMayBorrow(row.status),
     activeLoanCount: Number(row.active_loans),
     avatarKey: row.avatar_key,
     photoMediaId: row.photo_media_id,
@@ -398,7 +388,7 @@ export async function getIssuePreview(
     memberUserId: reader.member_user_id,
     displayName: reader.display_name,
     memberCode: reader.member_code,
-    canBorrow: !BORROWING_BLOCKED_STATUSES.includes(reader.status),
+    canBorrow: memberMayBorrow(reader.status),
     activeLoanCount: Number(reader.active_loans),
     avatarKey: reader.avatar_key,
     photoMediaId: reader.photo_media_id,
@@ -473,7 +463,7 @@ export async function issueBook(input: {
         );
       }
 
-      if (BORROWING_BLOCKED_STATUSES.includes(member.status)) {
+      if (!memberMayBorrow(member.status)) {
         // The generic sentence. Why an account is paused is the library's
         // business and a conversation with the family — never a tooltip.
         throw new RuleViolationError(
@@ -758,7 +748,7 @@ export async function renewLoan(input: { loanId: string }): Promise<{ dueAt: Dat
   return prisma.$transaction(async (tx) => {
     const loan = await lockActiveLoan(tx, actor, input.loanId);
 
-    if (BORROWING_BLOCKED_STATUSES.includes(loan.reader_status)) {
+    if (!memberMayBorrow(loan.reader_status)) {
       throw new RuleViolationError(
         `Member ${loan.member_user_id} is ${loan.reader_status} and may not renew`,
         CIRCULATION_MESSAGES.readerUnavailable,

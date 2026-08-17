@@ -1,4 +1,4 @@
-import type { LoanStatus } from "@prisma/client";
+import type { LoanStatus, UserStatus } from "@prisma/client";
 
 import { daysUntilDue, formatInTimezone } from "@/lib/dates";
 
@@ -22,6 +22,85 @@ import { daysUntilDue, formatInTimezone } from "@/lib/dates";
  * nine-year-old who already feels bad about it; "YOUR BOOK IS OVERDUE" is
  * exactly the wording this file exists to prevent.
  */
+
+// ---------------------------------------------------------------------------
+// Configuration that is real, and configuration that is not
+// ---------------------------------------------------------------------------
+
+/**
+ * The `library_settings` columns circulation actually reads.
+ *
+ * Every one of these changes what the software does the moment it is saved.
+ */
+export const ACTIVE_CIRCULATION_SETTINGS = [
+  "borrowingPeriodDays",
+  "maxActiveLoans",
+  "maxRenewals",
+  "renewalPeriodDays",
+  "allowRenewalWhenOverdue",
+  "timezone",
+] as const;
+
+/**
+ * Columns that exist, carry a plausible default, and change nothing.
+ *
+ * They were laid down in Phase 0 from the blueprint's sketch of a full library
+ * system. Phase 3 implemented circulation and deliberately did not give them
+ * meaning: `blockOnOverdueDays` would turn a late book into a locked account
+ * for a child, `renewalBlockedWhenReserved` describes reservations that do not
+ * exist, and `overdueReminderOffsets` describes notifications this phase does
+ * not send. Inventing behaviour for any of them would be inventing policy.
+ *
+ * The list exists so a settings screen — there is none yet — cannot render one
+ * of these beside a working control and leave a librarian believing they have
+ * changed how the library behaves. A field that looks like a rule and is not
+ * one is worse than an absent feature: it is a promise the software breaks
+ * silently. Anything here must either be hidden, or labelled as not yet in
+ * effect, or implemented and removed from this list.
+ */
+export const DORMANT_CIRCULATION_SETTINGS = [
+  "blockOnOverdueDays",
+  "renewalBlockedWhenReserved",
+  "overdueReminderOffsets",
+] as const;
+
+export type DormantCirculationSetting = (typeof DORMANT_CIRCULATION_SETTINGS)[number];
+
+// ---------------------------------------------------------------------------
+// Who may borrow
+// ---------------------------------------------------------------------------
+
+/**
+ * The account states that may take a book home. There is one.
+ *
+ * Written as a list of what is **allowed** rather than a list of what is
+ * blocked, and the difference matters more than it looks. A denylist has to be
+ * kept in step with the enum: add a state to `UserStatus` and forget to add it
+ * here, and the new state silently gains the right to borrow. An allowlist
+ * fails the other way — the new state cannot borrow until somebody decides it
+ * should, in this file, on purpose.
+ *
+ * INVITED is not on the list. An invited account is one whose guardian has not
+ * finished setting it up, so nobody has yet confirmed that this child is
+ * enrolled on the terms the family agreed to. Handing over a book first and
+ * completing the paperwork later is precisely the ordering a children's library
+ * should not adopt. The remedy is quick and it is the librarian's to apply:
+ * finish the activation, then lend the book.
+ */
+export const BORROWING_ALLOWED_STATUSES: readonly UserStatus[] = ["ACTIVE"];
+
+/**
+ * May this account borrow?
+ *
+ * The whole rule, in one place, used by the desk's preview and by the two
+ * writes that matter. A screen may call it to explain a refusal early; it is
+ * never what enforces it — `issueBook` and `renewLoan` re-check inside their
+ * transactions, after locking the row, because the answer can change between
+ * the render and the click.
+ */
+export function memberMayBorrow(status: UserStatus): boolean {
+  return BORROWING_ALLOWED_STATUSES.includes(status);
+}
 
 // ---------------------------------------------------------------------------
 // Loan status

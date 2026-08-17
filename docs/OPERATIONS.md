@@ -115,23 +115,94 @@ use **"Issued by mistake"** on the loan row. That needs `loan.correct`, asks for
 a reason, and leaves the loan, its events and an audit row behind it. Nothing is
 deleted.
 
-### "Which books did the Phase 3 upgrade put back on the shelf?"
+### An inconsistent circulation state
 
-Migration 6 reset any copy that read `BORROWED` with no loan — a status set by
-hand before circulation existed, with nobody attached to it. It invented no
-borrower, and it named every book it touched:
+**The situation.** A copy reads `BORROWED` and has no active loan behind it, so
+the record says the book is out and cannot say who has it. This happens to a
+library upgrading from Phase 2, where a librarian could type that status by
+hand, before loans existed to back it up.
 
-```sql
-SELECT occurred_at,
-       metadata->>'copyCode' AS book,
-       metadata->>'reason'   AS why
-  FROM audit_log
- WHERE actor_label = 'System (Phase 3 reconciliation)'
- ORDER BY occurred_at;
+**What the upgrade does about it: nothing, deliberately.** Migration 6 stops
+before it changes anything:
+
+```
+ERROR: Cannot enable circulation: 1 book(s) read BORROWED with no loan and so
+       no borrower (MJCL-B0010). Someone must find out where each one is;
+       a deployment must not guess.
 ```
 
-Each of those is a shelf worth checking: the library does not know where the
-book is, only that no loan ever recorded it leaving.
+That is not a bug to work around. Every automatic repair is a claim the
+deployment cannot support. Marking the book `AVAILABLE` tells the next child it
+is on the shelf, when it may be in another child's bag. Writing a loan puts a
+name against it that nothing in the database knows, and that name would sit in a
+real child's borrowing history from then on. **A deployment must never make a
+physically borrowed book appear available, and must never invent a borrower.**
+
+**What to do.** List them — this changes nothing:
+
+```bash
+npm run reconcile:circulation
+```
+
+Then, for each book, find out where it actually is. Ask at the desk, look on the
+shelf, check the returns trolley. There are three answers and each has a
+command. All three record your name and your reason in the audit log.
+
+**It is on the shelf.**
+
+```bash
+npm run reconcile:circulation -- --copy MJCL-B0010 --on-shelf \
+  --operator "Priya" --reason "Found on the returns trolley"
+```
+
+**A child has it, and you know which child.** Give their card number and the
+real dates — the loan appears in that child's history, so it should say what
+happened rather than what was convenient. The book stays `BORROWED`, which is
+now true.
+
+```bash
+npm run reconcile:circulation -- --copy MJCL-B0010 --with MJCL-R0007 \
+  --issued 2026-08-01 --due 2026-08-15 \
+  --operator "Priya" --reason "Aarav's family confirmed they have it at home"
+```
+
+Only use this when you are sure. A wrong card number puts a book in the wrong
+child's history, and the history is not editable afterwards.
+
+**Nobody knows where it is.**
+
+```bash
+npm run reconcile:circulation -- --copy MJCL-B0010 --missing \
+  --operator "Priya" --reason "Not on the shelf, nobody recalls lending it"
+```
+
+This marks the copy `LOST`, which is the honest answer: the library does not
+have it, does not know who does, and will not offer it to the next child who
+asks. If it turns up, a librarian restores it through the catalogue.
+
+**Then run the migration again.** It re-checks and continues. You can also
+confirm you are finished at any point:
+
+```sql
+SELECT circulation_assert_no_stranded_copies();
+```
+
+Silence means every borrowed book has a borrower. The function is installed by
+migration 6 and stays available afterwards, so this is also the check to run if
+you ever suspect the two have drifted apart.
+
+**What you decided is recoverable.** Every resolution writes an audit row under
+your name:
+
+```sql
+SELECT occurred_at, actor_label,
+       metadata->>'copyCode' AS book,
+       metadata->>'to'       AS became,
+       metadata->>'reason'   AS why
+  FROM audit_log
+ WHERE metadata->>'via' = 'reconcile-circulation'
+ ORDER BY occurred_at;
+```
 
 ### "Who has this book out, and how late is it?"
 

@@ -15,6 +15,50 @@
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------
+-- 0. The gate the upgrade has to pass, and the operator's own check.
+--
+--    Before any of the guarantees below can be installed, the data has to be
+--    capable of satisfying them. A database upgraded from Phase 2 may hold a
+--    copy that reads BORROWED with no loan behind it, because Phase 2 let a
+--    librarian type that status by hand.
+--
+--    This function refuses; it does not repair. A deployment that reset such a
+--    copy to AVAILABLE would be asserting the book is on the shelf, which it
+--    has no way of knowing, and one that wrote a loan would be naming a
+--    borrower nothing in the database knows. Both are for a person who can walk
+--    to the shelf — see docs/OPERATIONS.md.
+--
+--    It lives on after the migration so that person can re-run it to confirm
+--    they have finished.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION circulation_assert_no_stranded_copies()
+  RETURNS void
+  LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_codes text;
+  v_count integer;
+BEGIN
+  SELECT count(*), string_agg(c.copy_code, ', ' ORDER BY c.copy_code)
+    INTO v_count, v_codes
+    FROM book_copy c
+   WHERE c.status = 'BORROWED'
+     AND NOT EXISTS (
+       SELECT 1 FROM loan l WHERE l.copy_id = c.id AND l.status = 'ACTIVE'
+     );
+
+  IF v_count = 0 THEN
+    RETURN;
+  END IF;
+
+  RAISE EXCEPTION
+    'Cannot enable circulation: % book(s) read BORROWED with no loan and so no borrower (%). Someone must find out where each one is; a deployment must not guess. See docs/OPERATIONS.md, "An inconsistent circulation state".',
+    v_count, v_codes
+    USING ERRCODE = 'raise_exception';
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- 1. A loan's closing fields must match its status.
 --
 --    Replaces loan_return_fields_match_status from 001, which allowed the LOST

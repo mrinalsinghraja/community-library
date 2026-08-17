@@ -33,38 +33,74 @@ during the Phase 2 browser walkthrough.
 
 ### What was done, and why
 
-`MJCL-B0010` was reset to `AVAILABLE`, **and an audit row was written naming
-it**, by step 1 of the Phase 3 migration.
+> **Corrected after review.** The first implementation reset such a copy to
+> `AVAILABLE` inside the migration. That was right for a demo fixture and wrong
+> as a deployment behaviour, and it has been replaced. What follows describes
+> the current design.
 
-No borrower was invented. A fabricated loan would put a child's name against a
-book they may never have touched, and that name would then sit in their
-borrowing history permanently. Better that a librarian walks to the shelf.
+**The migration refuses to run.** Step 0 installs
+`circulation_assert_no_stranded_copies()` and calls it. If any copy reads
+BORROWED with no active loan, the migration stops there having changed nothing
+else:
 
-The reconciliation lives in the migration rather than in a one-off script for
-two reasons. It has to run *before* the invariant trigger is installed, or the
-trigger's first encounter with such a row would be a failure at a busy desk. And
-production faces the identical situation for the identical reason — it has no
-loans either, so any BORROWED copy there is also a hand-set Phase 2 status with
-nobody attached. Resetting it and recording which book it was is the only
-truthful option available.
-
-The statement is idempotent: on a database with no such rows it updates nothing
-and writes nothing.
-
-```sql
--- The audit row each reconciled copy gets
-{
-  "copyCode": "MJCL-B0010",
-  "from": "BORROWED",
-  "to": "AVAILABLE",
-  "reason": "Marked borrowed before circulation existed, with no loan and so no
-             borrower. Reset to available rather than inventing one — please
-             check the shelf for this book."
-}
+```
+ERROR: Cannot enable circulation: 1 book(s) read BORROWED with no loan and so
+       no borrower (MJCL-B0010). Someone must find out where each one is;
+       a deployment must not guess.
 ```
 
-**Action for the librarian:** the audit log now lists which books need a
-physical check. Query it with the SQL in `docs/OPERATIONS.md`.
+The reasoning is that both automatic repairs are lies the deployment is not
+entitled to tell. Resetting to `AVAILABLE` asserts the book is on the shelf, and
+a deployment has no way of knowing that — the book may be in a child's bag, and
+the next reader would be promised something nobody can hand them. Writing a loan
+asserts a particular child has it, which nothing in the database knows; the
+invented borrower would sit in a real child's history permanently. **A
+deployment must never silently make a physically borrowed book appear available,
+and must never invent a borrower.**
+
+**The decision belongs to a person who can walk to the shelf.**
+`npm run reconcile:circulation` lists what needs deciding and changes nothing.
+Each book is then resolved explicitly, with the operator's name and reason
+recorded in the audit log:
+
+| What they found | Command | Copy becomes |
+|---|---|---|
+| It is on the shelf | `--on-shelf` | `AVAILABLE` |
+| A named child has it | `--with MJCL-R0007 --issued … --due …` | stays `BORROWED`, with a real loan carrying the real dates |
+| Nobody knows where it is | `--missing` | `LOST` |
+
+`LOST` is the honest third answer, and it is what makes refusing viable: the
+library does not have the book, does not know who does, and now says so. No
+child is named, and no reader is promised the book.
+
+The full procedure is in `docs/OPERATIONS.md`, "An inconsistent circulation
+state". The guard function stays installed after the migration so an operator
+can re-run it to confirm they are finished.
+
+**The development database.** `MJCL-B0010` was reset to `AVAILABLE` — the same
+decision as before, now made explicitly rather than by the deployment, because
+it is known demo data: the demo seed only ever writes `AVAILABLE`, and that
+status came from the Phase 2 browser walkthrough. No borrower was invented then
+and none is now.
+
+**Production is not the same situation as development**, which is why the two
+are no longer handled by the same code. Development knew what that record was.
+Production does not.
+
+> **Migration 6 was edited in place, so its checksum changed.** That is only
+> safe because nothing is deployed: the sole databases that had ever applied it
+> were the local development and test ones, and both were rebuilt from the six
+> migrations and reseeded. Any database that had applied the earlier version
+> would report `migration ... was modified after it was applied` and would need
+> the same treatment. If this had already been live, the correction would have
+> had to arrive as migration 7 instead.
+
+Proved by test (`tests/database/circulation-reconciliation.test.ts`): the guard
+detects the state, names the book, leaves the copy BORROWED, creates no loan and
+no loan event, and passes once resolved. Two further tests read the migration
+file itself and assert it contains no statement that writes `book_copy` and no
+audit row written on the library's behalf — a regression guard against the
+silent repair coming back.
 
 ## 2. Database changes — migration 6
 
@@ -175,22 +211,32 @@ broader one.
 physical book, which `CopyStatus` already carries. Keeping both would give the
 library two places to ask "where is it?".
 
-**5. INVITED readers may borrow.** The brief listed suspended, deactivated and
-archived as the blocking states, and INVITED is none of them. A card is issued at
-approval; whether a guardian has clicked an activation link governs signing in,
-not taking a book home.
+**5. ~~INVITED readers may borrow.~~ Corrected: only ACTIVE members may
+borrow.** The first implementation allowed INVITED, reasoning that a card is
+issued at approval and activation only governs signing in. That is the wrong way
+round for a children's library — it lends the book first and finishes the
+family's paperwork afterwards. Now written as an allowlist of one, so a state
+added to the enum later cannot inherit the right to borrow. All five states are
+covered by tests, and every refused state gets the same sentence.
 
-**6. `loan.override_rules` is seeded but wired to nothing.** It existed from
-Phase 0. A half-designed bypass of the loan limit seemed worse than an unused
-permission — say if you want it to do something.
+**6. Dormant configuration is now labelled as such.** Five things exist, are
+grantable or settable, and are read by nothing:
 
-**7. `block_on_overdue_days` is not wired to issuing.** The blueprint sketched
-"a child with a book overdue by more than N days cannot borrow another". The
-brief's issue-validation list (§16) does not include it, and it is a
-consequential rule — it stops a specific child borrowing anything at all — so it
-was not invented. An overdue book blocks *renewal*; it does not currently block
-*borrowing*. The column stands unused and ready. Say if you want it on, and at
-what number.
+| | Why it was not implemented |
+|---|---|
+| `loan.override_rules` | A half-designed bypass of the loan limit is worse than an unused permission. |
+| `loan.mark_lost` | Status and condition are changed through the catalogue, under `book.edit`. |
+| `block_on_overdue_days` | It would stop a specific child borrowing anything at all over a late book. Consequential, and the brief's issue-validation list does not include it. |
+| `renewal_blocked_when_reserved` | There are no reservations, so there is nothing for it to describe. |
+| `overdue_reminder_offsets` | This phase sends no notifications. |
+
+They are declared dormant in code (`DORMANT_CIRCULATION_SETTINGS`,
+`DORMANT_PERMISSIONS`), their permission descriptions read "Not yet
+implemented", and tests assert nothing under `src/` reads any of them. There is
+no settings screen in Version 1, so none is rendered anywhere — the lists exist
+so that whoever builds one has to decide about these fields rather than
+discovering them afterwards. **No semantics were invented for any of them.** Say
+which you want, and what it should mean.
 
 ## 5. Tests
 
@@ -224,6 +270,22 @@ Three existing tests changed because the rules changed, not because they broke:
 the constraint tests now build coherent loans before attacking them, the
 catalogue filter fixture uses `DAMAGED` instead of the no-longer-selectable
 `BORROWED`, and the member-permission assertions include `loan.view`.
+
+### The correction pass
+
+**490 passing** (183 unit + 307 against real PostgreSQL), up from 446.
+
+| File | Adds |
+|---|---|
+| `tests/database/circulation-reconciliation.test.ts` | 17 — the migration's guard, the migration file's own text, and the three operator resolutions |
+| `tests/unit/dormant-configuration.test.ts` | 9 — nothing in `src/` reads a dormant setting or permission, and nothing live is mislabelled as dormant |
+| `tests/unit/circulation.test.ts` | 6 more — the eligibility allowlist and the one sentence every refusal shares |
+| `tests/database/circulation.test.ts` | 11 more — issue and renewal against all five account states, and the desk's own flag |
+
+Building the broken state takes a deliberate act, and that is the point: the
+deferred trigger makes it uncommittable through any ordinary path, so the test
+disables that trigger for exactly one statement to produce the row a Phase 2
+database arrives holding.
 
 ## 6. Browser walkthrough
 

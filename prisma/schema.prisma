@@ -307,6 +307,8 @@ model LibrarySettings {
   /// A child who renews early is not punished for it by losing the days they
   /// had left. See docs/CIRCULATION.md §"Renewal".
   renewalPeriodDays        Int     @default(7) @map("renewal_period_days")
+  /// NOT IMPLEMENTED, and cannot be: there are no reservations in Version 1, so
+  /// there is no state for this to describe.
   renewalBlockedWhenReserved Boolean @default(true) @map("renewal_blocked_when_reserved")
 
   /// May a loan already past its due date be renewed?
@@ -321,7 +323,14 @@ model LibrarySettings {
   /// one row. See docs/CIRCULATION.md §"Overdue and renewal".
   allowRenewalWhenOverdue Boolean @default(false) @map("allow_renewal_when_overdue")
 
+  /// NOT IMPLEMENTED. Sketched in the blueprint as "refuse to lend to a child
+  /// with something this many days overdue", and deliberately left unwired
+  /// through Phase 3: it is a rule that would turn a late book into a closed
+  /// door for a nine-year-old, and whether this library wants that is the
+  /// owner's decision, not a default the code should assume. Changing this
+  /// value today does nothing at all. Nothing reads it; a test says so.
   blockOnOverdueDays       Int     @default(7) @map("block_on_overdue_days")
+  /// NOT IMPLEMENTED. Phase 3 sends no notifications of any kind.
   overdueReminderOffsets   Int[]   @default([-2, 0, 3, 7]) @map("overdue_reminder_offsets")
 
   // Identifiers

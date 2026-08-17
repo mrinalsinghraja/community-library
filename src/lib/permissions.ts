@@ -82,9 +82,14 @@ export const PERMISSIONS = {
   },
   "loan.override_rules": {
     category: "circulation",
-    description: "Issue or renew outside the configured limits",
+    description: "Not yet implemented — nothing in the application reads this",
   },
-  "loan.mark_lost": { category: "circulation", description: "Mark a copy lost or damaged" },
+  "loan.mark_lost": {
+    // A copy's condition and status are changed through the catalogue, guarded
+    // by `book.edit`. This key has never guarded anything.
+    category: "circulation",
+    description: "Not yet implemented — nothing in the application reads this",
+  },
 
   // --- Library operations ---------------------------------------------------
   "report.view": { category: "reports", description: "See library reports" },
@@ -103,6 +108,30 @@ export const PERMISSIONS = {
 export type PermissionKey = keyof typeof PERMISSIONS;
 
 export const PERMISSION_KEYS = Object.keys(PERMISSIONS) as PermissionKey[];
+
+/**
+ * Permissions that exist in the model and change nothing when granted.
+ *
+ * They were seeded in Phase 0 to prove the RBAC model could express the roles
+ * the blueprint describes, and no phase since has given them meaning. Granting
+ * one today has exactly one effect: a row in `role_permission`.
+ *
+ * The list is here so that a role screen, whenever one is built, has to decide
+ * what to do about them rather than discovering the problem after somebody has
+ * ticked a box and gone home believing the library behaves differently. A
+ * permission that looks like a rule but is not one is worse than a missing
+ * feature — it is a promise the software will not keep.
+ *
+ * Implementing one means giving it semantics, and semantics for these are the
+ * owner's to define, not the code's to guess. Take a key off this list in the
+ * same change that makes it do something.
+ */
+export const DORMANT_PERMISSIONS = ["loan.override_rules", "loan.mark_lost"] as const satisfies
+  readonly PermissionKey[];
+
+export function isDormantPermission(key: PermissionKey): boolean {
+  return (DORMANT_PERMISSIONS as readonly PermissionKey[]).includes(key);
+}
 
 export const ROLE_KEYS = {
   SUPER_ADMIN: "SUPER_ADMIN",

@@ -7,6 +7,7 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Callout } from "@/components/ui/states";
+import { isDormantPermission } from "@/lib/permissions";
 import { signOutAction } from "@/server/actions/auth-actions";
 import { getActor } from "@/server/authz";
 import { getBrandingSafe } from "@/server/lib/settings";
@@ -101,7 +102,20 @@ export default async function AccountPage() {
               {permissions.length > 0 ? (
                 <ul className="grid gap-1.5 font-mono text-base">
                   {permissions.map((permission) => (
-                    <li key={permission}>{permission}</li>
+                    <li key={permission}>
+                      {permission}
+                      {/*
+                       * A few of these keys are seeded and read by nothing.
+                       * This is the only screen that shows them, and a heading
+                       * of "What you can do" above an inert permission is a
+                       * promise the software does not keep — so it says so.
+                       */}
+                      {isDormantPermission(permission) ? (
+                        <span className="ml-2 font-sans text-sm text-ink-soft">
+                          — not in use yet
+                        </span>
+                      ) : null}
+                    </li>
                   ))}
                 </ul>
               ) : (

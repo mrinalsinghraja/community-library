@@ -236,13 +236,31 @@ before any label was printed.
 three things needed a human, and they are worth reading before writing another
 migration that touches an enum.
 
-**1. Existing data is reconciled first.** Phase 2 let a librarian pick
-`Borrowed` as a status, so an upgraded database may hold copies that read
-BORROWED with no loan and therefore no borrower. Step 1 resets exactly those to
-`AVAILABLE` and writes an audit row naming each one, so the library gets a list
-of shelves to check. It invents no borrower: a fabricated loan would put a
-child's name against a book they may never have touched. It runs before step 5
-installs the trigger, and it is idempotent.
+**1. Existing data stops the migration, and is not repaired by it.** Phase 2 let
+a librarian pick `Borrowed` as a status, so an upgraded database may hold copies
+that read BORROWED with no loan and therefore no borrower. Step 0 installs
+`circulation_assert_no_stranded_copies()` and calls it; if any such copy exists
+the whole migration fails there, having changed nothing else. Prisma applies
+statements in order, so nothing below the guard has run.
+
+It refuses rather than repairing because both repairs are claims a deployment
+cannot support. Resetting to `AVAILABLE` says the book is on the shelf, when it
+may be in a child's bag — the next reader would be promised a book nobody can
+hand them. Writing a loan names a borrower nothing in the database knows, and
+that name would sit in a real child's history from then on. **A deployment must
+never silently make a physically borrowed book appear available, and must never
+invent a borrower.**
+
+Resolving them is `npm run reconcile:circulation` and a person who can walk to
+the shelf — three explicit, audited outcomes (on the shelf → `AVAILABLE`, a
+named child has it → a real loan with real dates, whereabouts unknown → `LOST`).
+The runbook is in `docs/OPERATIONS.md`, "An inconsistent circulation state". The
+guard function stays installed afterwards so an operator can re-run it to
+confirm they are finished.
+
+The guard must precede step 5, which installs the invariant trigger: the
+trigger's first encounter with such a row would otherwise be a failure at a busy
+desk.
 
 **2. Two things that reference `loan.status` had to come down first.** The CHECK
 constraint `loan_return_fields_match_status` names `'LOST'` and `'WRITTEN_OFF'`

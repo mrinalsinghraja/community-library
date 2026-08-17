@@ -3,15 +3,25 @@
 --
 -- Hand-corrected after `prisma migrate diff`. Three things needed a human:
 --
---   1. **Existing BORROWED copies are reconciled FIRST.** Phase 2 let a
---      librarian pick "Borrowed" as a status, so a database upgraded from it
---      may hold copies that read BORROWED with no loan and therefore no
---      borrower. Step 1 below resets exactly those to AVAILABLE and writes an
---      audit row naming each one, so the library gets a list of shelves to
---      check. It does NOT invent a borrower: a fabricated loan would put a
---      child's name against a book they may never have touched, and that name
---      would then appear in their borrowing history forever. Better a librarian
---      walks to the shelf.
+--   1. **Existing BORROWED copies stop the migration.** Phase 2 let a librarian
+--      pick "Borrowed" as a status, so a database upgraded from it may hold
+--      copies that read BORROWED with no loan and therefore no borrower.
+--      Step 0 below refuses to continue while any such copy exists.
+--
+--      It deliberately does NOT repair them. Both repairs are lies a deployment
+--      is not entitled to tell:
+--
+--        * Resetting to AVAILABLE says the book is on the shelf. It may be in a
+--          child's bag, and the next reader would be promised a book nobody can
+--          hand them.
+--        * Creating a loan says a particular child has it. Nothing in the
+--          database knows who, and a fabricated borrower would sit in a real
+--          child's borrowing history forever.
+--
+--      A person has to walk to the shelf. Which copies, and the three
+--      resolutions open to them, are in docs/OPERATIONS.md — "An inconsistent
+--      circulation state". The function installed here is the same one they run
+--      to check their work.
 --
 --      This must run before step 5 installs the trigger, or the trigger's first
 --      encounter with one of those rows would be a failure at a busy desk.
@@ -44,41 +54,46 @@
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------
--- 1. Reconcile copies marked borrowed before circulation existed.
+-- 0. Refuse to migrate a library whose shelves and records disagree.
 --
---    Idempotent: on a database with no such rows it updates nothing and writes
---    nothing.
+--    On a database with no such copy this installs a function and does nothing
+--    else, which is every clean install and every library that never used the
+--    Phase 2 "Borrowed" status. On one that does have such a copy, the whole
+--    migration stops here having changed nothing but the presence of this
+--    function — Prisma applies statements in order, so nothing below has run.
+--
+--    The function stays behind on purpose. An operator runs
+--    `SELECT circulation_assert_no_stranded_copies();` to see the list, and
+--    runs it again after resolving each one to confirm they are done.
 -- ---------------------------------------------------------------------------
-WITH stranded AS (
-  SELECT c.id, c.library_id, c.copy_code
+CREATE OR REPLACE FUNCTION circulation_assert_no_stranded_copies()
+  RETURNS void
+  LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_codes text;
+  v_count integer;
+BEGIN
+  SELECT count(*), string_agg(c.copy_code, ', ' ORDER BY c.copy_code)
+    INTO v_count, v_codes
     FROM book_copy c
    WHERE c.status = 'BORROWED'
      AND NOT EXISTS (
        SELECT 1 FROM loan l WHERE l.copy_id = c.id AND l.status = 'ACTIVE'
-     )
-), reset AS (
-  UPDATE book_copy
-     SET status = 'AVAILABLE',
-         updated_at = now()
-   WHERE id IN (SELECT id FROM stranded)
-  RETURNING id
-)
-INSERT INTO audit_log (id, library_id, action, entity_type, entity_id, actor_user_id, actor_label, metadata, occurred_at)
-SELECT gen_random_uuid()::text,
-       s.library_id,
-       'loan.corrected',
-       'book_copy',
-       s.id,
-       NULL,
-       'System (Phase 3 reconciliation)',
-       jsonb_build_object(
-         'copyCode', s.copy_code,
-         'from', 'BORROWED',
-         'to', 'AVAILABLE',
-         'reason', 'Marked borrowed before circulation existed, with no loan and so no borrower. Reset to available rather than inventing one — please check the shelf for this book.'
-       ),
-       now()
-  FROM stranded s;
+     );
+
+  IF v_count = 0 THEN
+    RETURN;
+  END IF;
+
+  RAISE EXCEPTION
+    'Cannot enable circulation: % book(s) read BORROWED with no loan and so no borrower (%). Someone must find out where each one is; a deployment must not guess. See docs/OPERATIONS.md, "An inconsistent circulation state".',
+    v_count, v_codes
+    USING ERRCODE = 'raise_exception';
+END;
+$$;
+
+SELECT circulation_assert_no_stranded_copies();
 
 -- ---------------------------------------------------------------------------
 -- 2. Take down what depends on the old enum. Both come back below.

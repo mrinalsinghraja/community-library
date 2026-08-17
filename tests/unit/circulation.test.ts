@@ -1,12 +1,17 @@
+import type { UserStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
 import {
+  ACTIVE_CIRCULATION_SETTINGS,
+  BORROWING_ALLOWED_STATUSES,
   CIRCULATION_MESSAGES,
+  DORMANT_CIRCULATION_SETTINGS,
   daysOverdue,
   isLoanFilter,
   LOAN_STATUSES,
   loanCondition,
   loanStatusDefinition,
+  memberMayBorrow,
   readerDueSentence,
   readerLoanBadge,
   staffOverdueSummary,
@@ -200,5 +205,70 @@ describe("desk filters", () => {
     // Anything else in a query string is dropped rather than passed to SQL.
     expect(isLoanFilter("' OR 1=1 --")).toBe(false);
     expect(isLoanFilter("cancelled")).toBe(false);
+  });
+});
+
+describe("who may borrow", () => {
+  /**
+   * The list is an allowlist, and this is the test that keeps it one.
+   *
+   * A denylist drifts silently: add a state to `UserStatus`, forget the
+   * circulation rule, and the new state can take books home. Written this way,
+   * a new state has to be argued for here before it can borrow anywhere.
+   */
+  const EVERY_STATUS: readonly UserStatus[] = [
+    "INVITED",
+    "ACTIVE",
+    "SUSPENDED",
+    "DEACTIVATED",
+    "ARCHIVED",
+  ];
+
+  it("lets an active member borrow", () => {
+    expect(memberMayBorrow("ACTIVE")).toBe(true);
+  });
+
+  it.each(["INVITED", "SUSPENDED", "DEACTIVATED", "ARCHIVED"] as const)(
+    "does not let a %s member borrow",
+    (status) => {
+      expect(memberMayBorrow(status)).toBe(false);
+    },
+  );
+
+  it("allows exactly one state, so a new one cannot inherit borrowing", () => {
+    expect(BORROWING_ALLOWED_STATUSES).toEqual(["ACTIVE"]);
+    expect(EVERY_STATUS.filter(memberMayBorrow)).toEqual(["ACTIVE"]);
+  });
+
+  it("says the same thing to everyone it refuses", () => {
+    // One sentence for every refused state. Which state a family is in is
+    // their business and a conversation, never a label on a desk screen.
+    expect(CIRCULATION_MESSAGES.readerUnavailable).toBe(
+      "This library account is currently unavailable for borrowing.",
+    );
+    expect(CIRCULATION_MESSAGES.readerUnavailable).not.toMatch(
+      /\b(invited|suspended|deactivated|archived|status)\b/i,
+    );
+  });
+});
+
+describe("configuration that is not implemented", () => {
+  it("does not claim a dormant setting is active", () => {
+    for (const setting of DORMANT_CIRCULATION_SETTINGS) {
+      expect(ACTIVE_CIRCULATION_SETTINGS).not.toContain(setting);
+    }
+  });
+
+  it("names every setting circulation actually reads", () => {
+    // If a rule stops being configurable, or a new one starts, this list has to
+    // be updated in the same change — which is the point of having it.
+    expect([...ACTIVE_CIRCULATION_SETTINGS].sort()).toEqual([
+      "allowRenewalWhenOverdue",
+      "borrowingPeriodDays",
+      "maxActiveLoans",
+      "maxRenewals",
+      "renewalPeriodDays",
+      "timezone",
+    ]);
   });
 });

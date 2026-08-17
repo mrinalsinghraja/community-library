@@ -1,3 +1,4 @@
+import type { UserStatus } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { __setSessionHandle } from "../stubs/auth-stub";
@@ -272,11 +273,83 @@ describe("issuing a book", () => {
     expect(JSON.stringify(error)).not.toContain("Kept losing books");
   });
 
-  it("refuses a deactivated reader", async () => {
-    const copy = await createBookCopy(fixture.libraryId);
-    await db.appUser.update({ where: { id: reader.id }, data: { status: "DEACTIVATED" } });
+  /**
+   * Every account state, not a convenient subset.
+   *
+   * ACTIVE is the only one that may borrow, and the rule is written as an
+   * allowlist so that a state added to the enum later cannot quietly inherit
+   * the right to take books home. This table is the proof, and it is also the
+   * thing that would fail loudly if someone widened the list.
+   */
+  const ELIGIBILITY: readonly { status: UserStatus; mayBorrow: boolean }[] = [
+    // Set up but not finished: the guardian has not completed activation, so
+    // nobody has yet confirmed this child is enrolled on the agreed terms.
+    { status: "INVITED", mayBorrow: false },
+    { status: "ACTIVE", mayBorrow: true },
+    { status: "SUSPENDED", mayBorrow: false },
+    { status: "DEACTIVATED", mayBorrow: false },
+    { status: "ARCHIVED", mayBorrow: false },
+  ];
 
-    await expect(issueTo(reader.id, copy.id)).rejects.toMatchObject({ code: "RULE_VIOLATION" });
+  for (const { status, mayBorrow } of ELIGIBILITY) {
+    it(`${mayBorrow ? "lends to" : "refuses"} a reader whose account is ${status}`, async () => {
+      const copy = await createBookCopy(fixture.libraryId);
+      await db.appUser.update({ where: { id: reader.id }, data: { status } });
+
+      if (mayBorrow) {
+        const loan = await issueTo(reader.id, copy.id);
+        expect(loan.loanId).toBeTruthy();
+        return;
+      }
+
+      await expect(issueTo(reader.id, copy.id)).rejects.toMatchObject({
+        code: "RULE_VIOLATION",
+        // One sentence for every refused state. A desk that said "this account
+        // is only invited" would be narrating a family's paperwork to whoever
+        // is standing at the counter.
+        friendlyMessage: "This library account is currently unavailable for borrowing.",
+      });
+
+      // Server-side, so no loan exists whatever the screen believed.
+      expect(await db.loan.count({ where: { memberUserId: reader.id } })).toBe(0);
+      const after = await db.bookCopy.findUniqueOrThrow({ where: { id: copy.id } });
+      expect(after.status).toBe("AVAILABLE");
+    });
+  }
+
+  for (const { status, mayBorrow } of ELIGIBILITY) {
+    it(`${mayBorrow ? "allows" : "blocks"} renewal for a reader whose account is ${status}`, async () => {
+      const copy = await createBookCopy(fixture.libraryId);
+      // Issue while ACTIVE — the account state can change while a book is out.
+      const loan = await issueTo(reader.id, copy.id);
+      await db.appUser.update({ where: { id: reader.id }, data: { status } });
+
+      await actingAs(librarian.id);
+      if (mayBorrow) {
+        await expect(renewLoan({ loanId: loan.loanId })).resolves.toBeTruthy();
+        return;
+      }
+
+      await expect(renewLoan({ loanId: loan.loanId })).rejects.toMatchObject({
+        friendlyMessage: "This library account is currently unavailable for borrowing.",
+      });
+
+      const unchanged = await db.loan.findUniqueOrThrow({ where: { id: loan.loanId } });
+      expect(unchanged.renewalCount).toBe(0);
+      expect(unchanged.dueAt.toISOString()).toBe(loan.dueAt.toISOString());
+    });
+  }
+
+  it("does not offer an ineligible reader at the desk", async () => {
+    await db.appUser.update({ where: { id: reader.id }, data: { status: "INVITED" } });
+    await actingAs(librarian.id);
+
+    const results = await searchReaders("Aarav");
+    const found = results.find((row) => row.memberUserId === reader.id);
+
+    // The desk still finds them — a librarian must be able to look someone up.
+    // It just does not pretend they can borrow.
+    expect(found?.canBorrow).toBe(false);
   });
 
   it("stops at the configured loan limit, with a message naming the number", async () => {
