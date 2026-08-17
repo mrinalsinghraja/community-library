@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { __setSessionHandle } from "../stubs/auth-stub";
+import { DEFAULT_TIMEZONE, endOfDayInTimezone } from "@/lib/dates";
 import { createSession } from "@/server/auth/session-store";
 import { __setEmailProviderForTests } from "@/server/lib/email";
 import { TEMPLATE_IDS } from "@/server/lib/email/templates";
@@ -46,6 +47,9 @@ let fixture: Fixture;
 let librarian: Awaited<ReturnType<typeof createStaff>>;
 const mail = new FakeEmailProvider();
 
+/** The fixture library's timezone. Every date here is built in it. */
+const TIMEZONE = DEFAULT_TIMEZONE;
+
 async function actingAs(userId: string, kind: "STAFF" | "MEMBER" = "STAFF") {
   __setSessionHandle(await createSession(userId, kind));
 }
@@ -71,9 +75,17 @@ async function loanDueIn(memberUserId: string, days: number) {
   await actingAs(librarian.id);
   const issued = await issueBook({ memberUserId, copyId: copy.id });
 
-  const dueAt = new Date();
-  dueAt.setDate(dueAt.getDate() + days);
-  dueAt.setHours(23, 59, 59, 999);
+  /*
+   * Built in the LIBRARY's timezone, not the machine's.
+   *
+   * `setHours(23, 59, …)` writes the end of the day where the process happens
+   * to be running, and CI runs in UTC while the fixture library lives in
+   * Asia/Kolkata. 23:59 UTC is 05:29 the next morning in Kolkata, which shifts
+   * every one of these loans a calendar day and makes the whole file pass on a
+   * laptop and fail in CI. `endOfDayInTimezone` is the same function the
+   * service uses, which is the point.
+   */
+  const dueAt = endOfDayInTimezone(new Date(Date.now() + days * 86_400_000), TIMEZONE);
 
   /*
    * The issue date moves with it. `loan_due_after_issue` is a real CHECK
@@ -81,8 +93,7 @@ async function loanDueIn(memberUserId: string, days: number) {
    * build a loan that is three days late, the whole loan has to sit in the
    * past — which is also what such a loan looks like in the library.
    */
-  const issuedAt = new Date(dueAt);
-  issuedAt.setDate(issuedAt.getDate() - 14);
+  const issuedAt = new Date(dueAt.getTime() - 14 * 86_400_000);
 
   await db.loan.update({ where: { id: issued.loanId }, data: { dueAt, issuedAt } });
   return { loanId: issued.loanId, copyId: copy.id, dueAt };
@@ -298,9 +309,8 @@ describe("saying it once", () => {
 
     expect((await sendCirculationReminders()).sent).toBe(1);
 
-    // Two days pass: the same loan is now due today.
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
+    // Two days pass: the same loan is now due today, in library time.
+    const today = endOfDayInTimezone(new Date(), TIMEZONE);
     await db.loan.update({ where: { id: loan.loanId }, data: { dueAt: today } });
 
     expect((await sendCirculationReminders()).sent).toBe(1);

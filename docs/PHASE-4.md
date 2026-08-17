@@ -136,6 +136,32 @@ the active-settings list, the reader's permission set (twice), and the rule that
 a reader holds only `.view` keys — now stated as the rule that actually matters,
 that a reader holds none of circulation's four write permissions.
 
+### A Phase 3 test that was wrong, found by CI
+
+`circulation-concurrency.test.ts` → *"does not let a return and a renewal both
+land on one loan"* demanded exactly one of the two to succeed. It passed on a
+laptop and failed on the CI runner, and the Phase 3 report already noted one
+unexplained failure in this file.
+
+It was wrong about the library, not about the timing. Both orderings are
+legitimate: if the return wins the loan's row lock the renewal is refused, but
+if the **renewal** wins, both succeed — and correctly, because keeping a book
+longer and then bringing it back an instant later is an ordinary afternoon at a
+desk. The old assertion was a coin toss dressed as an invariant.
+
+It now asserts what must actually hold however the two race: at most one RETURN
+event and at most one RENEW event, `renewal_count` equal to the number of RENEW
+events, the loan's status agreeing with whether a RETURN happened, and the copy's
+status agreeing with the loan. **No product code changed** — this was a test
+stating something untrue about a system that was behaving correctly.
+
+The notification suite had a defect of its own in the same run: its helper built
+due dates with `setHours` in the *machine's* timezone, so every case shifted by a
+calendar day on a UTC runner. It now builds them with `endOfDayInTimezone` in the
+library's timezone — the same function the service uses. Also product-code-clean,
+and a good argument for running the suite under `TZ=UTC` locally, which is now
+how it is verified.
+
 ---
 
 ## 6. Known limitations

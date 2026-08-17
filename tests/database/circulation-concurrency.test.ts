@@ -227,13 +227,40 @@ describe("the same loan renewed twice", () => {
       renewLoan({ loanId: issued.loanId }),
     ]);
 
-    // Whichever arrives first takes the loan out of ACTIVE, and the other is
-    // refused. A renewed-and-returned loan is not a state this library has.
-    expect(fulfilled(results)).toBe(1);
+    /*
+     * Both orderings are legitimate, and which one happens depends on who wins
+     * the loan's row lock.
+     *
+     *   return then renew — the renewal is refused, because the loan is no
+     *                       longer ACTIVE. One succeeds.
+     *   renew then return — BOTH succeed, and correctly: keeping a book longer
+     *                       and then bringing it back an instant later is an
+     *                       ordinary afternoon at a library desk.
+     *
+     * This assertion used to demand exactly one success, which made it a coin
+     * toss that happened to land the same way on a fast laptop and the other
+     * way on a slower CI runner. It was wrong about the library, not about the
+     * timing: "renewed and then returned" is a state this library very much
+     * has. What must never happen is a loan that is returned *and* still
+     * accruing renewals, or two of either operation.
+     */
+    expect(fulfilled(results)).toBeGreaterThanOrEqual(1);
 
     const loan = await db.loan.findUniqueOrThrow({ where: { id: issued.loanId } });
     expect(["RETURNED", "ACTIVE"]).toContain(loan.status);
-    if (loan.status === "RETURNED") expect(loan.renewalCount).toBe(0);
+
+    const events = await db.loanEvent.findMany({ where: { loanId: issued.loanId } });
+    const count = (type: string) => events.filter((event) => event.type === type).length;
+
+    // At most one of each, however the two raced, and the row agrees with the
+    // events rather than with whichever request finished last.
+    expect(count("RETURN")).toBeLessThanOrEqual(1);
+    expect(count("RENEW")).toBeLessThanOrEqual(1);
+    expect(loan.renewalCount).toBe(count("RENEW"));
+    expect(loan.status === "RETURNED" ? 1 : 0).toBe(count("RETURN"));
+
+    const copyAfter = await db.bookCopy.findUniqueOrThrow({ where: { id: copy.id } });
+    expect(copyAfter.status).toBe(loan.status === "RETURNED" ? "AVAILABLE" : "BORROWED");
   });
 
   it("does not let a cancellation and a return both land on one loan", async () => {

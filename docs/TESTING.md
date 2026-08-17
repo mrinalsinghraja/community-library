@@ -395,6 +395,23 @@ Worth recording, because they justify the effort:
     cookie — which is the state a reader is in the moment their session goes
     idle.
 
+## Run it under UTC before trusting it
+
+```bash
+TZ=UTC npm run test:all
+```
+
+Every date rule in this application is evaluated in the *library's* timezone,
+and CI runs in UTC while most laptops here do not. A test that builds a date
+with `setHours` builds it where the process is running, which shifts it a whole
+calendar day against Asia/Kolkata — passing locally and failing in CI, or worse,
+the other way round.
+
+Build dates in tests with `endOfDayInTimezone`, `calculateDueDate` and friends
+from `src/lib/dates.ts`: the same functions the services use. The Phase 4
+notification suite was written with `setHours` and failed its first CI run for
+exactly this reason.
+
 ## Running one file
 
 ```bash
