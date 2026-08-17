@@ -34,10 +34,19 @@ export const AUDIT_ACTIONS = {
 
   // Registration
   REGISTRATION_SUBMITTED: "registration.submitted",
+  REGISTRATION_REVIEWED: "registration.reviewed",
   REGISTRATION_APPROVED: "registration.approved",
   REGISTRATION_REJECTED: "registration.rejected",
   CONSENT_RECORDED: "consent.recorded",
   CONSENT_WITHDRAWN: "consent.withdrawn",
+
+  // Activation
+  ACTIVATION_SENT: "activation.sent",
+  ACTIVATION_REISSUED: "activation.reissued",
+  ACTIVATION_FAILED: "activation.failed",
+
+  // Guardians
+  GUARDIAN_UPDATED: "guardian.updated",
 
   // Catalogue
   BOOK_TITLE_CREATED: "book.title.created",

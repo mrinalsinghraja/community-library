@@ -105,6 +105,7 @@ export async function resolveSession(rawToken: string): Promise<ResolvedSessionU
           status: true,
           displayName: true,
           mustSetPassword: true,
+          passwordChangedAt: true,
         },
       },
     },
@@ -127,6 +128,18 @@ export async function resolveSession(rawToken: string): Promise<ResolvedSessionU
   // A suspended, deactivated or not-yet-activated account has no valid session.
   if (session.user.status !== "ACTIVE") {
     await prisma.session.deleteMany({ where: { userId: session.user.id } });
+    return null;
+  }
+
+  // A session minted before the current password is not trusted, even if the
+  // explicit revocation on password change somehow did not run. This is what
+  // makes "changing the password signs out every other device" true by
+  // construction rather than by remembering to call a function.
+  if (
+    session.user.passwordChangedAt &&
+    session.createdAt < session.user.passwordChangedAt
+  ) {
+    await prisma.session.deleteMany({ where: { id: session.id } });
     return null;
   }
 

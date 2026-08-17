@@ -79,6 +79,7 @@ async function seedDemoUsers(prisma: PrismaClient, libraryId: string): Promise<v
       passwordHash: await argon2Hash(DEMO_PASSWORDS.superAdmin, ARGON2_OPTIONS),
       status: "ACTIVE",
       mustSetPassword: false,
+      passwordChangedAt: new Date(),
     },
     update: {},
   });
@@ -94,6 +95,7 @@ async function seedDemoUsers(prisma: PrismaClient, libraryId: string): Promise<v
       passwordHash: await argon2Hash(DEMO_PASSWORDS.librarian, ARGON2_OPTIONS),
       status: "ACTIVE",
       mustSetPassword: false,
+      passwordChangedAt: new Date(),
     },
     update: {},
   });
@@ -115,6 +117,7 @@ async function seedDemoUsers(prisma: PrismaClient, libraryId: string): Promise<v
         passwordHash: await argon2Hash(DEMO_PASSWORDS.member, ARGON2_OPTIONS),
         status: "ACTIVE",
         mustSetPassword: false,
+        passwordChangedAt: new Date(),
         memberProfile: {
           create: {
             libraryId,
@@ -158,7 +161,7 @@ async function seedDemoUsers(prisma: PrismaClient, libraryId: string): Promise<v
         libraryId,
         type: "CHILD_ACCOUNT_CREATION",
         status: "GRANTED",
-        method: "GUARDIAN_ONLINE_FORM",
+        method: "WEB_FORM",
         consentVersion: settings.consentVersion,
         consentTextSnapshot: CONSENT_TEXT.CHILD_ACCOUNT_CREATION,
         guardianId: guardian.id,

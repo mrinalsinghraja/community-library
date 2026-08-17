@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
+import { JoinForm } from "@/app/join/join-form";
 import { PublicShell } from "@/components/layout/site-shell";
-import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/states";
+import { Callout } from "@/components/ui/states";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 
 export const metadata: Metadata = { title: "Join the library" };
@@ -18,13 +18,6 @@ export const metadata: Metadata = { title: "Join the library" };
  */
 export const dynamic = "force-dynamic";
 
-/**
- * Phase 0 placeholder.
- *
- * The registration form and its approval queue are Phase 2 work. This page
- * exists so the front door is not a dead link, and so the promises the library
- * makes — free, voluntary, no conditions — are already stated in public.
- */
 export default async function JoinPage() {
   const branding = await getBrandingSafe();
 
@@ -41,26 +34,23 @@ export default async function JoinPage() {
       <div className="mx-auto w-full max-w-3xl px-5 py-14 sm:px-8">
         <h1 className="text-4xl">Join {branding.libraryName}</h1>
         <p className="mt-4 text-lg text-ink-soft">
-          {ages
-            ? `Any child aged ${ages.ageMin} to ${ages.ageMax} living in ${branding.communityName} is welcome.`
-            : `Every child in ${branding.communityName} is welcome.`}{" "}
-          Membership is completely free, and it always will be.
+          Let&rsquo;s create your library account! It takes a minute, and a grown-up needs to fill
+          it in.
         </p>
 
-        <div className="mt-10">
-          <EmptyState
-            illustration="🚧"
-            title="The sign-up form is being built"
-            action={
-              <ButtonLink href="/" size="lg">
-                Back to the library
-              </ButtonLink>
-            }
-          >
-            Online registration opens with the next update. In the meantime, please have a word with
-            the librarian at the library and they will set up a card for your child.
-          </EmptyState>
-        </div>
+        {ages ? (
+          <div className="mt-10">
+            <JoinForm
+              ageMin={ages.ageMin}
+              ageMax={ages.ageMax}
+              libraryName={branding.libraryName}
+            />
+          </div>
+        ) : (
+          <Callout tone="warn" title="Not ready yet" className="mt-8">
+            The library has not been set up, so registrations cannot be accepted.
+          </Callout>
+        )}
 
         <Card tone="primary" className="mt-12">
           <CardTitle icon="🤝">Our promises</CardTitle>
@@ -72,15 +62,11 @@ export default async function JoinPage() {
                 borrowing.
               </li>
               <li>
-                We ask for as little information as we can: your child&rsquo;s name, their age, your
-                flat, and one grown-up&rsquo;s contact details.
+                We ask for as little as we can, and we never show one family&rsquo;s details to
+                another.
               </li>
               <li>
-                A photo is optional — there are friendly avatars to choose from instead.
-              </li>
-              <li>
-                We never show one child&rsquo;s details to another, and we never show what anyone
-                has borrowed.
+                Nobody at the library can see your child&rsquo;s password — not even the librarian.
               </li>
             </ul>
           </CardBody>

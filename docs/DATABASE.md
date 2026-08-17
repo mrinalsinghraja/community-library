@@ -1,6 +1,7 @@
 # Database
 
-PostgreSQL via Prisma. 27 application tables plus Prisma's migration table.
+PostgreSQL via Prisma. 27 application tables plus Prisma's migration table,
+across two migrations.
 All timestamps are `timestamptz` stored in UTC; every business date decision is
 made in the library's configured timezone.
 
@@ -105,6 +106,19 @@ npx prisma migrate diff \
 
 In production, only ever `npx prisma migrate deploy`. **Never `prisma db push`**
 — it applies changes with no migration history and no review.
+
+### Migration 2 — and why it was hand-written
+
+`20260817120000_phase1_identity_lifecycle` renames two `ConsentMethod` values.
+Prisma's generated migration would have **dropped and recreated the enum**,
+destroying every consent record — and a consent record is evidence of what a
+family agreed to. `ALTER TYPE … RENAME VALUE` preserves them.
+
+`ADD VALUE … BEFORE/AFTER` is used so the database's enum ordering matches
+`schema.prisma`, which keeps `migrate diff` reporting no drift.
+
+The lesson generalises: **when a migration touches an enum, read the generated
+SQL before applying it.**
 
 ### ⚠ The gotcha that will bite you
 

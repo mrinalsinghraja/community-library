@@ -805,6 +805,12 @@ All five settled. These are now binding on implementation and belong in `ARCHITE
 The login field accepts either `MJCL-R042` or a simple username chosen by the parent at activation (`aarav15`). Resolution order: exact `member_code` match, then `username` match, then fail with the single generic error. Staff continue to log in by email. `username` is unique per library, lowercased, 3–20 characters, letters/digits/hyphen only, and validated against a reserved-word list at activation.
 
 **2. Member password policy — 6 characters minimum, no complexity rules.**
+
+> **Revised 2026-08-17 to 8 characters (ADR-013).** The Phase 1 brief asked for
+> this to be re-examined rather than carried forward by default, and 6 proved
+> too few. No complexity rules were added — the increase is length only. The
+> paragraph below is kept as the original record of the decision.
+
 Checked against a common-password blocklist, no character-class requirements, show/hide toggle on every entry field. Compensating controls: 5 failures → 15-minute lock with escalation, per-IP hourly cap, short sessions on shared devices. **Staff accounts are unaffected and remain strict: 12 characters minimum, zxcvbn score ≥ 3.**
 
 **3. Catalogue visibility — members only by default, and configurable.**

@@ -22,12 +22,21 @@ boundaries, no microservices, no queues, no extra infrastructure.
         │                 • audit row in the same transaction as the change
         │  may call
         ▼
-  src/server/lib/         settings · codes · crypto · password · uploads
+  src/server/lib/         settings · codes · crypto · password · tokens
+                          uploads · storage · email/ · audit · rate-limit
   src/server/repositories/  library-scoped data access
         │
         ▼
   src/server/db.ts        Prisma
 ```
+
+Phase 1 services: `registration-service` · `password-service` ·
+`account-service` · `staff-service`. Each one opens with
+`requirePermission(...)` and audits inside the same transaction as its change.
+
+`src/server/page-guards.ts` sits beside them but is **not** part of the
+boundary: it turns a denial into a redirect instead of a crash page. The deny
+has already happened by then (ADR-016).
 
 **The rule that keeps this true:** components, pages and server actions may not
 import `@prisma/client` or `@/server/db`. This is enforced by

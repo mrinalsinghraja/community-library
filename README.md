@@ -5,7 +5,8 @@ library. Built for readers aged roughly 5–14, run by volunteers, and designed 
 the children themselves can eventually operate it.
 
 **First deployment:** Mana Jardin Children's Library
-**Status:** Phase 0 — foundation complete. See [`docs/PHASE-0.md`](docs/PHASE-0.md).
+**Status:** Phase 1 complete — identity, registration and account lifecycle.
+See [`docs/PHASE-1.md`](docs/PHASE-1.md).
 
 ---
 
@@ -62,6 +63,10 @@ Full instructions: [`docs/SETUP.md`](docs/SETUP.md) and
 | `npm run db:seed:demo` | The above plus fake people and books — **development only** |
 | `npm run create-admin` | Create a Super Admin, password typed and never echoed |
 
+While developing, `EMAIL_PROVIDER=console` captures every message to `.mail/`
+and serves it at `/dev/mail` — the whole join → approve → activate flow can be
+walked without sending a single real email. That route 404s in production.
+
 ## Architecture in one paragraph
 
 A modular monolith on Next.js (App Router) with PostgreSQL via Prisma.
@@ -80,7 +85,14 @@ Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | Document | Contents |
 |---|---|
 | [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md) | The original approved design |
-| [`docs/PHASE-0.md`](docs/PHASE-0.md) | What this phase delivered, and what it did not |
+| [`docs/PHASE-0.md`](docs/PHASE-0.md) | The foundation phase |
+| [`docs/PHASE-1.md`](docs/PHASE-1.md) | Identity, registration, account lifecycle |
+| [`docs/IDENTITY.md`](docs/IDENTITY.md) | Who exists, how they are told apart, roles |
+| [`docs/AUTHENTICATION.md`](docs/AUTHENTICATION.md) | Sessions, tokens, password policy |
+| [`docs/REGISTRATION.md`](docs/REGISTRATION.md) | Join → approve → activate |
+| [`docs/CONSENT.md`](docs/CONSENT.md) | Versioned parental consent — **legal review required** |
+| [`docs/EMAIL.md`](docs/EMAIL.md) | Provider abstraction, templates, dev inbox |
+| [`docs/ACCOUNT_LIFECYCLE.md`](docs/ACCOUNT_LIFECYCLE.md) | Suspend, reactivate, deactivate, retention |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, boundaries, request flow |
 | [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md) | ADRs, with the reasoning and the alternatives |
 | [`docs/DATABASE.md`](docs/DATABASE.md) | Schema, constraints, migration workflow |

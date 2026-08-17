@@ -111,7 +111,9 @@ export async function createMember(
       memberProfile: {
         create: {
           libraryId,
-          memberCode: `TST-R${suffix}`,
+          // "H" for helper: fixture members must not collide with the codes
+          // the real allocator issues during approval tests.
+          memberCode: `TST-H${suffix}`,
           dateOfBirth: new Date("2016-01-01"),
           apartment: `A${suffix}`,
         },
@@ -121,6 +123,58 @@ export async function createMember(
   });
 
   return user;
+}
+
+let staffCounter = 0;
+
+/** A staff account with a single role, for authorization tests. */
+export async function createStaff(
+  libraryId: string,
+  roleKey: "LIBRARIAN" | "SUPER_ADMIN",
+  overrides: { displayName?: string; status?: "ACTIVE" | "SUSPENDED" } = {},
+) {
+  staffCounter += 1;
+
+  const role = await db.role.findUniqueOrThrow({
+    where: { libraryId_key: { libraryId, key: roleKey } },
+  });
+
+  return db.appUser.create({
+    data: {
+      libraryId,
+      kind: "STAFF",
+      displayName: overrides.displayName ?? `Test ${roleKey} ${staffCounter}`,
+      email: `staff${staffCounter}@example.invalid`,
+      status: overrides.status ?? "ACTIVE",
+      mustSetPassword: false,
+      passwordHash: "$argon2id$placeholder",
+      passwordChangedAt: new Date(),
+      userRoles: { create: { roleId: role.id } },
+    },
+  });
+}
+
+/** A guardian linked to a member, so recovery-channel tests have a real target. */
+export async function attachGuardian(
+  libraryId: string,
+  memberUserId: string,
+  email = `guardian${Math.random().toString(36).slice(2, 10)}@example.invalid`,
+) {
+  const guardian = await db.guardian.create({
+    data: {
+      libraryId,
+      fullName: "Test Guardian",
+      email,
+      phone: "+910000000000",
+      apartment: "Z9",
+    },
+  });
+
+  await db.guardianMember.create({
+    data: { guardianId: guardian.id, memberUserId, isPrimary: true },
+  });
+
+  return guardian;
 }
 
 let copyCounter = 0;

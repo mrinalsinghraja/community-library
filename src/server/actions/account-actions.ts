@@ -1,0 +1,342 @@
+"use server";
+
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+
+import { isAppError, toFriendlyMessage, ValidationError } from "@/server/lib/errors";
+import {
+  activateAccount,
+  changeOwnPassword,
+  completePasswordReset,
+  requestPasswordReset,
+} from "@/server/services/password-service";
+import {
+  deactivateMember,
+  reactivateMember,
+  reissueActivation,
+  suspendMember,
+} from "@/server/services/account-service";
+import {
+  createStaffAccount,
+  deactivateStaff,
+  reactivateStaff,
+  reissueStaffActivation,
+  setStaffRole,
+  suspendStaff,
+} from "@/server/services/staff-service";
+import { ROLE_KEYS, type RoleKey } from "@/lib/permissions";
+
+export interface ActionState {
+  status: "idle" | "success" | "error";
+  message?: string;
+  fieldErrors?: Record<string, string>;
+}
+
+async function clientIp(): Promise<string | null> {
+  const headerList = await headers();
+  const forwarded = headerList.get("x-forwarded-for");
+  return forwarded?.split(",")[0]?.trim() ?? headerList.get("x-real-ip");
+}
+
+function toState(error: unknown): ActionState {
+  if (error instanceof ValidationError) {
+    return { status: "error", message: error.friendlyMessage, fieldErrors: error.fieldErrors };
+  }
+  if (isAppError(error)) {
+    return { status: "error", message: error.friendlyMessage };
+  }
+  console.error("Account action failed:", error);
+  return { status: "error", message: toFriendlyMessage(error) };
+}
+
+// ---------------------------------------------------------------------------
+// Activation and password
+// ---------------------------------------------------------------------------
+
+const setPasswordSchema = z
+  .object({
+    token: z.string().min(16),
+    password: z.string().min(1, "Please choose a secret word."),
+    confirmPassword: z.string().min(1, "Please type it a second time."),
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: "Those two do not match. Try typing them again.",
+    path: ["confirmPassword"],
+  });
+
+export async function activateAccountAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = setPasswordSchema.safeParse({
+    token: formData.get("token"),
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const key = issue.path[0];
+      if (typeof key === "string" && !fieldErrors[key]) fieldErrors[key] = issue.message;
+    }
+    return { status: "error", fieldErrors };
+  }
+
+  try {
+    await activateAccount({
+      rawToken: parsed.data.token,
+      newPassword: parsed.data.password,
+      requestIp: await clientIp(),
+    });
+  } catch (error) {
+    return toState(error);
+  }
+
+  // Deliberately not signed in automatically: the guardian usually completes
+  // this, and the child should then sign in themselves — which is also the
+  // moment they learn that their secret word works.
+  redirect("/login?activated=1");
+}
+
+export async function requestPasswordResetAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const identifier = String(formData.get("identifier") ?? "").trim();
+
+  // Never throws, never reveals. The same response is returned whether the
+  // account exists, is suspended, or was never real.
+  await requestPasswordReset({ identifier, requestIp: await clientIp() });
+
+  return {
+    status: "success",
+    message:
+      "If we can recover that account, we have sent instructions to the parent or guardian's email address.",
+  };
+}
+
+export async function completePasswordResetAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = setPasswordSchema.safeParse({
+    token: formData.get("token"),
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const key = issue.path[0];
+      if (typeof key === "string" && !fieldErrors[key]) fieldErrors[key] = issue.message;
+    }
+    return { status: "error", fieldErrors };
+  }
+
+  try {
+    await completePasswordReset({
+      rawToken: parsed.data.token,
+      newPassword: parsed.data.password,
+    });
+  } catch (error) {
+    return toState(error);
+  }
+
+  redirect("/login?reset=1");
+}
+
+export async function changePasswordAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+  const newPassword = String(formData.get("newPassword") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (newPassword !== confirmPassword) {
+    return {
+      status: "error",
+      fieldErrors: { confirmPassword: "Those two do not match. Try typing them again." },
+    };
+  }
+
+  try {
+    await changeOwnPassword({ currentPassword, newPassword });
+  } catch (error) {
+    return toState(error);
+  }
+
+  // Changing the password ends every session, including this one, so the only
+  // sensible next screen is sign-in.
+  redirect("/login?changed=1");
+}
+
+// ---------------------------------------------------------------------------
+// Member lifecycle (librarian)
+// ---------------------------------------------------------------------------
+
+export async function suspendMemberAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await suspendMember(String(formData.get("memberId") ?? ""), String(formData.get("reason") ?? ""));
+    revalidatePath("/desk/members");
+    return { status: "success", message: "Paused, and any signed-in device has been signed out." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+export async function reactivateMemberAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await reactivateMember(String(formData.get("memberId") ?? ""));
+    revalidatePath("/desk/members");
+    return { status: "success", message: "Back on the shelves." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+export async function deactivateMemberAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await deactivateMember(
+      String(formData.get("memberId") ?? ""),
+      String(formData.get("reason") ?? ""),
+    );
+    revalidatePath("/desk/members");
+    return { status: "success", message: "Account closed. Borrowing history has been kept." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+export async function reissueActivationAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const sent = await reissueActivation(String(formData.get("memberId") ?? ""));
+    revalidatePath("/desk/members");
+    return {
+      status: sent ? "success" : "error",
+      message: sent
+        ? "A fresh link is on its way to the guardian. The previous one no longer works."
+        : "The link could not be sent. Check the email settings and try again.",
+    };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Staff lifecycle (Super Admin)
+// ---------------------------------------------------------------------------
+
+function parseRoleKey(value: FormDataEntryValue | null): RoleKey {
+  const raw = String(value ?? "");
+  // Only ever the two staff roles. MEMBER, GUARDIAN and the not-yet-assignable
+  // JUNIOR_LIBRARIAN can never arrive through this form.
+  return raw === ROLE_KEYS.SUPER_ADMIN ? ROLE_KEYS.SUPER_ADMIN : ROLE_KEYS.LIBRARIAN;
+}
+
+export async function createStaffAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const result = await createStaffAccount({
+      displayName: String(formData.get("displayName") ?? ""),
+      email: String(formData.get("email") ?? ""),
+      roleKey: parseRoleKey(formData.get("roleKey")),
+    });
+    revalidatePath("/admin/staff");
+
+    return {
+      status: "success",
+      message: result.emailSent
+        ? "Created. They have been emailed a link to choose their own password."
+        : "Created, but the invitation email did not send — use “Send link again”.",
+    };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+export async function suspendStaffAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await suspendStaff(String(formData.get("staffId") ?? ""), String(formData.get("reason") ?? ""));
+    revalidatePath("/admin/staff");
+    return { status: "success", message: "Suspended, and their sessions have been ended." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+export async function reactivateStaffAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await reactivateStaff(String(formData.get("staffId") ?? ""));
+    revalidatePath("/admin/staff");
+    return { status: "success", message: "Reactivated." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+export async function deactivateStaffAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await deactivateStaff(String(formData.get("staffId") ?? ""), String(formData.get("reason") ?? ""));
+    revalidatePath("/admin/staff");
+    return { status: "success", message: "Account closed." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+export async function setStaffRoleAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await setStaffRole(String(formData.get("staffId") ?? ""), parseRoleKey(formData.get("roleKey")));
+    revalidatePath("/admin/staff");
+    return { status: "success", message: "Role updated. It applies on their next request." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+export async function reissueStaffActivationAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const sent = await reissueStaffActivation(String(formData.get("staffId") ?? ""));
+    revalidatePath("/admin/staff");
+    return {
+      status: sent ? "success" : "error",
+      message: sent ? "A fresh link has been sent." : "The link could not be sent.",
+    };
+  } catch (error) {
+    return toState(error);
+  }
+}

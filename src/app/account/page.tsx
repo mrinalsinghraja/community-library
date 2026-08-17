@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { PublicShell } from "@/components/layout/site-shell";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Callout } from "@/components/ui/states";
@@ -86,7 +86,13 @@ export default async function AccountPage() {
           </Card>
         </div>
 
-        <div className="mt-10">
+        <div className="mt-10 flex flex-wrap gap-3">
+          <ButtonLink href="/account/password" variant="secondary" size="lg" icon="🔑">
+            Change my secret word
+          </ButtonLink>
+        </div>
+
+        <div className="mt-6">
           <form action={signOutAction}>
             <Button type="submit" variant="quiet" size="lg" icon="👋">
               Sign out

@@ -19,7 +19,7 @@ scripts on any page.
 
 **What this codebase does NOT do, and cannot claim:**
 
-> **The consent wording in `prisma/seed/library-config.ts` has not been reviewed
+> **The consent wording in `src/lib/consent.ts` has not been reviewed
 > by a lawyer, and the strength of parental verification implemented here (a
 > guardian ticking a box on a web form) may not satisfy "verifiable parental
 > consent" as the applicable rules define it.**
@@ -34,6 +34,9 @@ new value plus a new code path, not a schema migration.
 
 No government identity documents are collected, and none should be added without
 a specific, approved reason.
+
+Full detail, including the verification methods the model can already express:
+`CONSENT.md`.
 
 ## 2. Data minimisation
 
@@ -64,6 +67,11 @@ data, advertising identifiers.
 | Control | Implementation |
 |---|---|
 | Password hashing | argon2id, m=19456 KiB, t=2, p=1 |
+| Password policy | members 8 chars minimum, staff 12 + zxcvbn ≥ 3; blocklist, library name, and the person's own name/username/card all refused (ADR-013) |
+| Breached passwords | optional, opt-in, k-anonymity, fails open (`PASSWORD_BREACH_CHECK`) |
+| Activation & reset tokens | 32 random bytes, SHA-256 stored, single use enforced by `UPDATE … WHERE consumed_at IS NULL`, time limited, superseded on reissue |
+| Password change | ends **every** session, including the current one (ADR-015) |
+| Stale sessions | a session created before `password_changed_at` is refused, independently of explicit revocation |
 | Plaintext passwords | Never stored, never logged, never emailed, visible to no role |
 | Session transport | Opaque random handle in an httpOnly, SameSite=Lax cookie; `__Host-` prefixed in production |
 | Session storage | Server-side rows; only the SHA-256 of the handle is stored |
@@ -93,6 +101,21 @@ Password policy differs by audience by design — see ADR-006.
 | Audit | Every mutation logged in the same transaction; a recursive redactor strips anything resembling a credential |
 | Dependencies | Pinned; `npm ci` in CI |
 
+### Verified in Phase 1
+
+- Full journey walked in a browser: `/join` → approval → emailed link →
+  activation → child sign-in.
+- A child hitting `/desk`, `/desk/registrations`, `/desk/members` or
+  `/admin/staff` → 307 to `/account`.
+- A librarian hitting `/admin/staff` → 307; `/desk/registrations` → 200.
+- **Cross-service privilege escalation blocked**: a librarian holds
+  `member.suspend`, and without a `kind` check could have suspended a Super
+  Admin through the member endpoint. `loadMember` refuses STAFF users; tested.
+- Suspension of a signed-in child → next request redirected, **0 session rows**.
+- Reset mail goes to the guardian, never the child; token stored hashed; the
+  audit log records the request without the token.
+- Consent survives approval with versioned, verbatim wording snapshots.
+
 ### Verified in Phase 0
 
 - Security headers present on responses (checked against the running server).
@@ -105,7 +128,7 @@ Password policy differs by audience by design — see ADR-006.
   `.jpg`; declared Content-Type ignored in favour of actual bytes.
 - Audit redaction covers nested objects and varied key casing.
 
-## 6. Known gaps at the end of Phase 0
+## 6. Known gaps
 
 These are honest limitations, not oversights:
 
@@ -124,6 +147,14 @@ These are honest limitations, not oversights:
    is later-phase work.
 7. **Backups** — Neon's free tier gives only a 6-hour point-in-time restore
    window, so a scheduled logical backup is required before production use.
+8. **No archival/redaction step.** `DEACTIVATED` is the terminal state in
+   practice. Retention periods need a community and legal decision, and none has
+   been invented — see `ACCOUNT_LIFECYCLE.md` §5.
+9. **Photo upload is validated and tested but not exposed** in the registration
+   form, pending the consent review.
+10. **Guardian email changes are staff-only** with no second-approver
+   requirement. Proportionate at this size; the audit trail is in place if the
+   library later wants one — see `ACCOUNT_LIFECYCLE.md` §6.
 
 ## 7. Reporting a problem
 

@@ -38,6 +38,7 @@ those are HMACs keyed with it. Rotate deliberately.
 | `TEST_DATABASE_URL` | unset | Needed for `npm run test:db`. **The test suite truncates every table in this database** — point it at a throwaway |
 | `BLOB_READ_WRITE_TOKEN` | unset | Injected by Vercel when a Blob store is linked |
 | `SETUP_TOKEN` | unset | Enables a one-time `/setup` route while the database has zero users. Prefer `npm run create-admin`. Unset it afterwards |
+| `PASSWORD_BREACH_CHECK` | unset (off) | `true` checks new passwords against Have I Been Pwned using k-anonymity — only a 5-character hash prefix leaves the server, never the password. Fails open with a 2.5s timeout, so a family can always finish setting up an account. It is an outbound request from a child-facing form, which is why it is opt-in |
 
 ## Email (declared now, used from Phase 5)
 
@@ -51,6 +52,10 @@ those are HMACs keyed with it. Rotate deliberately.
 
 Cross-field validation runs only in production: choosing `resend` without a key,
 or enabling email without `EMAIL_FROM`, fails at boot.
+
+In development, `EMAIL_PROVIDER=console` writes messages to `.mail/` and opens
+no socket at all — nothing can reach a real family from a laptop. `/dev/mail`
+renders that directory and 404s in production.
 
 **The sending domain must have SPF and DKIM configured.** Without them,
 activation links land in spam and no family can complete registration — which

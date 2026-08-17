@@ -24,9 +24,18 @@ export const PERMISSIONS = {
   "member.create": { category: "members", description: "Create a member account" },
   "member.edit": { category: "members", description: "Edit member details" },
   "member.suspend": { category: "members", description: "Suspend or reactivate a member" },
+  "member.deactivate": {
+    category: "members",
+    description: "Close a member account when a family leaves (history is retained)",
+  },
   "member.reset_password": {
     category: "members",
     description: "Send a password reset or fresh activation link (never reveals a password)",
+  },
+  "guardian.edit": {
+    category: "members",
+    description:
+      "Change guardian contact details, including the email that receives recovery links",
   },
 
   // --- Catalogue ------------------------------------------------------------
@@ -100,7 +109,9 @@ const LIBRARIAN_PERMISSIONS = [
   "member.create",
   "member.edit",
   "member.suspend",
+  "member.deactivate",
   "member.reset_password",
+  "guardian.edit",
   "book.view",
   "book.create",
   "book.edit",
@@ -188,6 +199,8 @@ export const PERMISSIONS_FORBIDDEN_FOR_CHILD_STAFF: readonly PermissionKey[] = [
   "member.reset_password",
   "member.create",
   "member.suspend",
+  "member.deactivate",
+  "guardian.edit",
   "book.delete",
   "loan.override_rules",
   "settings.view",

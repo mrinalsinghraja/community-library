@@ -1,0 +1,47 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+
+import { ChangePasswordForm } from "@/app/account/password/change-password-form";
+import { PublicShell } from "@/components/layout/site-shell";
+import { Card } from "@/components/ui/card";
+import { getActor } from "@/server/authz";
+import { PASSWORD_POLICY } from "@/server/lib/password";
+import { getBrandingSafe } from "@/server/lib/settings";
+
+export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Change your secret word" };
+
+export default async function ChangePasswordPage() {
+  const branding = await getBrandingSafe();
+  const actor = await getActor();
+
+  if (!actor) redirect("/login?next=/account/password");
+
+  const isStaff = actor.kind === "STAFF";
+  const policy = isStaff ? PASSWORD_POLICY.staff : PASSWORD_POLICY.member;
+
+  return (
+    <PublicShell branding={branding} signedIn>
+      <div className="mx-auto w-full max-w-xl px-5 py-14 sm:px-8">
+        <h1 className="text-4xl">
+          {isStaff ? "Change your password" : "Change your secret word"}
+        </h1>
+        <p className="mt-3 text-lg text-ink-soft">
+          You will need the current one first. Everything gets signed out afterwards — including
+          here — so you will sign in again with the new one.
+        </p>
+
+        <Card className="mt-8">
+          <ChangePasswordForm minLength={policy.minLength} isStaff={isStaff} />
+        </Card>
+
+        <p className="mt-6 text-base text-ink-soft">
+          <Link href="/account" className="font-bold text-primary-deep">
+            Back to my library
+          </Link>
+        </p>
+      </div>
+    </PublicShell>
+  );
+}

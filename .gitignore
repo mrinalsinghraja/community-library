@@ -50,3 +50,7 @@ next-env.d.ts
 
 # Local editor/tooling config
 /.claude
+
+# Development email capture and local object storage (never committed)
+/.mail
+/.storage

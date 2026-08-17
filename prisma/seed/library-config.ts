@@ -10,6 +10,8 @@
  * src/, so the platform cannot quietly become single-tenant.
  */
 
+import { CONSENT_VERSION as CONSENT_VERSION_VALUE } from "../../src/lib/consent";
+
 export interface LibraryConfigInput {
   community: {
     name: string;
@@ -76,7 +78,7 @@ export const MANA_JARDIN: LibraryConfigInput = {
     secondaryColor: "#E4572E",
     welcomeMessage: "Welcome to Mana Jardin Children's Library 📚",
     timezone: "Asia/Kolkata",
-    consentVersion: "2026-08-v1",
+    consentVersion: CONSENT_VERSION_VALUE,
   },
   categories: [
     { name: "Story Books", slug: "story-books", icon: "📖" },
@@ -97,28 +99,10 @@ export const MANA_JARDIN: LibraryConfigInput = {
 };
 
 /**
- * The consent wording shown to a guardian at registration.
+ * Consent wording is NOT defined here.
  *
- * Stored verbatim on every consent record, so a later change to this text can
- * never rewrite what somebody actually agreed to.
- *
- * IMPORTANT: this wording has NOT been reviewed by a lawyer. See docs/SECURITY.md
- * — India's DPDP Act 2023 requires verifiable parental consent for a child's
- * personal data, and both the wording and the strength of verification must be
- * reviewed against the applicable rules before this is used in production.
+ * It lives in `src/lib/consent.ts` so that the registration form, the stored
+ * snapshot, the emails and the seed all render the identical text. A second
+ * copy of consent wording would be a second version of what a family agreed to.
  */
-export const CONSENT_TEXT: Record<string, string> = {
-  CHILD_ACCOUNT_CREATION: `I am the parent or guardian of this child, and I agree to the library creating a membership account for them.
-
-I understand that the library will store my child's name, date of birth, our flat number, and my own name, phone number and email address, and that this information is used only to run the library.
-
-I understand that I can ask the librarian to correct or delete this information at any time.`,
-
-  CHILD_PHOTO_STORAGE: `I agree to the library storing the photograph I have uploaded of my child.
-
-I understand the photograph is kept privately, is shown only to my child and to library staff, is never published, and can be removed at any time on request. I understand that choosing an avatar instead is equally acceptable and gives my child exactly the same membership.`,
-
-  GUARDIAN_EMAIL_NOTIFICATIONS: `I agree to the library emailing me about my child's membership — activation and password links, reminders that a book is due back, and occasional library notices.
-
-I understand these are not marketing emails and that the library will never pass my details to anyone else.`,
-};
+export { CONSENT_TEXTS as CONSENT_TEXT, CONSENT_VERSION } from "../../src/lib/consent";

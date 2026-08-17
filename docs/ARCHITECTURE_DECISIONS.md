@@ -90,6 +90,10 @@ were ruled out. Login lookup checks `member_code`, then `username`, then
 
 ## ADR-006 — Member passwords: 6 characters, no complexity rules
 
+> **The 6-character minimum is superseded by ADR-013 (8 characters).** The rest
+> of this record — no complexity rules, the reasoning, the staff exception —
+> still stands.
+
 **Decision.** Members: minimum 6 characters, checked against a common-password
 blocklist plus the library's own name from configuration, no character-class
 requirements. Staff: minimum 12 characters, zxcvbn score ≥ 3.
@@ -217,3 +221,92 @@ indexes it can introspect but cannot find in `schema.prisma`. A plain
 indexes are invisible to that reconciliation, so the index is now defined on
 `lower(title)` — which is what case-insensitive fuzzy search wanted anyway.
 CI checks for drift on every run.
+
+---
+
+## ADR-013 — Member password minimum raised from 6 to 8 characters
+
+**Decision.** `PASSWORD_POLICY.member.minLength` = 8. Still no complexity rules.
+
+**Why.** The Phase 1 brief asked for this to be re-examined rather than
+preserved by default, and re-examination found 6 too few. Lowercase-only at 6
+characters is roughly 3×10⁸ candidates. Argon2id at 19 MiB makes that expensive
+rather than impossible, and a child's password is often reused elsewhere, so the
+blast radius of a database compromise is not limited to borrowing history.
+
+8 characters raises the space about a thousandfold, and costs a child nothing —
+because what we ask for is *length*, not symbols. "bluecatjumps", "dragonfly",
+"my dog rex" all pass. The form teaches the habit that actually helps: join two
+words together.
+
+**Also added:** the person's own name, username and card code are refused, split
+into words so "Rosalind Chen" blocks `rosalind99`.
+
+**Rejected.** 12 characters for members (unusable for a five-year-old);
+character-class rules (they produce sticky notes, not entropy).
+
+**Supersedes** the minimum set in ADR-006. Everything else in ADR-006 stands.
+
+---
+
+## ADR-014 — ConsentMethod renamed to a verification-strength vocabulary
+
+**Decision.** `GUARDIAN_ONLINE_FORM` → `WEB_FORM`,
+`LIBRARIAN_RECORDED_IN_PERSON` → `ADMIN_VERIFIED`, plus `EMAIL_CONFIRMATION` and
+`OTHER_VERIFIED_METHOD`.
+
+**Why.** The original names described *where* consent came from. What matters
+legally is *how strongly it was verified*. India's DPDP Act requires verifiable
+parental consent, and if a review demands something stronger than a tickbox, the
+system must be able to express it without a rewrite.
+
+**How.** `ALTER TYPE … RENAME VALUE`, hand-written. Prisma's generated migration
+would have dropped and recreated the enum, destroying every consent record — and
+a consent record is evidence of what a family agreed to. `ADD VALUE … BEFORE/AFTER`
+positions the new members so the database's enum ordering matches
+`schema.prisma`, keeping `migrate diff` clean.
+
+**Consequence.** Adding a stronger verification method is now a new enum value
+plus a code path — not a schema change and not a data migration.
+
+---
+
+## ADR-015 — Changing a password ends every session, including the current one
+
+**Decision.** `changeOwnPassword` deletes all sessions for the user. The action
+redirects to sign-in.
+
+**Why.** Phase 1 added a rule to `resolveSession`: a session created before
+`password_changed_at` is not trusted. That rule makes "changing the password
+signs out every other device" true by construction rather than by remembering to
+call a function — but it also makes keeping the *current* session impossible,
+because that session is also older than the new password.
+
+Keeping it alive would mean rotating its cookie, which only the auth layer can
+do; the service layer cannot set cookies. The options were to weaken the rule,
+plumb cookie rotation through Auth.js, or sign out.
+
+Signing out is the strictest reading and the simplest to explain: if the change
+was made by someone who should not have had the device, they lose it too.
+
+**Cost.** One extra sign-in after a password change. The UI says so plainly.
+
+---
+
+## ADR-016 — Page guards are cosmetic; services remain the boundary
+
+**Decision.** `src/server/page-guards.ts` redirects a person who reaches a page
+they may not see. Services continue to throw.
+
+**Why.** Before this, a child tapping a stale link to `/desk` got a 500. Access
+was correctly denied — the service threw `NotAuthorizedError` — but a crash page
+is the wrong answer for a nine-year-old, and it violates the project's own rule
+that errors must be understandable.
+
+**What it is not.** It is not the security boundary, and the module says so at
+the top. The deny has already happened by the time a redirect is a possibility;
+this only changes what the person sees. Every page behind a guard still calls a
+service that checks permissions independently.
+
+**Why it lives outside `@/server/authz`.** Services must never import routing.
+Keeping `redirect()` out of the authorization module preserves that.

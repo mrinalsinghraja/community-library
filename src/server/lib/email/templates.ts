@@ -1,0 +1,336 @@
+import "server-only";
+
+import type { EmailContext, RenderedTemplate } from "@/server/lib/email/types";
+
+/**
+ * Email templates.
+ *
+ * Tone: written to the parent or guardian, not to the child. A six-year-old is
+ * not responsible for account security, and an email that talks to them as if
+ * they were would be both confusing and wrong.
+ *
+ * Rules, without exception:
+ *   • no password is ever included, not even a temporary one
+ *   • the only secret that appears is a single-use, time-limited link
+ *   • nothing about any other family appears in any message
+ */
+
+/** Escapes interpolated values. Names come from a form and end up in HTML. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function layout(context: EmailContext, heading: string, bodyHtml: string): string {
+  return `<!doctype html>
+<html lang="en">
+<body style="margin:0;padding:24px;background:#FDF8F0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2B2118;line-height:1.6;">
+  <div style="max-width:560px;margin:0 auto;background:#FFFFFF;border-radius:16px;padding:32px;">
+    <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#1F6F5C;letter-spacing:0.02em;">
+      ${escapeHtml(context.libraryName)}
+    </p>
+    <h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;color:#2B2118;">${escapeHtml(heading)}</h1>
+    ${bodyHtml}
+    <hr style="border:none;border-top:1px solid #E3D9C9;margin:28px 0 16px;" />
+    <p style="margin:0;font-size:13px;color:#5C4F42;">
+      ${escapeHtml(context.libraryName)} is a free library run by and for the
+      ${escapeHtml(context.communityName)} community.
+      ${context.contactEmail ? `Questions? Write to ${escapeHtml(context.contactEmail)}.` : ""}
+    </p>
+  </div>
+</body>
+</html>`;
+}
+
+function button(href: string, label: string): string {
+  return `<p style="margin:24px 0;">
+    <a href="${escapeHtml(href)}" style="display:inline-block;background:#1F6F5C;color:#FFFFFF;text-decoration:none;font-weight:700;padding:14px 26px;border-radius:999px;">${escapeHtml(label)}</a>
+  </p>
+  <p style="margin:0 0 8px;font-size:13px;color:#5C4F42;">
+    If the button does not work, copy this link into your browser:<br />
+    <span style="word-break:break-all;">${escapeHtml(href)}</span>
+  </p>`;
+}
+
+function paragraph(text: string): string {
+  return `<p style="margin:0 0 14px;">${escapeHtml(text)}</p>`;
+}
+
+// ---------------------------------------------------------------------------
+// Templates
+// ---------------------------------------------------------------------------
+
+export const TEMPLATE_IDS = {
+  REGISTRATION_RECEIVED: "registration_received",
+  REGISTRATION_APPROVED: "registration_approved",
+  REGISTRATION_REJECTED: "registration_rejected",
+  ACTIVATION: "activation",
+  STAFF_INVITATION: "staff_invitation",
+  PASSWORD_RESET: "password_reset",
+  PASSWORD_CHANGED: "password_changed",
+  ACCOUNT_SUSPENDED: "account_suspended",
+  ACCOUNT_REACTIVATED: "account_reactivated",
+  IMPORTANT_NOTIFICATION: "important_notification",
+} as const;
+
+export function registrationReceived(
+  context: EmailContext,
+  params: { guardianName: string; childName: string },
+): RenderedTemplate {
+  const heading = "We have your library registration";
+  const body =
+    paragraph(`Dear ${params.guardianName},`) +
+    paragraph(
+      `Thank you for registering ${params.childName} for ${context.libraryName}. Our librarian will look at the details and get back to you shortly.`,
+    ) +
+    paragraph(
+      "There is nothing else you need to do right now. Membership is free, and it always will be.",
+    );
+
+  return {
+    subject: `We have your registration for ${params.childName}`,
+    html: layout(context, heading, body),
+    text: [
+      `Dear ${params.guardianName},`,
+      "",
+      `Thank you for registering ${params.childName} for ${context.libraryName}. Our librarian will look at the details and get back to you shortly.`,
+      "",
+      "There is nothing else you need to do right now. Membership is free, and it always will be.",
+    ].join("\n"),
+  };
+}
+
+/**
+ * The most important email in the system. If this does not arrive, a family
+ * cannot join — which is why delivery is logged and a librarian can reissue
+ * the link from the desk.
+ */
+export function activation(
+  context: EmailContext,
+  params: {
+    guardianName: string;
+    childName: string;
+    memberCode: string;
+    activationUrl: string;
+    expiresInDays: number;
+  },
+): RenderedTemplate {
+  const heading = `${params.childName}'s library account is ready`;
+  const body =
+    paragraph(`Dear ${params.guardianName},`) +
+    paragraph(
+      `Good news — ${params.childName} is now a member of ${context.libraryName}. Their library card number is ${params.memberCode}.`,
+    ) +
+    paragraph(
+      "One last step: please help them choose a secret word for signing in. Use the button below.",
+    ) +
+    button(params.activationUrl, "Set up the account") +
+    paragraph(
+      `This link works once and expires in ${params.expiresInDays} days. If it stops working, just ask the librarian for a fresh one.`,
+    ) +
+    paragraph(
+      "Please choose the secret word together with your child, and keep it somewhere safe. Nobody at the library can see it — if it is forgotten, we send you a new link rather than telling you the old one.",
+    );
+
+  return {
+    subject: `${params.childName}'s library account is ready`,
+    html: layout(context, heading, body),
+    text: [
+      `Dear ${params.guardianName},`,
+      "",
+      `${params.childName} is now a member of ${context.libraryName}. Their library card number is ${params.memberCode}.`,
+      "",
+      "Please help them choose a secret word for signing in:",
+      params.activationUrl,
+      "",
+      `This link works once and expires in ${params.expiresInDays} days.`,
+      "",
+      "Nobody at the library can see the secret word. If it is forgotten, we send a new link rather than telling you the old one.",
+    ].join("\n"),
+  };
+}
+
+/**
+ * Staff invitation. A separate template rather than a reused activation email:
+ * a new librarian is not a child's guardian, and telling them "your child is now
+ * a member" would be nonsense.
+ */
+export function staffInvitation(
+  context: EmailContext,
+  params: { name: string; roleName: string; activationUrl: string; expiresInDays: number },
+): RenderedTemplate {
+  const heading = `You have been added to ${context.libraryName}`;
+  const body =
+    paragraph(`Hello ${params.name},`) +
+    paragraph(
+      `You have been set up as ${params.roleName} for ${context.libraryName}. Use the button below to choose your password and sign in.`,
+    ) +
+    button(params.activationUrl, "Set up your account") +
+    paragraph(`This link works once and expires in ${params.expiresInDays} days.`) +
+    paragraph(
+      "You will be helping look after children's personal information, so please choose a strong password and do not share it with anyone.",
+    );
+
+  return {
+    subject: `Your ${context.libraryName} account`,
+    html: layout(context, heading, body),
+    text: [
+      `Hello ${params.name},`,
+      "",
+      `You have been set up as ${params.roleName} for ${context.libraryName}.`,
+      "",
+      "Choose your password here:",
+      params.activationUrl,
+      "",
+      `This link works once and expires in ${params.expiresInDays} days.`,
+      "",
+      "You will be helping look after children's personal information, so please choose a strong password and do not share it.",
+    ].join("\n"),
+  };
+}
+
+export function registrationRejected(
+  context: EmailContext,
+  params: { guardianName: string; childName: string },
+): RenderedTemplate {
+  const heading = "About your library registration";
+  // Deliberately soft, and deliberately without the internal reason. The
+  // librarian's note is for the library, not for the family.
+  const body =
+    paragraph(`Dear ${params.guardianName},`) +
+    paragraph(
+      `Thank you for your interest in ${context.libraryName}. We are not able to set up an account for ${params.childName} from this registration.`,
+    ) +
+    paragraph(
+      "Please do come and have a word with the librarian at the library — it is usually something small that we can sort out together.",
+    );
+
+  return {
+    subject: `About ${params.childName}'s library registration`,
+    html: layout(context, heading, body),
+    text: [
+      `Dear ${params.guardianName},`,
+      "",
+      `Thank you for your interest in ${context.libraryName}. We are not able to set up an account for ${params.childName} from this registration.`,
+      "",
+      "Please come and have a word with the librarian at the library — it is usually something small we can sort out together.",
+    ].join("\n"),
+  };
+}
+
+export function passwordReset(
+  context: EmailContext,
+  params: { childName: string; resetUrl: string; expiresInHours: number },
+): RenderedTemplate {
+  const heading = "Setting a new secret word";
+  const body =
+    paragraph(
+      `Someone asked to reset the sign-in details for ${params.childName}'s account at ${context.libraryName}.`,
+    ) +
+    button(params.resetUrl, "Choose a new secret word") +
+    paragraph(
+      `This link works once and expires in ${params.expiresInHours} hours.`,
+    ) +
+    paragraph(
+      "If you did not ask for this, you can ignore this email — nothing has changed, and the old secret word still works.",
+    );
+
+  return {
+    subject: `Setting a new secret word for ${params.childName}`,
+    html: layout(context, heading, body),
+    text: [
+      `Someone asked to reset the sign-in details for ${params.childName}'s account at ${context.libraryName}.`,
+      "",
+      params.resetUrl,
+      "",
+      `This link works once and expires in ${params.expiresInHours} hours.`,
+      "",
+      "If you did not ask for this, you can ignore this email. Nothing has changed.",
+    ].join("\n"),
+  };
+}
+
+export function passwordChanged(
+  context: EmailContext,
+  params: { childName: string },
+): RenderedTemplate {
+  const heading = "The secret word was changed";
+  const body =
+    paragraph(
+      `The sign-in details for ${params.childName}'s account at ${context.libraryName} were changed just now, and every other device has been signed out.`,
+    ) +
+    paragraph(
+      "If this was not you or your child, please tell the librarian as soon as you can.",
+    );
+
+  return {
+    subject: `${params.childName}'s library sign-in was changed`,
+    html: layout(context, heading, body),
+    text: [
+      `The sign-in details for ${params.childName}'s account at ${context.libraryName} were changed just now, and every other device has been signed out.`,
+      "",
+      "If this was not you or your child, please tell the librarian as soon as you can.",
+    ].join("\n"),
+  };
+}
+
+export function accountSuspended(
+  context: EmailContext,
+  params: { childName: string },
+): RenderedTemplate {
+  const heading = "Library account paused";
+  // No internal reason. The librarian's note stays inside the library.
+  const body =
+    paragraph(
+      `${params.childName}'s account at ${context.libraryName} has been paused for the moment, so they will not be able to sign in.`,
+    ) +
+    paragraph(
+      "Please have a word with the librarian at the library and we will get it sorted.",
+    );
+
+  return {
+    subject: `${params.childName}'s library account has been paused`,
+    html: layout(context, heading, body),
+    text: [
+      `${params.childName}'s account at ${context.libraryName} has been paused for the moment, so they will not be able to sign in.`,
+      "",
+      "Please have a word with the librarian at the library and we will get it sorted.",
+    ].join("\n"),
+  };
+}
+
+export function accountReactivated(
+  context: EmailContext,
+  params: { childName: string },
+): RenderedTemplate {
+  const heading = "Library account is active again";
+  const body =
+    paragraph(
+      `Good news — ${params.childName}'s account at ${context.libraryName} is active again. They can sign in as usual.`,
+    ) + paragraph("Happy reading!");
+
+  return {
+    subject: `${params.childName}'s library account is active again`,
+    html: layout(context, heading, body),
+    text: [
+      `${params.childName}'s account at ${context.libraryName} is active again. They can sign in as usual.`,
+      "",
+      "Happy reading!",
+    ].join("\n"),
+  };
+}
+
+export function importantNotification(
+  context: EmailContext,
+  params: { heading: string; body: string },
+): RenderedTemplate {
+  return {
+    subject: `${params.heading} — ${context.libraryName}`,
+    html: layout(context, params.heading, paragraph(params.body)),
+    text: [params.heading, "", params.body].join("\n"),
+  };
+}

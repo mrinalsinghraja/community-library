@@ -55,6 +55,18 @@ const serverEnvSchema = z.object({
   // --- Jobs -----------------------------------------------------------------
   CRON_SECRET: z.string().optional(),
 
+  // --- Password hardening ---------------------------------------------------
+  /**
+   * Opt in to checking new passwords against the Have I Been Pwned corpus via
+   * k-anonymity (only a 5-character hash prefix leaves this server). Off by
+   * default: it is an outbound request from a child-facing form, and that is a
+   * community's decision to make. Always fails open.
+   */
+  PASSWORD_BREACH_CHECK: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
+
   // --- One-time bootstrap ---------------------------------------------------
   /** Enables /setup while the database has zero users. Unset it after use. */
   SETUP_TOKEN: z.string().min(16).optional(),

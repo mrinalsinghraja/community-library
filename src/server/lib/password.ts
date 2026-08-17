@@ -1,10 +1,13 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import { hash as argon2Hash, verify as argon2Verify, type Algorithm } from "@node-rs/argon2";
 import { ZxcvbnFactory } from "@zxcvbn-ts/core";
 import { adjacencyGraphs, dictionary } from "@zxcvbn-ts/language-common";
 
 import { COMMON_PASSWORDS } from "@/lib/common-passwords";
+import { env } from "@/server/env";
 
 /**
  * Password hashing and policy.
@@ -13,14 +16,17 @@ import { COMMON_PASSWORDS } from "@/lib/common-passwords";
  *
  *   Staff  — adults with real administrative power over children's data.
  *            12 characters minimum, strength-checked.
- *   Member — children aged 5 to 14. 6 characters, no character-class rules.
+ *   Member — children aged 5 to 14. 8 characters, no character-class rules.
  *
  * The member policy is weaker than an adult standard on purpose. Complexity
- * rules do not make a six-year-old's password stronger; they make it written on
- * a sticky note on the shelf. The compensating controls are strict lockout,
- * short sessions on shared devices, and the fact that the data behind a member
- * account is a picture-book borrowing history. This trade-off was approved by
- * the library owner and is recorded in docs/ARCHITECTURE_DECISIONS.md (ADR-006).
+ * rules do not make a child's password stronger; they make it written on a
+ * sticky note on the shelf. What we ask for instead is length, which children
+ * manage well. The compensating controls are strict lockout, short sessions on
+ * shared devices, argon2id, and the fact that the data behind a member account
+ * is a picture-book borrowing history.
+ *
+ * See ADR-006 (the original decision) and ADR-013 (the Phase 1 revision from
+ * 6 characters to 8) in docs/ARCHITECTURE_DECISIONS.md.
  */
 
 /**
@@ -48,8 +54,26 @@ function zxcvbnScore(password: string): number {
   return strengthEstimator.check(password.slice(0, 128)).score;
 }
 
+/**
+ * PHASE 1 REVISION — member minimum raised from 6 to 8 characters.
+ *
+ * Phase 0 chose 6. Reviewing it properly (Phase 1 brief §16), 6 is too few:
+ * lowercase-only at 6 characters is about 3×10⁸ candidates. Argon2id at 19 MiB
+ * makes that expensive rather than trivial, but it is within reach if the
+ * database is ever taken, and a child's password is often reused elsewhere.
+ *
+ * 8 characters raises that to roughly 2×10¹¹ — a thousandfold — while staying
+ * completely typable for a five-year-old, because we still impose NO complexity
+ * rules. "bluecat7", "dragonfly", "my dog rex" all pass. What we ask for is
+ * *length*, which children manage well, rather than symbols and mixed case,
+ * which they do not.
+ *
+ * The compensating controls are unchanged and still carry most of the weight:
+ * lockout after 5 attempts, a per-IP cap, argon2id, and the fact that the data
+ * behind a member account is a picture-book borrowing history.
+ */
 export const PASSWORD_POLICY = {
-  member: { minLength: 6, maxLength: 128, label: "secret word" },
+  member: { minLength: 8, maxLength: 128, label: "secret word" },
   staff: { minLength: 12, maxLength: 128, label: "password" },
 } as const;
 
@@ -72,6 +96,17 @@ export interface PasswordPolicyOptions {
    * blocklist so that file stays community-agnostic.
    */
   forbiddenWords?: readonly string[];
+
+  /**
+   * The person's own details — display name, username, member code. A child
+   * whose password is their own name has not really chosen a password, and this
+   * is the single most common thing they try.
+   */
+  personalDetails?: readonly (string | null | undefined)[];
+}
+
+function normaliseForComparison(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 export function checkPasswordPolicy(
@@ -105,10 +140,36 @@ export function checkPasswordPolicy(
     };
   }
 
+  const normalised = normaliseForComparison(password);
+
+  /*
+   * Your own name is not a password.
+   *
+   * Each detail is split into words and each word checked separately: a child
+   * given "Rosalind Chen" will use "rosalind", not "rosalindchen", so matching
+   * only the whole string would catch nobody.
+   */
+  const personalWords = (options.personalDetails ?? [])
+    .filter((detail): detail is string => Boolean(detail))
+    .flatMap((detail) => [detail, ...detail.split(/[\s\-_]+/)])
+    .map(normaliseForComparison)
+    .filter((word) => word.length >= 4);
+
+  for (const word of personalWords) {
+    if (normalised.includes(word)) {
+      return {
+        ok: false,
+        message:
+          audience === "member"
+            ? "That has your own name in it — someone could guess it. Try something else!"
+            : "Do not use your name or email address in your password.",
+      };
+    }
+  }
+
   // The library's own name is the first thing anyone tries.
-  const normalised = password.toLowerCase().replace(/[^a-z0-9]/g, "");
   for (const word of options.forbiddenWords ?? []) {
-    const normalisedWord = word.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const normalisedWord = normaliseForComparison(word);
     if (normalisedWord.length >= 4 && normalised.includes(normalisedWord)) {
       return {
         ok: false,
@@ -131,6 +192,49 @@ export function checkPasswordPolicy(
   }
 
   return { ok: true };
+}
+
+/**
+ * Optional check against Have I Been Pwned's breached-password corpus.
+ *
+ * Uses k-anonymity: only the first five characters of the SHA-1 hash leave this
+ * server, and the response is a list of suffixes we match locally. The password
+ * itself never goes anywhere. That property is why this is acceptable to use on
+ * a flow that involves children at all.
+ *
+ * Two deliberate choices:
+ *   • Off unless PASSWORD_BREACH_CHECK=true. It makes an outbound request from a
+ *     child-facing form, and a community library should get to decide whether it
+ *     wants that.
+ *   • Fails OPEN, with a short timeout. If the service is slow or down, a family
+ *     must still be able to finish setting up an account. A breach check is a
+ *     nice-to-have; being able to join the library is not.
+ */
+export async function isPasswordBreached(password: string): Promise<boolean> {
+  if (!env.PASSWORD_BREACH_CHECK) return false;
+
+  try {
+    const digest = createHash("sha1").update(password, "utf8").digest("hex").toUpperCase();
+    const prefix = digest.slice(0, 5);
+    const suffix = digest.slice(5);
+
+    const response = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
+      headers: { "Add-Padding": "true" },
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!response.ok) return false;
+
+    const body = await response.text();
+    return body
+      .split("\n")
+      .some((line) => {
+        const [candidate, count] = line.trim().split(":");
+        return candidate === suffix && Number(count) > 0;
+      });
+  } catch {
+    // Fail open, deliberately. See above.
+    return false;
+  }
 }
 
 export async function hashPassword(password: string): Promise<string> {

@@ -30,6 +30,23 @@ export const RATE_LIMITS = {
   /** Public form submissions (registration) per IP. */
   publicFormMaxSubmissions: 5,
   publicFormWindowMinutes: 60,
+
+  /**
+   * Presenting an activation or reset link. Generous on purpose: a parent
+   * clicking an emailed link three times because the first tap did not seem to
+   * work is normal behaviour, not an attack. This exists to stop token
+   * guessing, and a 256-bit token cannot be guessed anyway — this is the second
+   * lock, not the first.
+   */
+  tokenAttemptsMax: 20,
+  tokenAttemptsWindowMinutes: 60,
+
+  /**
+   * Password-reset requests per IP. Low, because each one sends an email to a
+   * guardian and mail sent to families is not a resource to be spent freely.
+   */
+  passwordResetRequestsMax: 5,
+  passwordResetWindowMinutes: 60,
 } as const;
 
 export interface ThrottleDecision {
@@ -117,6 +134,45 @@ export async function checkPublicFormThrottle(ip: string | null): Promise<Thrott
     return { allowed: false, retryAfterSeconds: RATE_LIMITS.publicFormWindowMinutes * 60 };
   }
   return ALLOWED;
+}
+
+/**
+ * A generic named throttle bucket, reusing the login_attempt table.
+ *
+ * `bucket` namespaces the counter (e.g. "token-attempt", "password-reset") so
+ * that exhausting one does not lock a family out of another. The subject is
+ * hashed, never stored raw.
+ */
+export async function checkActionThrottle(params: {
+  bucket: string;
+  subject: string | null;
+  max: number;
+  windowMinutes: number;
+}): Promise<ThrottleDecision> {
+  if (!params.subject) return ALLOWED;
+
+  const used = await prisma.loginAttempt.count({
+    where: {
+      identifierHash: hashIdentifier(`${params.bucket}:${params.subject}`),
+      attemptedAt: { gte: minutesAgo(params.windowMinutes) },
+    },
+  });
+
+  if (used >= params.max) {
+    return { allowed: false, retryAfterSeconds: params.windowMinutes * 60 };
+  }
+  return ALLOWED;
+}
+
+export async function recordAction(bucket: string, subject: string | null): Promise<void> {
+  if (!subject) return;
+  await prisma.loginAttempt.create({
+    data: {
+      identifierHash: hashIdentifier(`${bucket}:${subject}`),
+      ipHash: hashIdentifier(subject),
+      succeeded: true,
+    },
+  });
 }
 
 export async function recordPublicFormSubmission(ip: string | null): Promise<void> {
