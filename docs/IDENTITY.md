@@ -52,36 +52,55 @@ password (it is on the blocklist for that member's own password).
 
 See `DATABASE.md` §4 and ADR-010.
 
-### Two kinds of code, one prefix
+### Two kinds of code, two namespaces
 
-This deployment sets `copy_code_prefix` and `member_code_prefix` to the same
-value, `MJCL-R`, so that a volunteer learns one house style instead of two. The
-two sequences are independent, which means the collision is not a possibility
-but a certainty: **`MJCL-R0007` is both the seventh library card and the seventh
-book**, and every book on the shelf carries a string that is also a valid card
-number.
+A library card and a book label are different kinds of thing, and the codes say
+so. One house style, two namespaces: the community's initials, a letter naming
+the kind, then a padded number.
 
-What that does and does not change:
+| Kind | Setting | This deployment | Example |
+| --- | --- | --- | --- |
+| Reader's library card | `member_code_prefix` | `MJCL-R` | `MJCL-R0007` |
+| Physical book copy | `copy_code_prefix` | `MJCL-B` | `MJCL-B0007` |
 
-- **It does not grant access.** A card code is an identifier, not a credential.
-  Sign-in still requires that member's password, still throttles, and still
-  answers every failure with the one generic message.
-- **It does not confuse the lookup.** `member_code` and `copy_code` live in
-  different tables and are only ever queried by column. `findUserByIdentifier`
-  reads `member_profile` and cannot return a book; catalogue search reads
-  `book_copy` and cannot return a child.
-- **It does remove one obstacle for an attacker already inside the building.**
-  Before, a valid card number had to be obtained from a child or a card. Now it
-  can be read off any spine. Against 8-character member passwords with no
-  complexity rule (ADR-013), that is a real if modest weakening: the unknown
-  half of the pair is now only the password.
-- **It does make desk conversation ambiguous.** "Look up MJCL-R0007" has two
-  answers.
+The two sequences are independent and always were — `code_sequence` holds one
+row per kind — so the seventh card and the seventh book both exist and both
+carry the number 7. What the prefixes guarantee is that they never carry the
+same *string*.
 
-This is the owner's explicit decision, taken after the alternative (`MJCL` for
-books, `MJCL-R` for cards) was in place and reviewed. Reversing it is one seed
-value plus a rename of existing `copy_code` rows; nothing in the application
-reads or parses the prefix.
+Two things worth being precise about.
+
+**The letter is for people, not for the software.** Nothing in the application
+decides what a code refers to by reading its prefix, and nothing may start.
+`member_code` and `copy_code` live in different tables and are only ever queried
+by column: `findUserByIdentifier` reads `member_profile` and cannot return a
+book, catalogue lookup reads `book_copy` and cannot return a child. If the
+prefixes were made identical again tomorrow, authorization would be exactly as
+sound as it is today — which is why the guarantee is written as a table join and
+not as a string test. A code is an identifier, not a credential; sign-in still
+requires that member's password, still throttles, and still answers every
+failure with the one generic message.
+
+**What the separation does buy** is everything a human does with a code. A book
+on the shelf no longer displays a string that is also a valid card number, so
+the card half of a sign-in attempt cannot be read off a spine by someone already
+in the room. Against 8-character member passwords with no complexity rule
+(ADR-013), that matters more than it looks. And "look up MJCL-B0007" now has one
+answer instead of two.
+
+**History.** Books were briefly labelled `MJCL-R` as well, matching the cards.
+That is corrected: the development copies were renamed in place, readers were
+untouched, and the old string no longer resolves to a book. Audit rows written
+before the rename still quote the old label in their metadata — they are a
+record of what happened, and they link to the copy by id, so a book's history
+survives the rename regardless of the label in the snapshot.
+
+This is not a Mana Jardin special case. The platform defaults are `LIB-B` and
+`LIB-R`, so a community that configures nothing still gets two namespaces that
+cannot spell each other. Migration
+`20260817180000_book_code_default_namespace` changed that default and nothing
+else — column defaults apply to future inserts, so no existing settings row and
+no printed code moved.
 
 ## 4. Roles
 

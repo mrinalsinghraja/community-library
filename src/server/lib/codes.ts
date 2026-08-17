@@ -65,7 +65,7 @@ export async function allocateSequenceValue(
   return allocated;
 }
 
-/** Allocates and formats the next book copy code, e.g. `LIB-R0051`. */
+/** Allocates and formats the next book copy code, e.g. `LIB-B0051`. */
 export async function allocateCopyCode(
   db: Db,
   libraryId: string,

@@ -17,6 +17,7 @@ import {
 import { FakeEmailProvider } from "./fake-email";
 import {
   attachGuardian,
+  createBookCopy,
   createLibraryFixture,
   createMember,
   createStaff,
@@ -237,6 +238,20 @@ describe("password reset", () => {
     await requestPasswordReset({ identifier: "no-such-person", requestIp: nextIp() });
 
     // No throw, no email, no signal of any kind.
+    expect(mail.sent).toHaveLength(0);
+  });
+
+  /*
+   * A book's label is not a person. The prefixes make that obvious to a
+   * volunteer, but the actual guarantee is structural: this lookup reads
+   * member_profile and physically cannot reach book_copy. Assert it with a real
+   * book's real code, so the test still means something if the prefixes change.
+   */
+  it("does not accept a book's label as a login identity", async () => {
+    const copy = await createBookCopy(fixture.libraryId);
+
+    await requestPasswordReset({ identifier: copy.copyCode, requestIp: nextIp() });
+
     expect(mail.sent).toHaveLength(0);
   });
 

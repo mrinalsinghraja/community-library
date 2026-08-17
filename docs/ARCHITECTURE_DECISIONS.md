@@ -467,3 +467,39 @@ deliberately does not exist. A test asserts both.
 **Cost.** "How many books has the library received?" needs a query rather than a
 column. Acceptable: that question is asked once a year, by an adult, and does not
 need to be on a child's screen.
+
+---
+
+## ADR-023 — Books and readers get separate code namespaces, for humans only
+
+**Decision.** `copy_code_prefix` and `member_code_prefix` carry a letter naming
+the kind of thing the code refers to: `MJCL-B0007` is a book on the shelf,
+`MJCL-R0007` is a child's library card. Platform defaults are `LIB-B` and
+`LIB-R`. The two sequences remain independent, as they always were.
+
+**Why.** Books were briefly labelled in the readers' namespace, on the argument
+that a volunteer should learn one shape rather than two. Because the sequences
+are independent, that made a collision certain rather than possible: the seventh
+book and the seventh card spelled the same string. Two costs followed. Every
+spine in the room displayed a string that was also a valid card number, which
+against 8-character member passwords (ADR-013) left the password as the only
+unknown half of a sign-in. And "look up MJCL-R0007" had two answers, which is
+exactly the ambiguity a desk full of children does not need.
+
+**What the letter is not.** It is not an authorization signal and must never
+become one. No code path may decide what a record is by parsing a prefix.
+`member_code` and `copy_code` are columns on different tables and are only ever
+queried by column: `findUserByIdentifier` reads `member_profile` and cannot
+return a book; catalogue lookup reads `book_copy` and cannot return a child. If
+the two prefixes were made identical again tomorrow, authorization would be
+exactly as sound — the tests assert the table boundary, not the string shape.
+
+**Cost.** A volunteer learns two shapes instead of one. Books catalogued under
+the old labels had to be renamed, which is only tolerable because it happened in
+development, before any label was printed. A code is a permanent physical
+sticker; the deployed system must never rewrite one.
+
+**Verified.** A book and a card at the same number are different strings; 25
+concurrent book allocations yield 25 distinct codes; a book's own code offered
+as a login identity finds nobody; and the code a book used to carry no longer
+resolves to it, in search or at its URL.

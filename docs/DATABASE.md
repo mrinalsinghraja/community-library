@@ -1,7 +1,7 @@
 # Database
 
 PostgreSQL via Prisma. 28 application tables plus Prisma's migration table,
-across four migrations.
+across five migrations.
 All timestamps are `timestamptz` stored in UTC; every business date decision is
 made in the library's configured timezone.
 
@@ -101,16 +101,19 @@ stuck to a real book.
 
 Format rule: a prefix of letters and digits gets a `-` before the number
 (`LIB` → `LIB-0051`); a prefix that already contains punctuation is treated as
-complete (`MJCL-R` → `MJCL-R0042`). The rule lives in `src/lib/codes.ts` — one
+complete (`MJCL-B` → `MJCL-B0042`). The rule lives in `src/lib/codes.ts` — one
 pure function, deliberately *not* `server-only`, because the allocator, the
 sign-in pages and the development seed must all format a code the same way. They
 did not: the seed re-implemented the rule and produced `MJCL-R-0001` for a prefix
 the allocator writes as `MJCL-R0001`.
 
-**Both prefixes are `MJCL-R` in this deployment** (the owner's house style), so
-`MJCL-R0007` may be both a book's label and a reader's card. Nothing in the code
-depends on telling them apart — they live in different tables and are only ever
-looked up by column — but see `IDENTITY.md` §3 for what it means at sign-in.
+**Two prefixes, two namespaces.** `copy_code_prefix` is `MJCL-B` and
+`member_code_prefix` is `MJCL-R` in this deployment (`LIB-B` / `LIB-R` by
+default). The sequences are independent, so `MJCL-B0007` and `MJCL-R0007` both
+exist and are unrelated numbers; the letter is what stops them being the same
+string. No code path decides what a record is by reading a prefix — the two
+columns live in different tables and are only ever looked up by column. See
+`IDENTITY.md` §3.
 
 ## 5. Migration workflow
 
@@ -183,6 +186,21 @@ see `CATALOGUE.md` §2 for why dropping beats leaving them nullable.
 
 Same lexicographic-ordering rule as migration 3: `20260817160000` was chosen to
 sort after `20260817140000`, not taken from the clock.
+
+### Migration 5 — the book code namespace
+
+`20260817180000_book_code_default_namespace` is one statement: the default for
+`copy_code_prefix` becomes `LIB-B`, so that a community configuring nothing gets
+book labels and library cards in namespaces that cannot spell each other. Column
+defaults apply to future inserts only — no existing settings row is rewritten,
+and no code already printed on a book or a card changes.
+
+Note what it deliberately does **not** do. Mana Jardin's own books were
+relabelled from `MJCL-R…` to `MJCL-B…` by a one-off `UPDATE` against the
+development database, not by a migration. A copy code is a permanent physical
+sticker; a deployment that rewrites its own labels on upgrade would invalidate
+every spine in the room. That correction was only safe because it happened
+before any label was printed.
 
 ### ⚠ The gotcha that will bite you
 

@@ -55,12 +55,16 @@ export async function createLibraryFixture(): Promise<Fixture> {
       settings: {
         create: {
           /*
-           * Both prefixes end in punctuation, mirroring the real deployment
-           * where book labels and library cards share one house style. That
-           * also keeps the tests on the branch of formatCode that appends the
-           * number directly — the branch a hand-rolled seed got wrong.
+           * Two prefixes that differ only in their kind letter, mirroring the
+           * real deployment: books are "-B", readers are "-R". Tests that pass
+           * with one shared prefix cannot tell the two namespaces apart, so a
+           * book code leaking into a member lookup would go unnoticed.
+           *
+           * Both end in punctuation, which also keeps the suite on the branch
+           * of formatCode that appends the number directly — the branch a
+           * hand-rolled seed once got wrong.
            */
-          copyCodePrefix: "TST-R",
+          copyCodePrefix: "TST-B",
           memberCodePrefix: "TST-R",
           borrowingPeriodDays: 14,
           maxActiveLoans: 2,
@@ -104,7 +108,7 @@ export async function createLibraryFixture(): Promise<Fixture> {
     });
   }
 
-  return { libraryId: library.id, memberCodePrefix: "TST-R", copyCodePrefix: "TST-R" };
+  return { libraryId: library.id, memberCodePrefix: "TST-R", copyCodePrefix: "TST-B" };
 }
 
 /** The library's "Stories" shelf, which every fixture book is filed on. */
@@ -247,6 +251,6 @@ export async function createBookCopy(libraryId: string) {
   });
 
   return db.bookCopy.create({
-    data: { libraryId, titleId: title.id, copyCode: `TST-${suffix}` },
+    data: { libraryId, titleId: title.id, copyCode: `TST-B${suffix}` },
   });
 }

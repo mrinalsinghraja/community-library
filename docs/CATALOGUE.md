@@ -38,6 +38,12 @@ same transaction that creates the book, so two people cataloguing at the same
 desk cannot be handed the same number and nobody has to remember where the
 numbering got to.
 
+Books are labelled `MJCL-B0001`, readers' cards `MJCL-R0001` — the same house
+style with a letter naming the kind. The two sequences are independent, so
+`MJCL-B0007` and `MJCL-R0007` both exist and are unrelated numbers; the letter is
+what stops them being the same string. Nothing in the application works out what
+a code refers to by reading the letter (see `IDENTITY.md` §3 and ADR-023).
+
 ## 2. What is deliberately not here
 
 ISBN · publisher · publication year · series · volume · **language** ·
@@ -65,9 +71,9 @@ a choice nobody has made.
 
 ```
 book_title   The Jungle Book · Rudyard Kipling · Adventure & Fantasy · 8–10 years
-  └─ book_copy  MJCL-R0010  Good      Available   donated by Mrinal, P15
-  └─ book_copy  MJCL-R0028  Fair      Borrowed    donated by the Iyer family
-  └─ book_copy  MJCL-R0047  Good      Available   (bought)
+  └─ book_copy  MJCL-B0010  Good      Available   donated by Mrinal, P15
+  └─ book_copy  MJCL-B0028  Fair      Borrowed    donated by the Iyer family
+  └─ book_copy  MJCL-B0047  Good      Available   (bought)
 ```
 
 One thing that can be *described*, three things that can be *borrowed*. Every
@@ -315,7 +321,7 @@ internal database ids · audit information · donor contact details ·
 administrative notes · storage paths · book condition · **any information about
 who has borrowed anything**.
 
-The URL carries the code printed on the book's own label (`/books/MJCL-R0010`) —
+The URL carries the code printed on the book's own label (`/books/MJCL-B0010`) —
 the thing a child can read off the object in their hand — not a UUID.
 
 **No child's name appears anywhere in this catalogue.** Verified in the browser

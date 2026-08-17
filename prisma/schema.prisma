@@ -291,7 +291,7 @@ model LibrarySettings {
   overdueReminderOffsets   Int[]   @default([-2, 0, 3, 7]) @map("overdue_reminder_offsets")
 
   // Identifiers
-  copyCodePrefix   String @default("LIB") @map("copy_code_prefix")
+  copyCodePrefix   String @default("LIB-B") @map("copy_code_prefix")
   copyCodePadding  Int    @default(4) @map("copy_code_padding")
   memberCodePrefix String @default("LIB-R") @map("member_code_prefix")
   memberCodePadding Int   @default(4) @map("member_code_padding")
@@ -895,9 +895,10 @@ model RenewalRequest {
   @@map("renewal_request")
 }
 
-/// Allocator for human-facing codes (LIB-R0001 for a book, LIB-R0042 for a card).
-/// The two kinds are separate sequences even where a deployment gives them the
-/// same prefix, so the same string can name both a book and a reader.
+/// Allocator for human-facing codes (LIB-B0001 for a book, LIB-R0042 for a card).
+/// The two kinds are separate sequences with separate prefixes, so the seventh
+/// book and the seventh card share a number but never a string. Nothing in the
+/// application decides what a code refers to by reading its prefix.
 /// Allocation is a single atomic `UPDATE ... RETURNING`, which takes a row lock
 /// for the duration of the statement. Two librarians adding books at the same
 /// moment therefore cannot receive the same number — there is no read-then-write

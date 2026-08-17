@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { allocateCopyCode, allocateSequenceValue } from "@/server/lib/codes";
+import { allocateCopyCode, allocateSequenceValue, formatCode } from "@/server/lib/codes";
 import { createLibraryFixture, db, resetDatabase, type Fixture } from "./helpers";
 
 /**
@@ -73,7 +73,43 @@ describe("sequence allocation", () => {
       settings.copyCodePadding,
     );
 
-    expect(code).toMatch(/^TST-R\d{4,}$/);
+    expect(code).toMatch(/^TST-B\d{4,}$/);
+  });
+
+  /*
+   * Two independent sequences make the seventh book and the seventh card
+   * inevitable. The prefixes are the only thing keeping those two facts from
+   * spelling the same string, so assert on the string and not on the number.
+   */
+  it("spells a book and a card differently even at the same number", async () => {
+    const settings = await db.librarySettings.findUniqueOrThrow({
+      where: { libraryId: fixture.libraryId },
+    });
+
+    const book = formatCode(settings.copyCodePrefix, 7, settings.copyCodePadding);
+    const card = formatCode(settings.memberCodePrefix, 7, settings.memberCodePadding);
+
+    expect(book).toBe("TST-B0007");
+    expect(card).toBe("TST-R0007");
+    expect(book).not.toBe(card);
+  });
+
+  it("never issues the same book code twice under concurrent cataloguing", async () => {
+    const CONCURRENCY = 25;
+    const settings = await db.librarySettings.findUniqueOrThrow({
+      where: { libraryId: fixture.libraryId },
+    });
+
+    const codes = await Promise.all(
+      Array.from({ length: CONCURRENCY }, () =>
+        allocateCopyCode(db, fixture.libraryId, settings.copyCodePrefix, settings.copyCodePadding),
+      ),
+    );
+
+    expect(new Set(codes).size).toBe(CONCURRENCY);
+    for (const code of codes) {
+      expect(code).toMatch(/^TST-B\d{4,}$/);
+    }
   });
 
   it("rolls the reservation back when the surrounding transaction fails", async () => {

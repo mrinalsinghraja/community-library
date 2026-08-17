@@ -69,13 +69,17 @@ export const MANA_JARDIN: LibraryConfigInput = {
     renewalPeriodDays: 7,
     blockOnOverdueDays: 7,
     /*
-     * The owner's decision: book labels and library cards share one house
-     * style, "MJCL-R" + a four-digit number, so a volunteer only has to learn
-     * one shape. The two sequences are independent, so the same string can be
-     * both a card number and a book number — see docs/IDENTITY.md §"Two kinds
-     * of code, one prefix" for what that does and does not mean at sign-in.
+     * One house style, two namespaces: the community's initials, then a letter
+     * saying what kind of thing this is — "B" for a book on the shelf, "R" for
+     * a reader's card — then a four-digit number.
+     *
+     * The two sequences are independent and always were, so the seventh book
+     * and the seventh card carry the same number. They no longer carry the same
+     * string: MJCL-B0007 is a book, MJCL-R0007 is a child. Nothing in the
+     * application infers a kind from the letter — see docs/IDENTITY.md §"Two
+     * kinds of code, two namespaces" for why that separation is for humans.
      */
-    copyCodePrefix: "MJCL-R",
+    copyCodePrefix: "MJCL-B",
     copyCodePadding: 4,
     memberCodePrefix: "MJCL-R",
     memberCodePadding: 4,

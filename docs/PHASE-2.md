@@ -117,10 +117,12 @@ horizontal overflow at 375px.
 
 ## 8. Still open
 
-1. **The Book ID prefix — settled.** Book copies now read `MJCL-R0001`, the same
-   house style as library cards, at the owner's direction after review. The two
-   sequences are independent, so a given string is both a card and a book. The
-   consequences are written out in `IDENTITY.md` §3.
+1. **The Book ID prefix — settled.** Book copies read `MJCL-B0001`, readers'
+   cards read `MJCL-R0001`: one house style, a kind letter apart. The two
+   sequences are independent, so the seventh of each exists and the numbers are
+   unrelated — the letter is what keeps them from being the same string. Books
+   were briefly labelled `MJCL-R` too; that is corrected and the development
+   copies were renamed in place. See `IDENTITY.md` §3.
 2. **Donor name and flat are optional on the form.** A blank name means no
    donation record, which is right for a purchased book — but it is a choice the
    brief did not specify.

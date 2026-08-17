@@ -121,7 +121,7 @@ describe("adding a book", () => {
 
     expect(created.createdNewTitle).toBe(true);
     // Issued by the allocator, never typed by the librarian.
-    expect(created.copyCode).toBe("TST-R0001");
+    expect(created.copyCode).toBe("TST-B0001");
 
     const copy = await db.bookCopy.findUniqueOrThrow({
       where: { id: created.copyId },
@@ -298,7 +298,7 @@ describe("adding a book", () => {
 describe("who may manage the catalogue", () => {
   it("lets a Super Admin add a book", async () => {
     await actingAs(superAdmin.id);
-    await expect(createBook(bookInput())).resolves.toMatchObject({ copyCode: "TST-R0001" });
+    await expect(createBook(bookInput())).resolves.toMatchObject({ copyCode: "TST-B0001" });
   });
 
   it("refuses a member creating a book", async () => {
@@ -375,7 +375,7 @@ describe("who may manage the catalogue", () => {
     __setSessionHandle(null);
     // MEMBER_ONLY is the configured default for this deployment.
     await expect(browseCatalogue()).rejects.toMatchObject({ code: "NOT_AUTHENTICATED" });
-    await expect(getBookByCode("TST-R0001")).rejects.toMatchObject({ code: "NOT_AUTHENTICATED" });
+    await expect(getBookByCode("TST-B0001")).rejects.toMatchObject({ code: "NOT_AUTHENTICATED" });
   });
 
   it("refuses a book copy id belonging to another library", async () => {
@@ -421,8 +421,18 @@ describe("searching", () => {
   });
 
   it("finds a book by its book ID", async () => {
-    const result = await browseCatalogue({ search: "tst-r0001" });
+    const result = await browseCatalogue({ search: "tst-b0001" });
     expect(result.total).toBe(1);
+  });
+
+  /*
+   * Books used to be labelled in the readers' namespace. The old label must not
+   * quietly keep working, or two strings would name the same book and the
+   * separation would exist only on paper.
+   */
+  it("does not find a book by the code it used to carry", async () => {
+    const result = await browseCatalogue({ search: "TST-R0001" });
+    expect(result.total).toBe(0);
   });
 
   it("does not search donor names", async () => {
@@ -648,11 +658,20 @@ describe("donors", () => {
     expect(credit).not.toContain("P15");
   });
 
+  it("does not open a book at a reader's card number", async () => {
+    await addBook();
+    await actingAs(reader.id, "MEMBER");
+
+    // Same number, other namespace: /books/TST-R0001 is not this book's page.
+    await expect(getBookByCode("TST-R0001")).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(getBookByCode("TST-B0001")).resolves.toBeTruthy();
+  });
+
   it("puts the acknowledgement on the book's page and nowhere on the card", async () => {
     await addBook();
     await actingAs(reader.id, "MEMBER");
 
-    const detail = await getBookByCode("TST-R0001");
+    const detail = await getBookByCode("TST-B0001");
     expect(detail.donorAcknowledgement).toBe("📚 Donated by Mrinal from P15");
 
     // The browse card has no donor field at all, so no template change can put
@@ -714,12 +733,12 @@ describe("archiving instead of deleting", () => {
     expect(copy.archivedAt).not.toBeNull();
     // The code, the donation and the history all survive. Somebody gave that
     // book, and there is no delete anywhere in this catalogue.
-    expect(copy.copyCode).toBe("TST-R0001");
+    expect(copy.copyCode).toBe("TST-B0001");
     expect(copy.donation?.donorName).toBe("Mrinal");
 
     await actingAs(reader.id, "MEMBER");
     expect((await browseCatalogue()).total).toBe(0);
-    await expect(getBookByCode("TST-R0001")).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(getBookByCode("TST-B0001")).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("keeps an archived book out of the staff list until it is asked for", async () => {
@@ -764,7 +783,7 @@ describe("archiving instead of deleting", () => {
     });
 
     expect(row.actorUserId).toBe(librarian.id);
-    expect(row.metadata).toMatchObject({ reason: "spine fell off", copyCode: "TST-R0001" });
+    expect(row.metadata).toMatchObject({ reason: "spine fell off", copyCode: "TST-B0001" });
   });
 });
 
