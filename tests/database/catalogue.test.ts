@@ -468,12 +468,15 @@ describe("filtering", () => {
     ).id;
 
     await addBook({ title: "Story One", ageGroup: "AGE_5_7", condition: "GOOD", status: "AVAILABLE" });
+    // Not BORROWED, which stopped being a status a form can set when Phase 3
+    // gave circulation ownership of it. DAMAGED is the nearest thing this test
+    // needs: a second, distinguishable status a librarian still chooses.
     await addBook({
       title: "Comic One",
       categoryId: comicsId,
       ageGroup: "AGE_11_14",
       condition: "FAIR",
-      status: "BORROWED",
+      status: "DAMAGED",
     });
   });
 
@@ -497,7 +500,7 @@ describe("filtering", () => {
 
   it("filters by status, for staff", async () => {
     await actingAs(librarian.id);
-    const result = await listBooksForStaff({ status: "BORROWED" });
+    const result = await listBooksForStaff({ status: "DAMAGED" });
     expect(result.items.map((book) => book.title)).toEqual(["Comic One"]);
   });
 

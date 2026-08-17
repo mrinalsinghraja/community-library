@@ -32,16 +32,24 @@ export function StaffShell({
   branding,
   actor,
   pendingRegistrations,
+  overdueLoans,
   title,
   children,
 }: {
   branding: Branding;
   actor: Actor;
   pendingRegistrations?: number;
+  /** Counted by the page that wants the badge; omitted elsewhere. */
+  overdueLoans?: number;
   title: string;
   children: ReactNode;
 }) {
   const navItems: NavItem[] = [
+    // Circulation first: on an ordinary afternoon it is what the desk is for.
+    { href: "/desk/circulation", label: "Issue", permission: "loan.issue" },
+    // loan.return, not loan.view — every reader holds loan.view, and this link
+    // must only appear for somebody who works the desk.
+    { href: "/desk/loans", label: "Books out", permission: "loan.return", badge: overdueLoans },
     {
       href: "/desk/registrations",
       label: "New members",

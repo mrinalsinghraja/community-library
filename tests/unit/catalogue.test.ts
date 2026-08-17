@@ -74,8 +74,19 @@ describe("condition", () => {
 });
 
 describe("status", () => {
-  it("lets a librarian choose exactly four", () => {
-    expect(SELECTABLE_STATUSES).toEqual(["AVAILABLE", "BORROWED", "LOST", "DAMAGED"]);
+  it("lets a librarian choose exactly three", () => {
+    expect(SELECTABLE_STATUSES).toEqual(["AVAILABLE", "LOST", "DAMAGED"]);
+  });
+
+  it("does not let anybody lend a book by picking BORROWED from a dropdown", () => {
+    /*
+     * BORROWED was pickable in Phase 2, when the catalogue had to describe a
+     * shelf that existed before the software did. Circulation owns it now: a
+     * copy reads BORROWED because a loan says so, and a database trigger
+     * refuses to commit any other arrangement. A dropdown that could set it
+     * would be a borrowed book with no borrower.
+     */
+    expect(isSelectableStatus("BORROWED")).toBe(false);
   });
 
   it("does not let anybody archive a book by picking it from a list", () => {

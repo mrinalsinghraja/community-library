@@ -67,10 +67,25 @@ describe("role definitions", () => {
     expect(junior?.isAssignable).toBe(false);
   });
 
-  it("gives a member nothing beyond browsing the catalogue", () => {
-    // Everything else a child can do is scoped by ownership, not by permission:
-    // "see my own loans" is not a permission anyone can be granted over others.
-    expect(permissionsForRole(ROLE_KEYS.MEMBER)).toEqual(["book.view"]);
+  it("gives a member nothing beyond browsing and their own books", () => {
+    /*
+     * Two read permissions, and no mutation permission of any kind. A child
+     * never issues, returns, renews or cancels anything.
+     *
+     * `loan.view` is scoped by ownership rather than by the grant: the service
+     * behind a child's screen takes no member id at all and reads the session,
+     * so holding this key cannot be stretched into seeing somebody else's
+     * books. The corollary is the trap — because every reader holds it, a staff
+     * screen may never be guarded by it. See the circulation tests.
+     */
+    expect(permissionsForRole(ROLE_KEYS.MEMBER)).toEqual(["book.view", "loan.view"]);
+  });
+
+  it("gives a member no way to change anything", () => {
+    const member = permissionsForRole(ROLE_KEYS.MEMBER);
+    for (const permission of member) {
+      expect(permission.endsWith(".view")).toBe(true);
+    }
   });
 
   it("gives a guardian no permissions at all in v1", () => {

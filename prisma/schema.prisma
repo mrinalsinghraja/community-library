@@ -171,22 +171,36 @@ enum DonorDisplayConsent {
   ANONYMOUS
 }
 
+/// The whole life of a loan, in three words.
+///
 /// Deliberately has no OVERDUE member: overdue is derived from dueAt < now(),
-/// never stored, so no failed job can leave it stale.
+/// never stored, so no failed job can leave it stale. And deliberately no LOST
+/// member either — "lost" is a fact about the physical book, which is what
+/// `CopyStatus` is for. A loan is a record of a book going out and coming back;
+/// conflating the two would give the library two places to ask "where is it?"
+/// and let them disagree.
+///
+/// CANCELLED exists for exactly one situation: an issue that should not have
+/// happened, reversed at the desk moments later. It is not a soft delete. The
+/// row stays, the events stay, and the book returns to the shelf.
 enum LoanStatus {
   ACTIVE
   RETURNED
-  LOST
-  WRITTEN_OFF
+  CANCELLED
 }
 
+/// Append-only history. One row per thing that happened to a loan.
+///
+/// MARK_DAMAGED is a loan event and not only a catalogue one because a book
+/// coming back damaged happened *during this loan*, and the desk needs to be
+/// able to read that from the loan rather than by correlating timestamps.
 enum LoanEventType {
   ISSUE
   RENEW
   RETURN
-  MARK_LOST
+  CANCEL
   MARK_DAMAGED
-  ADJUST_DUE
+  CORRECT
 }
 
 enum RenewalRequestStatus {
@@ -282,11 +296,31 @@ model LibrarySettings {
   ageMax Int @default(14) @map("age_max")
 
   // Borrowing
+  //
+  // Every circulation rule the library has is one of these numbers. Nothing in
+  // src/ writes `14`, `2` or `1` into a business decision; the service reads
+  // this row and the tests set their own values on their own fixture library.
   borrowingPeriodDays      Int     @default(14) @map("borrowing_period_days")
   maxActiveLoans           Int     @default(2) @map("max_active_loans")
   maxRenewals              Int     @default(1) @map("max_renewals")
+  /// Days added to the CURRENT due date when a loan is renewed — not to today.
+  /// A child who renews early is not punished for it by losing the days they
+  /// had left. See docs/CIRCULATION.md §"Renewal".
   renewalPeriodDays        Int     @default(7) @map("renewal_period_days")
   renewalBlockedWhenReserved Boolean @default(true) @map("renewal_blocked_when_reserved")
+
+  /// May a loan already past its due date be renewed?
+  ///
+  /// Default false, which is the library's policy: bring the book to the desk,
+  /// the librarian returns it, and it can go out again the same minute. That
+  /// keeps "renew" meaning "you still have it and we know where it is" rather
+  /// than becoming a way to never come back.
+  ///
+  /// A setting and not a constant because it is a community's decision, and a
+  /// library that would rather a child renewed than kept it silently can change
+  /// one row. See docs/CIRCULATION.md §"Overdue and renewal".
+  allowRenewalWhenOverdue Boolean @default(false) @map("allow_renewal_when_overdue")
+
   blockOnOverdueDays       Int     @default(7) @map("block_on_overdue_days")
   overdueReminderOffsets   Int[]   @default([-2, 0, 3, 7]) @map("overdue_reminder_offsets")
 
@@ -390,6 +424,7 @@ model AppUser {
   loans            Loan[]           @relation("LoanBorrower")
   loansIssued      Loan[]           @relation("LoanIssuedBy")
   loansReturned    Loan[]           @relation("LoanReturnedBy")
+  loansCancelled   Loan[]           @relation("LoanCancelledBy")
   loanEvents       LoanEvent[]
   renewalRequests  RenewalRequest[] @relation("RenewalRequester")
   renewalDecisions RenewalRequest[] @relation("RenewalDecider")
@@ -834,9 +869,15 @@ model Loan {
 
   issuedAt     DateTime  @default(now()) @map("issued_at") @db.Timestamptz(6)
   issuedById   String?   @map("issued_by_id")
+  /// The due date this loan actually has, computed once when it was issued (and
+  /// again on each renewal) and then stored. NEVER re-derived from the current
+  /// library settings: changing the borrowing period from 14 days to 21 must
+  /// not silently move the date on a book already in a child's bag.
   dueAt        DateTime  @map("due_at") @db.Timestamptz(6)
   returnedAt   DateTime? @map("returned_at") @db.Timestamptz(6)
   returnedById String?   @map("returned_by_id")
+  cancelledAt   DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelledById String?   @map("cancelled_by_id")
   renewalCount Int       @default(0) @map("renewal_count")
 
   library    Library @relation(fields: [libraryId], references: [id], onDelete: Cascade)
@@ -844,6 +885,7 @@ model Loan {
   member     AppUser  @relation("LoanBorrower", fields: [memberUserId], references: [id], onDelete: Restrict)
   issuedBy   AppUser? @relation("LoanIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
   returnedBy AppUser? @relation("LoanReturnedBy", fields: [returnedById], references: [id], onDelete: SetNull)
+  cancelledBy AppUser? @relation("LoanCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
 
   events          LoanEvent[]
   renewalRequests RenewalRequest[]

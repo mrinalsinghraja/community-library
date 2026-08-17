@@ -122,6 +122,39 @@ Password policy differs by audience by design — see ADR-006.
 | Audit | Every mutation logged in the same transaction; a recursive redactor strips anything resembling a credential |
 | Dependencies | Pinned; `npm ci` in CI |
 
+### Verified in Phase 3
+
+- **The same wrong-guard trap, one phase later.** `loan.view` is held by every
+  reader — it is what lets a child see their own books — so a desk screen
+  guarded by it would hand any nine-year-old the whole library's loan list with
+  every borrower's name on it. The desk queries require
+  `["loan.issue", "loan.return", "loan.renew"]` instead, and a test asserts a
+  member cannot reach `listLoansForStaff`, `countDeskLoans`, `searchReaders` or
+  `searchCopies`. The rule now written down twice: **a permission that readers
+  hold can never guard a staff surface.** ADR-026.
+- **No reader-facing surface can name a borrower.** There is no function in the
+  application that answers "who has this book?" to a child. `copyIsOnLoan()`
+  returns a boolean and nothing else, and `listOwnLoans()` takes **no member
+  id** — it reads the session, so there is no ownership check to forget and no
+  id in a URL to increment. A test serialises a reader's whole response and
+  asserts another child's name and id are absent from it.
+- **Apartment is not a search key for children.** The desk finds a child by name
+  or card number only. A desk that offered "show me everyone in B-402" would be
+  a directory of who lives where with whom, and the trigram index that makes
+  name search fast was deliberately not built over apartment.
+- **A refusal to lend says nothing about why an account is paused.** The message
+  is "This library account is currently unavailable for borrowing." A test
+  asserts the internal `status_reason` a librarian wrote does not appear in the
+  error, and that the message itself contains none of *suspend, deactivat,
+  archiv, banned* or *reason*.
+- **Client-side disabling is not the control.** Verified in the browser: forcing
+  a disabled Issue button past its `disabled` attribute is still refused by the
+  server, leaves the loan count unchanged, and writes a `loan.issue.refused`
+  audit row. The same for a second renewal past the maximum.
+- **Donor acknowledgement stays independent of circulation.** No view renders
+  "donated by X and borrowed by Y" — the donors page has no borrower column to
+  add one to, and no donor-facing shape carries a borrower at all.
+
 ### Verified in Phase 2
 
 - **A permission that was the wrong guard.** Every reader holds `book.view` —

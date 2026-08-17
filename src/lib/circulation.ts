@@ -1,0 +1,246 @@
+import type { LoanStatus } from "@prisma/client";
+
+import { daysUntilDue, formatInTimezone } from "@/lib/dates";
+
+/**
+ * Circulation's vocabulary, in one place.
+ *
+ * Isomorphic on purpose (no `server-only`): the service, the React components
+ * and the tests all read the same words and the same derivations, so "overdue"
+ * cannot mean one thing on the librarian's screen and another on the child's.
+ *
+ * Two rules shape this whole file.
+ *
+ * **Overdue is derived, never stored.** There is no OVERDUE column and no
+ * OVERDUE loan status. A loan is overdue when it is ACTIVE and its stored due
+ * date has passed, evaluated in the library's timezone — which means no failed
+ * scheduled job can ever leave the library believing something untrue, and a
+ * book becomes overdue at midnight without anything having to run.
+ *
+ * **The library charges no fines, so the words must not imply one.** A child
+ * who is late is not in trouble. Every string below was written to be read by a
+ * nine-year-old who already feels bad about it; "YOUR BOOK IS OVERDUE" is
+ * exactly the wording this file exists to prevent.
+ */
+
+// ---------------------------------------------------------------------------
+// Loan status
+// ---------------------------------------------------------------------------
+
+export interface LoanStatusDefinition {
+  value: LoanStatus;
+  /** Wording for the librarian's screens: factual, dense, scannable. */
+  staffLabel: string;
+  /** Wording for a child. Warmer, and never about the library's paperwork. */
+  readerLabel: string;
+}
+
+export const LOAN_STATUSES: readonly LoanStatusDefinition[] = [
+  { value: "ACTIVE", staffLabel: "Out", readerLabel: "You have this one" },
+  { value: "RETURNED", staffLabel: "Returned", readerLabel: "Brought back" },
+  // A child never sees this word on their own screen — a cancelled loan is one
+  // that should not have existed, and the reader's list simply does not
+  // contain it. The label exists for the desk's history view.
+  { value: "CANCELLED", staffLabel: "Cancelled", readerLabel: "Cancelled" },
+] as const;
+
+export function loanStatusDefinition(value: LoanStatus): LoanStatusDefinition {
+  const found = LOAN_STATUSES.find((entry) => entry.value === value);
+  // Throwing rather than falling back: an unknown status means the enum and
+  // this file have drifted, and a silent "Unknown" would hide it.
+  if (!found) throw new Error(`Unknown loan status: ${value}`);
+  return found;
+}
+
+// ---------------------------------------------------------------------------
+// The derived condition
+// ---------------------------------------------------------------------------
+
+/**
+ * What a loan actually *is* right now, as opposed to what the row says.
+ *
+ * `dueSoon` is a presentation nicety and nothing depends on it. `overdue` is
+ * the one that matters, and it is computed here so that the desk's filter, the
+ * child's card and the tests cannot disagree about it.
+ */
+export type LoanCondition = "active" | "dueSoon" | "overdue" | "returned" | "cancelled";
+
+/** How many days before the due date the desk starts flagging a loan. */
+export const DUE_SOON_DAYS = 2;
+
+export function loanCondition(
+  loan: { status: LoanStatus; dueAt: Date },
+  timezone: string,
+  now: Date = new Date(),
+): LoanCondition {
+  // A returned book is never *currently* overdue, however late it came back.
+  // Whatever happened, it is over. This ordering is the rule.
+  if (loan.status === "RETURNED") return "returned";
+  if (loan.status === "CANCELLED") return "cancelled";
+
+  const days = daysUntilDue(loan.dueAt, timezone, now);
+  if (days < 0) return "overdue";
+  if (days <= DUE_SOON_DAYS) return "dueSoon";
+  return "active";
+}
+
+/**
+ * Whole days a loan is past its due date. Zero when it is not.
+ *
+ * Derived at read time from the stored due date, never persisted. "Days
+ * overdue" written into a column would be wrong by morning.
+ */
+export function daysOverdue(
+  loan: { status: LoanStatus; dueAt: Date },
+  timezone: string,
+  now: Date = new Date(),
+): number {
+  if (loan.status !== "ACTIVE") return 0;
+  const days = daysUntilDue(loan.dueAt, timezone, now);
+  return days < 0 ? -days : 0;
+}
+
+// ---------------------------------------------------------------------------
+// Wording
+// ---------------------------------------------------------------------------
+
+export type LoanTone = "available" | "out" | "soon" | "late" | "neutral";
+
+/** The badge a child sees on one of their books. Word first, colour second. */
+export function readerLoanBadge(
+  loan: { status: LoanStatus; dueAt: Date },
+  timezone: string,
+  now: Date = new Date(),
+): { tone: LoanTone; mark: string; label: string } {
+  switch (loanCondition(loan, timezone, now)) {
+    case "overdue":
+      // Not "LATE", not a red exclamation, not a number of days. The book is
+      // ready to come home; that is the whole message.
+      return { tone: "late", mark: "🏠", label: "Ready to come home" };
+    case "dueSoon":
+      return { tone: "soon", mark: "📖", label: "Back soon" };
+    case "returned":
+      return { tone: "out", mark: "✅", label: "Brought back" };
+    case "cancelled":
+      return { tone: "neutral", mark: "—", label: "Cancelled" };
+    case "active":
+      return { tone: "available", mark: "📚", label: "You have this one" };
+  }
+}
+
+/**
+ * The sentence under a child's book card.
+ *
+ * The overdue case names the date and asks, once, kindly. It does not count
+ * days, does not scold, and does not mention a consequence, because there is
+ * no consequence: this library has no fines and never will.
+ */
+export function readerDueSentence(
+  loan: { status: LoanStatus; dueAt: Date; returnedAt?: Date | null },
+  timezone: string,
+  now: Date = new Date(),
+): string {
+  const due = formatInTimezone(loan.dueAt, timezone, "d MMM");
+
+  switch (loanCondition(loan, timezone, now)) {
+    case "overdue":
+      return `This book was due back on ${due}. Please return it when you can.`;
+    case "dueSoon": {
+      const days = daysUntilDue(loan.dueAt, timezone, now);
+      if (days === 0) return "Please bring this one back today.";
+      if (days === 1) return "Please bring this one back tomorrow.";
+      return `Please bring this one back by ${due}.`;
+    }
+    case "returned":
+      return loan.returnedAt
+        ? `Brought back on ${formatInTimezone(loan.returnedAt, timezone, "d MMM yyyy")}.`
+        : "Brought back.";
+    case "cancelled":
+      return "This borrowing was cancelled.";
+    case "active":
+      return `Yours until ${due}.`;
+  }
+}
+
+/**
+ * The librarian's summary of an overdue loan. Days are fine here — this is an
+ * operational screen, and the person reading it is deciding who to remind.
+ */
+export function staffOverdueSummary(
+  loan: { status: LoanStatus; dueAt: Date },
+  timezone: string,
+  now: Date = new Date(),
+): string | null {
+  const days = daysOverdue(loan, timezone, now);
+  if (days === 0) return null;
+  return days === 1 ? "1 day over" : `${days} days over`;
+}
+
+// ---------------------------------------------------------------------------
+// Refusal messages
+// ---------------------------------------------------------------------------
+
+/**
+ * Why an issue was refused, in words a librarian can act on and a child can
+ * hear without being embarrassed.
+ *
+ * Every one of these is generated from configuration, never from a literal —
+ * `maxActiveLoans` is a row in `library_settings`, so a library that allows
+ * four books gets a message that says four.
+ *
+ * None of them expose internal state: no ids, no table names, no account
+ * status, no reason a member is suspended. "This library account is currently
+ * unavailable for borrowing" is the whole truth a desk needs; why is a
+ * conversation, not a tooltip.
+ */
+export const CIRCULATION_MESSAGES = {
+  loanLimitReached: (readerName: string, limit: number): string =>
+    limit === 1
+      ? `${readerName} already has a book borrowed. Please return it before borrowing another.`
+      : `${readerName} already has ${limit} books borrowed. Please return one before borrowing another.`,
+
+  readerUnavailable: "This library account is currently unavailable for borrowing.",
+
+  bookNotAvailable: "This book is not on the shelf right now.",
+  bookIsLost: "This book is marked as missing. Find it and put it back on the shelf first.",
+  bookIsDamaged:
+    "This book is marked as damaged. Mend it and change its condition before lending it out.",
+  bookIsArchived: "This book is no longer part of the library.",
+  bookAlreadyOut: "Someone just got there first — this book is already out.",
+
+  loanNotActive: "That book has already been brought back.",
+  renewalLimitReached: (limit: number): string =>
+    limit === 0
+      ? "This library does not extend loans."
+      : limit === 1
+        ? "This book has already been kept for longer once. Please bring it back to the desk."
+        : `This book has already been kept for longer ${limit} times. Please bring it back to the desk.`,
+  renewalBlockedByOverdue:
+    "This book is past its date, so it cannot be kept for longer. Bring it to the desk and it can go straight back out.",
+} as const;
+
+// ---------------------------------------------------------------------------
+// Paging
+// ---------------------------------------------------------------------------
+
+/**
+ * One page of loans, always. Filtering, counting and paging happen in
+ * PostgreSQL — the desk is never handed every loan the library has ever made
+ * and asked to sort them.
+ */
+export const LOAN_PAGE_SIZES = {
+  /** Dense staff table. */
+  desk: 25,
+  /** Search results while issuing: enough to pick from, few enough to scan. */
+  picker: 8,
+  /** A child's own history, as cards. */
+  reader: 20,
+} as const;
+
+/** The desk's list filters. Anything else in the query string is ignored. */
+export const LOAN_FILTERS = ["active", "overdue", "returned"] as const;
+export type LoanFilter = (typeof LOAN_FILTERS)[number];
+
+export function isLoanFilter(value: unknown): value is LoanFilter {
+  return LOAN_FILTERS.includes(value as LoanFilter);
+}

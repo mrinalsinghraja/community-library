@@ -1,7 +1,7 @@
 # Database
 
 PostgreSQL via Prisma. 28 application tables plus Prisma's migration table,
-across five migrations.
+across six migrations.
 All timestamps are `timestamptz` stored in UTC; every business date decision is
 made in the library's configured timezone.
 
@@ -59,6 +59,9 @@ in `tests/database/constraints.test.ts`.
 | Guarantee | Mechanism |
 |---|---|
 | A copy can be on loan to one reader at a time | `CREATE UNIQUE INDEX one_active_loan_per_copy ON loan (copy_id) WHERE status = 'ACTIVE'` |
+| **A borrowed book has a borrower, and a borrower's book reads borrowed** | deferred `CONSTRAINT TRIGGER`s on `loan` and `book_copy` — see §3.1 |
+| A loan's closing timestamp matches its status | `loan_closing_fields_match_status`: ACTIVE has neither, RETURNED has `returned_at`, CANCELLED has `cancelled_at` |
+| A renewal records both dates it moved between | `loan_event_renewal_moves_the_date` |
 | The same child cannot queue twice | partial unique on `(library_id, lower(btrim(child_name)), lower(btrim(apartment)))` where status is open |
 | Login identifiers are stored normalised | CHECKs: `email = lower(btrim(email))`, username shape `^[a-z0-9][a-z0-9-]{2,19}$` |
 | Loans are coherent in time | `due_at > issued_at`; returned loans record when; active loans do not |
@@ -80,7 +83,32 @@ in `tests/database/constraints.test.ts`.
 | Book IDs are unique per library | `book_copy_library_code_key` |
 
 **Overdue is not a column.** It is derived as `due_at < now()` at read time, so
-no failed scheduled job can leave the library believing something untrue.
+no failed scheduled job can leave the library believing something untrue. There
+is no `OVERDUE` loan status either — `LoanStatus` is exactly `ACTIVE`,
+`RETURNED`, `CANCELLED`. A test asserts that no column matching `%overdue%`
+exists on `loan`, `loan_event` or `book_copy`. See ADR-025.
+
+### 3.1 The one rule a CHECK constraint cannot express
+
+```
+a copy reads BORROWED  ⟺  that copy has exactly one ACTIVE loan
+```
+
+A CHECK may only look at the row it is checking, and this rule is about a
+`book_copy` row and a `loan` row agreeing. It is therefore two
+`CONSTRAINT TRIGGER`s — one on each table — declared
+`DEFERRABLE INITIALLY DEFERRED`, in `prisma/sql/005_circulation.sql`.
+
+Deferred because issuing a book creates a loan and updates a copy, and one of
+those necessarily happens first; an immediate trigger would reject a perfectly
+correct transaction halfway through. Deferring to `COMMIT` applies the rule to
+the end state while staying inescapable — a transaction that would leave the
+database incoherent does not commit.
+
+⚠ **Consequence for anyone writing tests or fixtures:** a bare `loan` row is not
+a legal state any more. Build the loan and set the copy to `BORROWED` in the
+same transaction, exactly as `issueBook` does. The failure surfaces at commit,
+not at the offending statement. See ADR-024.
 
 ## 4. Codes
 
@@ -201,6 +229,49 @@ development database, not by a migration. A copy code is a permanent physical
 sticker; a deployment that rewrites its own labels on upgrade would invalidate
 every spine in the room. That correction was only safe because it happened
 before any label was printed.
+
+### Migration 6 — circulation
+
+`20260817200000_phase3_circulation`. Hand-corrected after `prisma migrate diff`;
+three things needed a human, and they are worth reading before writing another
+migration that touches an enum.
+
+**1. Existing data is reconciled first.** Phase 2 let a librarian pick
+`Borrowed` as a status, so an upgraded database may hold copies that read
+BORROWED with no loan and therefore no borrower. Step 1 resets exactly those to
+`AVAILABLE` and writes an audit row naming each one, so the library gets a list
+of shelves to check. It invents no borrower: a fabricated loan would put a
+child's name against a book they may never have touched. It runs before step 5
+installs the trigger, and it is idempotent.
+
+**2. Two things that reference `loan.status` had to come down first.** The CHECK
+constraint `loan_return_fields_match_status` names `'LOST'` and `'WRITTEN_OFF'`
+literally, and altering the column's type re-parses that expression against an
+enum that no longer has them.
+
+The subtler one is **the partial unique index `one_active_loan_per_copy`**. Its
+predicate is `WHERE status = 'ACTIVE'::"LoanStatus"`, and Postgres rebuilds
+indexes when a column's type changes — by which point the column is
+`LoanStatus_new` while the predicate still says `LoanStatus`:
+
+```
+ERROR: operator does not exist: "LoanStatus_new" = "LoanStatus"
+```
+
+Prisma's generated SQL cannot know about it: a partial index is not expressible
+in `schema.prisma` and never appears there. Dropped and **rebuilt in the same
+migration** — it is the guarantee that a book cannot be issued twice.
+
+**3. The cross-table invariant is a constraint trigger**, per §3.1.
+
+Rebuilding both enums rather than renaming values was safe only because no loan
+had ever been issued. With rows present it would have been
+`ALTER TYPE … RENAME VALUE`, as migration 2 was for consent.
+
+⚠ **Verify against an empty database as well as against the live one.** That is
+what caught a duplicate index name here: `member_profile_code_lower_idx` already
+existed from migration 1, better scoped as `(library_id, lower(member_code))`,
+and the redundant new one only collided on a clean install.
 
 ### ⚠ The gotcha that will bite you
 

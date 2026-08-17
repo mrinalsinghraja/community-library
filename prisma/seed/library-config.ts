@@ -32,6 +32,7 @@ export interface LibraryConfigInput {
     maxActiveLoans: number;
     maxRenewals: number;
     renewalPeriodDays: number;
+    allowRenewalWhenOverdue: boolean;
     blockOnOverdueDays: number;
     copyCodePrefix: string;
     copyCodePadding: number;
@@ -63,10 +64,32 @@ export const MANA_JARDIN: LibraryConfigInput = {
   settings: {
     ageMin: 5,
     ageMax: 14,
+    /*
+     * The circulation rules, and the only place they are written down.
+     *
+     * Fourteen days, two books at a time, one renewal. Small numbers on
+     * purpose: a shelf of a few hundred books in a corner of the Yoga Room
+     * works when books come back, and a child who may hold six for a month is
+     * a child holding books nobody else can read.
+     *
+     * `renewalPeriodDays: 14` matches the borrowing period, so one renewal
+     * doubles the loan: issued 17 August, due 31 August, renewed to 14
+     * September. The platform default is 7 — a shorter second stretch, which
+     * suits a busier library — and this deployment deliberately differs from
+     * it. **This value is a judgement, not a derivation, and is flagged for the
+     * owner's approval in docs/PHASE-3.md.**
+     */
     borrowingPeriodDays: 14,
     maxActiveLoans: 2,
     maxRenewals: 1,
-    renewalPeriodDays: 7,
+    renewalPeriodDays: 14,
+    /*
+     * A book past its date is not renewed. Bring it to the desk, the librarian
+     * takes it back, and it can go straight out again in the same minute — the
+     * same outcome, reached with somebody holding the book. See
+     * docs/CIRCULATION.md §"Overdue and renewal".
+     */
+    allowRenewalWhenOverdue: false,
     blockOnOverdueDays: 7,
     /*
      * One house style, two namespaces: the community's initials, then a letter

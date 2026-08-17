@@ -189,11 +189,16 @@ describe("child isolation", () => {
     const authz = await actingAs(reader.id);
     const actor = await authz.requireActor();
 
-    expect([...actor.permissions]).toEqual(["book.view"]);
+    // Browse the shelf, and see their own books. Nothing else, and nothing
+    // that changes anything.
+    expect([...actor.permissions].sort()).toEqual(["book.view", "loan.view"]);
 
     for (const forbidden of [
       "member.view_contact",
       "loan.issue",
+      "loan.return",
+      "loan.renew",
+      "loan.correct",
       "settings.edit",
       "audit.view",
     ] as const) {

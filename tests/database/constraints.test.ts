@@ -28,7 +28,35 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
+/**
+ * A physical book cannot be in two pairs of hands.
+ *
+ * Two mechanisms hold this, and both are tested here without the service layer:
+ * the partial unique index `one_active_loan_per_copy`, and the deferred
+ * constraint trigger that ties a copy's status to whether it has a loan at all.
+ *
+ * Note the `issueByHand` helper. Since Phase 3 a loan row on its own is not a
+ * legal state — the copy has to read BORROWED in the same transaction — so
+ * these tests build a coherent loan and then attack it, rather than testing the
+ * index against a state the database would never have allowed to exist.
+ */
 describe("one active loan per physical copy", () => {
+  /** A loan and its copy status, committed together, exactly as issuing does. */
+  async function issueByHand(copyId: string, memberUserId: string) {
+    return db.$transaction(async (tx) => {
+      const loan = await tx.loan.create({
+        data: {
+          libraryId: fixture.libraryId,
+          copyId,
+          memberUserId,
+          dueAt: new Date(Date.now() + 14 * 86_400_000),
+        },
+      });
+      await tx.bookCopy.update({ where: { id: copyId }, data: { status: "BORROWED" } });
+      return loan;
+    });
+  }
+
   it("refuses a second active loan on the same copy", async () => {
     const copy = await createBookCopy(fixture.libraryId);
     const [readerA, readerB] = await Promise.all([
@@ -36,27 +64,13 @@ describe("one active loan per physical copy", () => {
       createMember(fixture.libraryId),
     ]);
 
-    await db.loan.create({
-      data: {
-        libraryId: fixture.libraryId,
-        copyId: copy.id,
-        memberUserId: readerA.id,
-        dueAt: new Date(Date.now() + 14 * 86_400_000),
-      },
-    });
+    await issueByHand(copy.id, readerA.id);
 
     // Two children cannot have the same physical book. Disabling a button in
     // the browser is not what stops this.
-    await expect(
-      db.loan.create({
-        data: {
-          libraryId: fixture.libraryId,
-          copyId: copy.id,
-          memberUserId: readerB.id,
-          dueAt: new Date(Date.now() + 14 * 86_400_000),
-        },
-      }),
-    ).rejects.toThrow(/one_active_loan_per_copy|unique/i);
+    await expect(issueByHand(copy.id, readerB.id)).rejects.toThrow(
+      /one_active_loan_per_copy|unique|active loans/i,
+    );
   });
 
   it("survives two simultaneous issues — exactly one wins", async () => {
@@ -66,14 +80,9 @@ describe("one active loan per physical copy", () => {
       createMember(fixture.libraryId),
     ]);
 
-    const dueAt = new Date(Date.now() + 14 * 86_400_000);
     const results = await Promise.allSettled([
-      db.loan.create({
-        data: { libraryId: fixture.libraryId, copyId: copy.id, memberUserId: readerA.id, dueAt },
-      }),
-      db.loan.create({
-        data: { libraryId: fixture.libraryId, copyId: copy.id, memberUserId: readerB.id, dueAt },
-      }),
+      issueByHand(copy.id, readerA.id),
+      issueByHand(copy.id, readerB.id),
     ]);
 
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
@@ -87,24 +96,30 @@ describe("one active loan per physical copy", () => {
     const copy = await createBookCopy(fixture.libraryId);
     const readerA = await createMember(fixture.libraryId);
     const readerB = await createMember(fixture.libraryId);
-    const dueAt = new Date(Date.now() + 14 * 86_400_000);
 
-    const first = await db.loan.create({
-      data: { libraryId: fixture.libraryId, copyId: copy.id, memberUserId: readerA.id, dueAt },
-    });
+    const first = await issueByHand(copy.id, readerA.id);
 
-    await db.loan.update({
-      where: { id: first.id },
-      data: { status: "RETURNED", returnedAt: new Date() },
+    await db.$transaction(async (tx) => {
+      await tx.loan.update({
+        where: { id: first.id },
+        data: { status: "RETURNED", returnedAt: new Date() },
+      });
+      await tx.bookCopy.update({ where: { id: copy.id }, data: { status: "AVAILABLE" } });
     });
 
     // The index is partial (WHERE status = 'ACTIVE'), so history does not block
     // the next reader.
+    await expect(issueByHand(copy.id, readerB.id)).resolves.toBeDefined();
+  });
+
+  it("refuses a copy that claims to be borrowed with nobody holding it", async () => {
+    const copy = await createBookCopy(fixture.libraryId);
+
+    // The cross-table half of the invariant, which no CHECK constraint could
+    // express: a status and a loan that disagree cannot be committed.
     await expect(
-      db.loan.create({
-        data: { libraryId: fixture.libraryId, copyId: copy.id, memberUserId: readerB.id, dueAt },
-      }),
-    ).resolves.toBeDefined();
+      db.bookCopy.update({ where: { id: copy.id }, data: { status: "BORROWED" } }),
+    ).rejects.toThrow(/must have a borrower/);
   });
 });
 

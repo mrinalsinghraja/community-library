@@ -7,8 +7,10 @@ import {
   AGE_GROUP_VALUES,
   CATALOGUE_LIMITS,
   CONDITION_VALUES,
+  donorAcknowledgement,
   PAGE_SIZES,
   SELECTABLE_STATUSES,
+  type Page,
 } from "@/lib/catalogue";
 import { dateOnlyInTimezone } from "@/lib/dates";
 import { prisma } from "@/server/db";
@@ -29,6 +31,7 @@ import {
   purgeScheduledMedia,
   scheduleMediaDeletion,
 } from "@/server/services/media-service";
+import { copyIsOnLoan } from "@/server/services/circulation-service";
 
 /**
  * The catalogue.
@@ -87,9 +90,21 @@ const bookInputSchema = z.object({
   condition: z.enum(CONDITION_VALUES as [CopyCondition, ...CopyCondition[]], {
     message: "Please choose a condition.",
   }),
-  status: z.enum(SELECTABLE_STATUSES as unknown as [CopyStatus, ...CopyStatus[]], {
-    message: "Please choose where this book is.",
-  }),
+  /*
+   * Optional as of Phase 3.
+   *
+   * BORROWED left `SELECTABLE_STATUSES` when circulation took ownership of it,
+   * so the edit form for a book that is currently out has no status control at
+   * all — there is nothing valid for it to offer, and a dropdown that could set
+   * "Available" on a book in a child's bag is exactly the inconsistency Phase 3
+   * exists to prevent. That form therefore submits no status, and this field
+   * means "leave it as it is".
+   */
+  status: z
+    .enum(SELECTABLE_STATUSES as unknown as [CopyStatus, ...CopyStatus[]], {
+      message: "Please choose where this book is.",
+    })
+    .optional(),
   /*
    * Donation is voluntary — for the donor and for this form.
    *
@@ -178,47 +193,14 @@ export interface ReaderBookDetail extends ReaderBookCard {
   donorAcknowledgement: string | null;
 }
 
-export interface Page<T> {
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-  pageCount: number;
-}
-
-// ---------------------------------------------------------------------------
-// Donor acknowledgement
-// ---------------------------------------------------------------------------
-
 /**
- * How a donation is credited, according to the choice the donor made.
- *
- * `display_consent` is the donor's decision and this function is the only place
- * that reads it, so there is one answer to "what may we say about this
- * donation?" rather than one per template.
- *
- * There is deliberately no count, no total and no ranking anywhere in this
- * file. Gratitude, not competition.
+ * Re-exported so that call sites and tests reading about the catalogue keep
+ * importing from the catalogue. The definitions moved to `@/lib/catalogue` when
+ * circulation needed them too — a pure function and a page shape do not belong
+ * to one service, and leaving them here would have made the two services import
+ * each other in a circle.
  */
-export function donorAcknowledgement(donation: {
-  donorName: string;
-  donorApartment: string | null;
-  displayConsent: DonorDisplayConsent;
-} | null): string | null {
-  if (!donation) return null;
-
-  switch (donation.displayConsent) {
-    case "NAMED":
-      return donation.donorApartment
-        ? `📚 Donated by ${donation.donorName} from ${donation.donorApartment}`
-        : `📚 Donated by ${donation.donorName}`;
-    case "APARTMENT_ONLY":
-      return `📚 Donated by a family in ${donation.donorApartment}`;
-    case "ANONYMOUS":
-      // No name, no flat. An anonymous donor is still thanked.
-      return "📚 Donated by a neighbour";
-  }
-}
+export { donorAcknowledgement, type Page };
 
 // ---------------------------------------------------------------------------
 // Access
@@ -789,7 +771,10 @@ export async function createBook(input: BookInput): Promise<CreatedBook> {
         libraryId: actor.libraryId,
         titleId,
         copyCode,
-        status: parsed.status,
+        // A brand new copy is on the shelf unless the librarian says otherwise,
+        // and "otherwise" can no longer be BORROWED: a book cannot be catalogued
+        // as already lent, because there would be nobody it was lent to.
+        status: parsed.status ?? "AVAILABLE",
         condition: parsed.condition,
         acquisitionType: hasDonor ? "RESIDENT_DONATION" : "PURCHASE",
       },
@@ -886,6 +871,24 @@ export async function updateBook(copyId: string, input: BookInput): Promise<void
     );
   }
 
+  /*
+   * Circulation owns AVAILABLE ↔ BORROWED, so the catalogue may not move a
+   * book that is out.
+   *
+   * The database says the same thing and says it harder — the constraint
+   * trigger in 005_circulation.sql would refuse the transaction outright. This
+   * check exists so the librarian gets a sentence about the desk rather than a
+   * Postgres exception, and so bibliographic edits (title, author, shelf,
+   * cover) still work perfectly well on a book that happens to be in a bag.
+   */
+  const onLoan = await copyIsOnLoan(existing.id);
+  if (onLoan && parsed.status && parsed.status !== existing.status) {
+    throw new RuleViolationError(
+      `Refusing to change status of copy ${copyId} while it has an active loan`,
+      "This book is out with a reader. Take it back at the desk to change where it is.",
+    );
+  }
+
   const previousCoverId = existing.title.coverMediaId;
   const coverChanged = Boolean(parsed.coverMediaId) && parsed.coverMediaId !== previousCoverId;
 
@@ -935,10 +938,12 @@ export async function updateBook(copyId: string, input: BookInput): Promise<void
 
     await tx.bookCopy.update({
       where: { id: existing.id },
-      data: { status: parsed.status, condition: parsed.condition },
+      // An omitted status means "unchanged", which is what the edit form for a
+      // borrowed book submits.
+      data: { status: parsed.status ?? existing.status, condition: parsed.condition },
     });
 
-    if (existing.status !== parsed.status) {
+    if (parsed.status && existing.status !== parsed.status) {
       await recordAudit(tx, {
         libraryId: actor.libraryId,
         action: AUDIT_ACTIONS.BOOK_COPY_STATUS_CHANGED,
@@ -1050,6 +1055,15 @@ export async function archiveBook(copyId: string, reason?: string): Promise<void
 
   if (!copy) throw new NotFoundError(`Book copy ${copyId} not found in library ${actor.libraryId}`);
   if (copy.status === "ARCHIVED") return;
+
+  // A book cannot leave the collection while a child has it. Taking it back is
+  // the first step, and it is a step somebody has to physically perform.
+  if (await copyIsOnLoan(copy.id)) {
+    throw new RuleViolationError(
+      `Refusing to archive copy ${copyId} while it has an active loan`,
+      "This book is out with a reader. Take it back at the desk before archiving it.",
+    );
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.bookCopy.update({

@@ -1,4 +1,4 @@
-import type { AgeGroup, CopyCondition, CopyStatus } from "@prisma/client";
+import type { AgeGroup, CopyCondition, CopyStatus, DonorDisplayConsent } from "@prisma/client";
 
 /**
  * The catalogue's vocabulary, in one place.
@@ -167,11 +167,13 @@ export const STATUSES: readonly StatusDefinition[] = [
 /**
  * What a librarian may choose in the Add Book and Edit Book forms.
  *
- * BORROWED is here because a book can be catalogued while it is already in a
- * child's bag — the shelf existed before this software did. What Phase 2 does
- * NOT do is *drive* that transition: no issue, no return, no due date, no loan
- * row. Phase 3 owns AVAILABLE ↔ BORROWED, and when it lands, this list is where
- * BORROWED should be removed from manual choice.
+ * **BORROWED is not on this list, as of Phase 3.** It was in Phase 2, when the
+ * catalogue had to describe a shelf that existed before the software did and a
+ * book could be catalogued while already in a child's bag. Circulation now owns
+ * that transition: a copy is BORROWED because a loan says so and for no other
+ * reason, and a database trigger enforces the two agreeing. Leaving BORROWED
+ * pickable would let a dropdown create a borrowed book with no borrower — the
+ * exact inconsistency Phase 3 exists to make impossible.
  *
  * ARCHIVED is absent deliberately: archiving is its own audited action with its
  * own reason, not a value someone can pick from a list by mistake.
@@ -179,10 +181,30 @@ export const STATUSES: readonly StatusDefinition[] = [
  */
 export const SELECTABLE_STATUSES: readonly CopyStatus[] = [
   "AVAILABLE",
-  "BORROWED",
   "LOST",
   "DAMAGED",
 ] as const;
+
+/**
+ * Statuses a copy may be in and still be handed to a child.
+ *
+ * Exactly one, and that is the point. A book that is LOST has to be found and
+ * explicitly restored; one that is DAMAGED has to be mended and its condition
+ * changed by somebody who looked at it; one that is ARCHIVED is not part of the
+ * collection any more. None of those become issuable as a side effect of trying
+ * to issue them. See docs/CIRCULATION.md §"What blocks an issue".
+ */
+export const ISSUABLE_STATUSES: readonly CopyStatus[] = ["AVAILABLE"] as const;
+
+/**
+ * Conditions a copy may be in and still be handed to a child.
+ *
+ * A DAMAGED book is not issued. The way to make it issuable is for a librarian
+ * to look at the physical object and change its condition to Good or Fair —
+ * which is a deliberate human judgement with an audit row, not a checkbox that
+ * says "issue anyway".
+ */
+export const ISSUABLE_CONDITIONS: readonly CopyCondition[] = ["GOOD", "FAIR"] as const;
 
 export function statusDefinition(value: CopyStatus): StatusDefinition {
   const found = STATUSES.find((status) => status.value === value);
@@ -235,8 +257,57 @@ export const CATALOGUE_LIMITS = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Donor acknowledgement
+// ---------------------------------------------------------------------------
+
+/**
+ * How a donation is credited, according to the choice the donor made.
+ *
+ * `displayConsent` is the donor's decision and this function is the only place
+ * that reads it, so there is one answer to "what may we say about this
+ * donation?" rather than one per template.
+ *
+ * There is deliberately no count, no total and no ranking here or anywhere
+ * else. Gratitude, not competition.
+ *
+ * Lives in the isomorphic module rather than in a service because it is pure,
+ * and because both the catalogue and circulation need it — a child looking at
+ * one of their own borrowed books sees the same thank-you as on the book's
+ * page. Putting it here is also what keeps those two services from importing
+ * each other in a circle.
+ */
+export function donorAcknowledgement(donation: {
+  donorName: string;
+  donorApartment: string | null;
+  displayConsent: DonorDisplayConsent;
+} | null): string | null {
+  if (!donation) return null;
+
+  switch (donation.displayConsent) {
+    case "NAMED":
+      return donation.donorApartment
+        ? `📚 Donated by ${donation.donorName} from ${donation.donorApartment}`
+        : `📚 Donated by ${donation.donorName}`;
+    case "APARTMENT_ONLY":
+      return `📚 Donated by a family in ${donation.donorApartment}`;
+    case "ANONYMOUS":
+      // No name, no flat. An anonymous donor is still thanked.
+      return "📚 Donated by a neighbour";
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Paging
 // ---------------------------------------------------------------------------
+
+/** One page of anything, counted and sliced in PostgreSQL. */
+export interface Page<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
+}
 
 /**
  * One page of results.

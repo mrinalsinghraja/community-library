@@ -112,7 +112,12 @@ export default async function AccountPage() {
         </div>
 
         <div className="mt-10 flex flex-wrap gap-3">
-          <ButtonLink href="/books" size="lg" icon="📚">
+          {actor.kind === "MEMBER" ? (
+            <ButtonLink href="/my-books" size="lg" icon="📚">
+              My books
+            </ButtonLink>
+          ) : null}
+          <ButtonLink href="/books" variant={actor.kind === "MEMBER" ? "secondary" : "primary"} size="lg" icon="🔍">
             Find a book
           </ButtonLink>
           <ButtonLink href="/account/password" variant="secondary" size="lg" icon="🔑">

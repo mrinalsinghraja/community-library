@@ -130,25 +130,38 @@ Three values a nine-year-old volunteer can apply consistently beat five that
 nobody applies the same way twice. The migration maps `NEW → GOOD` and
 `WORN → DAMAGED`.
 
-## 7. Status — and the Phase 3 boundary
+## 7. Status — and the line circulation owns
 
 | Value | Reader sees | Set by |
 |---|---|---|
-| `AVAILABLE` | 🟢 On the shelf | librarian, and Phase 3 |
-| `BORROWED` | 📕 Someone is reading it | librarian now, **Phase 3 later** |
+| `AVAILABLE` | 🟢 On the shelf | librarian, and circulation on return |
+| `BORROWED` | 📕 Someone is reading it | **circulation only** |
 | `LOST` | 🔍 Missing right now | librarian |
-| `DAMAGED` | ⚠️ Being mended | librarian |
+| `DAMAGED` | ⚠️ Being mended | librarian, and circulation on a damaged return |
 | `ARCHIVED` | *not shown at all* | the archive action only |
 | `RESERVED` | 🔖 Being kept for someone | **nothing in Version 1** |
 
-**This is where the phase boundary runs.** Phase 2 lets a librarian *state*
-where a book is — the shelf existed before this software did, and a book may be
-in a child's bag on the day it is catalogued. Phase 2 does not *drive* that
-transition: there is no issue, no return, no renewal, no due date, and no code
-path in `catalogue-service.ts` creates a `loan` row.
+**This is where the boundary runs.** A librarian *states* where a book is when
+it is not out — the shelf existed before this software did. Circulation *drives*
+`AVAILABLE ↔ BORROWED`, and as of Phase 3 it owns that transition outright.
 
-Phase 3 owns `AVAILABLE ↔ BORROWED`. When it lands, `SELECTABLE_STATUSES` in
-`src/lib/catalogue.ts` is where `BORROWED` should be removed from manual choice.
+`BORROWED` was removed from `SELECTABLE_STATUSES` when Phase 3 landed. A copy
+reads BORROWED because a loan says so and for no other reason, and a deferred
+constraint trigger refuses to commit any other arrangement (ADR-024). A dropdown
+that could set it would be a borrowed book with no borrower.
+
+Consequences for the edit form and the service:
+
+* the form for a book that is out renders a read-only note and **no status
+  control at all** — there is nothing valid for it to offer;
+* `status` is therefore optional in the input schema, and an omitted one means
+  "leave it as it is";
+* `updateBook` refuses a status change while a loan is active, with a sentence
+  about the desk rather than a Postgres exception — while still allowing every
+  bibliographic edit, because correcting a title should not require the book
+  back;
+* `archiveBook` refuses a copy that is out. A book cannot leave the collection
+  while a child has it.
 
 `ARCHIVED` is absent from the dropdown deliberately: archiving is its own
 audited action with its own reason, not a value somebody can pick by mistake.

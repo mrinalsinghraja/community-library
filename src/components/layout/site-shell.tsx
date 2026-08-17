@@ -46,7 +46,19 @@ export function SiteHeader({
           </span>
         </Link>
 
-        <nav aria-label="Main" className="ms-auto flex shrink-0 items-center gap-2">
+        {/*
+          Wraps, and does not shrink-0.
+
+          There is no hamburger menu here on purpose — every door stays visible
+          — so the navigation has to be able to take a second row rather than
+          push the page sideways. Adding "My books" in Phase 3 made a fourth
+          item, which is what took it past 375px and produced a horizontally
+          scrolling page on the smallest phone in the building.
+        */}
+        <nav
+          aria-label="Main"
+          className="ms-auto flex flex-wrap items-center justify-end gap-x-1 gap-y-2 sm:gap-2"
+        >
           {/*
             Only for signed-in readers, because the catalogue defaults to
             MEMBER_ONLY. Offering a door that answers "sign in first" is worse
@@ -54,12 +66,26 @@ export function SiteHeader({
             the page itself.
           */}
           {signedIn ? (
-            <Link
-              href="/books"
-              className="rounded-full px-2 py-2.5 text-base font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink sm:px-4 sm:text-lg"
-            >
-              Books
-            </Link>
+            <>
+              <Link
+                href="/books"
+                className="rounded-full px-2 py-2.5 text-base font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink sm:px-4 sm:text-lg"
+              >
+                Books
+              </Link>
+              {/*
+                No permission check here, deliberately. This shell renders for
+                staff as well as readers, and /my-books redirects a librarian to
+                the desk rather than showing them an empty shelf. The page
+                itself decides; the masthead only offers the door.
+              */}
+              <Link
+                href="/my-books"
+                className="rounded-full px-2 py-2.5 text-base font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink sm:px-4 sm:text-lg"
+              >
+                My books
+              </Link>
+            </>
           ) : null}
           <Link
             href="/rules"

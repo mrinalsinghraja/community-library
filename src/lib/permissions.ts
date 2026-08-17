@@ -66,9 +66,20 @@ export const PERMISSIONS = {
   },
 
   // --- Circulation ----------------------------------------------------------
+  //
+  // `loan.view` is held by staff AND by every reader, and the two mean different
+  // things: a librarian sees the desk's loans, a child sees their own. That is
+  // not decided here. `listOwnLoans` takes no id and reads the session; the
+  // staff queries require an operational permission a reader does not hold. The
+  // same key cannot widen a child's view because no code path lets it.
+  "loan.view": { category: "circulation", description: "See loans — your own, or the desk's" },
   "loan.issue": { category: "circulation", description: "Give a book to a reader" },
   "loan.return": { category: "circulation", description: "Take a book back" },
   "loan.renew": { category: "circulation", description: "Extend a loan" },
+  "loan.correct": {
+    category: "circulation",
+    description: "Repair a loan that went wrong — cancel a mis-issue, or close a loan the system missed",
+  },
   "loan.override_rules": {
     category: "circulation",
     description: "Issue or renew outside the configured limits",
@@ -134,9 +145,11 @@ const LIBRARIAN_PERMISSIONS = [
   "donation.view",
   "donation.record",
   "donation.view_private",
+  "loan.view",
   "loan.issue",
   "loan.return",
   "loan.renew",
+  "loan.correct",
   "loan.override_rules",
   "loan.mark_lost",
   "report.view",
@@ -152,12 +165,23 @@ const LIBRARIAN_PERMISSIONS = [
  */
 const JUNIOR_LIBRARIAN_PERMISSIONS = [
   "book.view",
+  "loan.view",
   "loan.issue",
   "loan.return",
+  "loan.renew",
   "member.view",
 ] as const satisfies readonly PermissionKey[];
 
-const MEMBER_PERMISSIONS = ["book.view"] as const satisfies readonly PermissionKey[];
+/**
+ * A reader.
+ *
+ * `loan.view` here means one thing only: their own books. The service that
+ * backs the child's screen takes no member id at all — it reads the session —
+ * so this grant cannot be stretched into seeing somebody else's. Readers hold
+ * no circulation *mutation* permission: a child never issues, returns, renews
+ * or cancels anything, in this phase or any other.
+ */
+const MEMBER_PERMISSIONS = ["book.view", "loan.view"] as const satisfies readonly PermissionKey[];
 
 export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
   {
@@ -222,6 +246,10 @@ export const PERMISSIONS_FORBIDDEN_FOR_CHILD_STAFF: readonly PermissionKey[] = [
   "guardian.verify",
   "book.delete",
   "loan.override_rules",
+  // Correcting circulation state means editing what the record says happened.
+  // A child volunteer may hand books out and take them back all day; rewriting
+  // the library's own account of a loan is an adult's responsibility.
+  "loan.correct",
   "settings.view",
   "settings.edit",
   "branding.edit",

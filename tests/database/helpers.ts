@@ -66,9 +66,19 @@ export async function createLibraryFixture(): Promise<Fixture> {
            */
           copyCodePrefix: "TST-B",
           memberCodePrefix: "TST-R",
+          /*
+           * The real deployment's circulation rules, so the suite exercises
+           * the numbers the library actually runs on. Tests that need a
+           * different rule change this ONE library's settings row rather than
+           * passing an override into a service — because the services read
+           * configuration, and a test that could bypass that would not be
+           * testing the thing that ships.
+           */
           borrowingPeriodDays: 14,
           maxActiveLoans: 2,
           maxRenewals: 1,
+          renewalPeriodDays: 14,
+          allowRenewalWhenOverdue: false,
         },
       },
     },

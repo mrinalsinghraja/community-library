@@ -82,9 +82,17 @@ export const AUDIT_ACTIONS = {
   DONATION_UPDATED: "donation.updated",
 
   // Circulation
+  //
+  // Every one of these names a decision somebody made about a physical book and
+  // a named child. `loan.issue.refused` is here deliberately: a refusal is the
+  // interesting event when a family later asks why a child came home empty
+  // handed, and it is the only trace an attempted rule bypass leaves.
   LOAN_ISSUED: "loan.issued",
+  LOAN_ISSUE_REFUSED: "loan.issue.refused",
   LOAN_RETURNED: "loan.returned",
   LOAN_RENEWED: "loan.renewed",
+  LOAN_CANCELLED: "loan.cancelled",
+  LOAN_CORRECTED: "loan.corrected",
   LOAN_MARKED_LOST: "loan.marked_lost",
 
   // Configuration

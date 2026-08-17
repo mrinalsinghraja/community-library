@@ -503,3 +503,106 @@ sticker; the deployed system must never rewrite one.
 concurrent book allocations yield 25 distinct codes; a book's own code offered
 as a login identity finds nobody; and the code a book used to carry no longer
 resolves to it, in search or at its URL.
+
+---
+
+## ADR-024 — The database owns "borrowed", via a deferred constraint trigger
+
+**Decision.** The rule *a copy reads BORROWED if and only if it has exactly one
+ACTIVE loan* is enforced by a pair of `CONSTRAINT TRIGGER`s declared
+`DEFERRABLE INITIALLY DEFERRED`, not by application code alone.
+
+**Why.** This is the one invariant the whole of circulation rests on, and it is
+the one a CHECK constraint cannot express: a CHECK may only look at the row it
+is checking, and this rule is about a `book_copy` row and a `loan` row agreeing.
+Left to the service layer it would hold until the first refactor, the first
+`psql` session, or the first raced request. `AVAILABLE + active loan` and
+`BORROWED + no loan` are the two states that make a library's own records
+untrustworthy, and they should be unrepresentable rather than merely unlikely.
+
+**Why deferred.** Issuing a book creates a loan and updates a copy, and one of
+those necessarily happens first. An immediate trigger would reject a perfectly
+correct transaction halfway through. Deferring to `COMMIT` applies the rule to
+the end state — which is the state that matters — while remaining inescapable,
+because a transaction that would leave the database incoherent simply does not
+commit.
+
+**Alternatives.** Application-only checks (fail on any bypass); a materialised
+`has_active_loan` column with its own drift problem; making `book_copy.status`
+a view over `loan` (loses LOST, DAMAGED and ARCHIVED, which are facts about a
+physical object and not about circulation).
+
+**Cost.** A violation surfaces at commit rather than at the offending statement,
+so the raw error names no statement. The services check first and raise
+something a librarian can read; the trigger is the net underneath them, not the
+first line. Tests that build loan rows by hand must now build coherent ones —
+three Phase 0 constraint tests were rewritten for exactly this reason, and are
+better for it.
+
+**Consequence.** `BORROWED` left `SELECTABLE_STATUSES`. A dropdown that could
+set it would be a borrowed book with no borrower, and the database would refuse
+the write anyway.
+
+---
+
+## ADR-025 — Overdue is derived at read time and has no representation anywhere
+
+**Decision.** No `is_overdue` column, no `OVERDUE` loan status, no nightly job
+that marks anything. A loan is overdue when `status = 'ACTIVE' AND due_at < now()`,
+evaluated in the library's configured timezone at the moment somebody asks.
+
+**Why.** A stored overdue flag is only as correct as the last successful run of
+whatever sets it. On a volunteer-run system with no operations staff, the failure
+mode is a library that believes something untrue about a child — and the person
+who finds out is the child being told to bring back a book they returned. A
+derived answer cannot be stale, becomes true at midnight with nothing running,
+and becomes false the instant a book is returned.
+
+**Alternatives.** A cron job flipping a flag (the failure above); a materialised
+view (same staleness, more machinery); a generated column (Postgres generated
+columns must be immutable, and `now()` is not).
+
+**Cost.** Every "is this late?" read does the comparison. It is one indexed
+predicate against a partial index over active loans only, which stay a rounding
+error next to returned ones. `LoanStatus` is therefore three values and reads
+oddly to anyone expecting a fourth.
+
+**Enforced.** A test asserts no column matching `%overdue%` exists on `loan`,
+`loan_event` or `book_copy`, and that `LoanStatus` is exactly
+`ACTIVE, RETURNED, CANCELLED`. The only matches anywhere are reminder
+configuration on `library_settings`.
+
+---
+
+## ADR-026 — `loan.view` is shared with readers, so it may never guard a staff screen
+
+**Decision.** One permission key, `loan.view`, is held by every staff role **and
+by every reader**. What differs is not the key but the function: the reader's
+view is `listOwnLoans()`, which takes no member id and reads the session. The
+desk's queries require `["loan.issue", "loan.return", "loan.renew"]`.
+
+**Why.** A child seeing their own books is a read of loans, and inventing a
+second key (`loan.view_own`) would put the ownership rule in the permission
+system, where it would be one forgotten check away from leaking. Putting it in
+the *shape of the function* means there is no "whose loans?" parameter to get
+wrong and no id in a URL to increment. The strongest form of "you reach your own
+record and no other" is having nothing to tamper with.
+
+**The trap this creates, written down deliberately.** Because every reader holds
+`loan.view`, guarding a desk screen with it would hand any nine-year-old the
+whole library's loan list with every borrower's name on it. This is exactly the
+mistake `book.view` invited in Phase 2 — `book.view` is what lets a child browse,
+so the staff catalogue screens require `book.create`/`book.edit`/`book.archive`
+instead. The rule generalises: **a permission that readers hold can never guard a
+staff surface.**
+
+**Alternatives.** Separate `loan.view_own` and `loan.view_all` (moves ownership
+into RBAC, where it is weaker); deciding by `actor.kind === "MEMBER"` (authorization
+by user kind rather than by permission, against ADR-006).
+
+**Cost.** The rule has to be known. It is stated in `permissions.ts`, in the
+service, in `CIRCULATION.md` §12, and asserted by a test that a member cannot
+reach `listLoansForStaff`, `countDeskLoans`, `searchReaders` or `searchCopies`.
+
+**Corollary.** Readers hold no circulation *mutation* permission at all. A test
+asserts every permission a member holds ends in `.view`.

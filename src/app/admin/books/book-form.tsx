@@ -255,27 +255,54 @@ export function BookForm({
         </Select>
       </Field>
 
-      <Field
-        id={field("status")}
-        label="Where is it now?"
-        required
-        error={errors.status}
-        hint="Issuing and returning books arrives in the next phase — for now this just records where the book is."
-      >
-        <Select
+      {/*
+        Where the book is.
+
+        A book that is currently out gets no control at all — not a disabled
+        one, and not a dropdown missing its own current value. Circulation owns
+        AVAILABLE ↔ BORROWED as of Phase 3: the way to put this book back on the
+        shelf is to take it back at the desk, which is a person handling a
+        physical object. A form that could set "Available" on a book in a
+        child's bag is exactly the inconsistency the database now refuses to
+        commit, so the form does not offer it either.
+
+        Submitting no status at all means "leave it as it is", which is why the
+        field is optional in the service's schema.
+      */}
+      {values?.status === "BORROWED" ? (
+        <div className="flex flex-col gap-2">
+          <p className="font-display text-lg font-bold text-ink">Where is it now?</p>
+          <p className="rounded-[var(--radius-field)] bg-surface-sunk px-4 py-3.5 text-ink-soft">
+            📕 Out with a reader.{" "}
+            <Link href="/desk/loans" className="font-bold text-primary-deep">
+              Take it back at the desk
+            </Link>{" "}
+            to change this. Everything else on this form can still be edited.
+          </p>
+        </div>
+      ) : (
+        <Field
           id={field("status")}
-          name="status"
-          defaultValue={values?.status ?? "AVAILABLE"}
+          label="Where is it now?"
           required
-          invalid={Boolean(errors.status)}
+          error={errors.status}
+          hint="Lending and returning happen at the desk. This records where the book is when it is not out."
         >
-          {SELECTABLE_STATUSES.map((status) => (
-            <option key={status} value={status}>
-              {statusDefinition(status).staffLabel}
-            </option>
-          ))}
-        </Select>
-      </Field>
+          <Select
+            id={field("status")}
+            name="status"
+            defaultValue={values?.status ?? "AVAILABLE"}
+            required
+            invalid={Boolean(errors.status)}
+          >
+            {SELECTABLE_STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {statusDefinition(status).staffLabel}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <SaveButton mode={mode} />

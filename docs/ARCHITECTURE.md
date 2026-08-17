@@ -154,20 +154,35 @@ No multi-tenant machinery has been built. Row-level security is deliberately
 not used: the browser never talks to the database, so authorization belongs in
 the service layer where it can be read and tested.
 
-## 8. Phase boundaries inside the catalogue
+## 8. The seam between the catalogue and circulation
 
-The catalogue (Phase 2) and circulation (Phase 3) are separated on purpose, and
-the seam is worth knowing because it looks like an omission:
+The catalogue (Phase 2) describes what the library owns. Circulation (Phase 3)
+owns what is happening to it. The line between them is sharp and worth knowing.
 
-`catalogue-service.ts` never creates a `loan` row, never computes a due date and
-never moves a copy between `AVAILABLE` and `BORROWED` as a side effect. A
-librarian may *set* a status, because the shelf existed before this software did
-and a book may already be in a child's bag on the day it is catalogued — but
-that is a statement of fact, not a workflow.
+`catalogue-service.ts` never creates a `loan` row and never computes a due date.
+`circulation-service.ts` never edits a title, an author, a shelf or a donation.
+The only calls that cross are one-directional: the catalogue asks circulation
+`copyIsOnLoan()` before letting a librarian change a status or archive a copy,
+so the answer is a sentence rather than a Postgres exception.
 
-`SELECTABLE_STATUSES` in `src/lib/catalogue.ts` is the single line Phase 3 will
-change. The `loan`, `loan_event` and `renewal_request` models stay exactly as
-Phase 0 left them, unused.
+**As of Phase 3, circulation owns `AVAILABLE` ↔ `BORROWED` outright.** `BORROWED`
+left `SELECTABLE_STATUSES`: a copy reads BORROWED because a loan says so and for
+no other reason, and a deferred constraint trigger refuses to commit any other
+arrangement (ADR-024). A librarian may still set `AVAILABLE`, `LOST` or
+`DAMAGED` — those are facts about a physical object, not circulation events —
+but not on a book that is currently out. The edit form for such a book renders a
+read-only note instead of a status control, and the service refuses the change
+independently.
+
+`renewal_request` is the one model still exactly as Phase 0 left it, unused.
+Renewal in Phase 3 is a librarian action; letting a child *ask* is a later
+decision.
+
+**Two pure things live in `src/lib/catalogue.ts` rather than in either service:**
+`donorAcknowledgement()` and `Page<T>`. Both are needed by both sides — a child
+looking at one of their own borrowed books sees the same thank-you as on the
+book's page — and putting them in the shared isomorphic module is what stops the
+two services importing each other in a circle.
 
 Reader-facing types (`ReaderBookCard`, `ReaderBookDetail`) are **projections,
 not filtered renders**: they have no field for a database id, an audit trail, a
@@ -180,6 +195,11 @@ template cannot leak a field that never left the server. See `CATALOGUE.md` §14
 - No analytics, tracking pixels, ad networks or third-party scripts.
 - No Redis — throttling is DB-backed, which is right for tens of logins a week.
 - No reservation workflow (the `RESERVED` status ships; no code path sets it).
+- No fines, late fees or any punitive mechanism — and no wording that implies
+  one. A unit test asserts the absence of *fine, fee, charge, penalty, pay* and
+  *owe* from every circulation message.
+- No stored overdue state of any kind (ADR-025).
+- No circulation notifications. The architecture is ready; nothing is sent.
 - No delete anywhere in the catalogue — books are archived, never removed.
 - No donation counter, total, rank or score, at any layer. There is no column to
   hang a leaderboard on, which is the most reliable way not to have one.

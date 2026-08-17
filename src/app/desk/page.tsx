@@ -3,22 +3,25 @@ import Link from "next/link";
 
 import { StaffShell } from "@/components/layout/staff-shell";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
+import { ButtonLink } from "@/components/ui/button";
 import { requireAnyPermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe } from "@/server/lib/settings";
 import { countPendingRegistrations } from "@/server/services/registration-service";
+import { countDeskLoans } from "@/server/services/circulation-service";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Library desk" };
 
 /**
- * The desk landing page.
+ * The desk landing page: what needs somebody today.
  *
- * Phase 1 shows the identity work only — registrations, readers, staff. The
- * circulation cards (books out, overdue, quick issue) arrive with Phase 4.
+ * Every card is behind the permission that its screen requires, so a role that
+ * cannot issue books does not see a door to issuing them. That is a courtesy,
+ * not the control — each page behind these links calls requirePermission again.
  */
 export default async function DeskPage() {
   const actor = await requireAnyPermissionForPage(
-    ["registration.view", "member.view", "user.manage_staff"],
+    ["registration.view", "member.view", "user.manage_staff", "loan.issue", "loan.return"],
     { signedOutTo: "/login?next=/desk" },
   );
   const branding = await getBrandingSafe();
@@ -27,13 +30,46 @@ export default async function DeskPage() {
     ? await countPendingRegistrations()
     : 0;
 
+  // Counted only for somebody who works the desk. The count itself is derived —
+  // `status = 'ACTIVE' AND due_at < now()` — never read from a stored flag.
+  const loans =
+    actor.permissions.has("loan.return") || actor.permissions.has("loan.issue")
+      ? await countDeskLoans()
+      : { active: 0, overdue: 0 };
+
   return (
-    <StaffShell branding={branding} actor={actor} pendingRegistrations={pending} title="Library desk">
+    <StaffShell
+      branding={branding}
+      actor={actor}
+      pendingRegistrations={pending}
+      overdueLoans={loans.overdue}
+      title="Library desk"
+    >
       <p className="text-lg text-ink-soft">
         Hello {actor.displayName}. Here is what needs you today.
       </p>
 
       <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {actor.permissions.has("loan.return") ? (
+          <Link href="/desk/loans" className="no-underline">
+            <Card tone={loans.overdue > 0 ? "shelf" : "plain"} className="h-full">
+              <CardTitle icon="📕">Books out</CardTitle>
+              <CardBody>
+                <p className="font-display text-5xl font-extrabold text-ink">{loans.active}</p>
+                <p className="mt-1">
+                  {loans.overdue === 0
+                    ? loans.active === 0
+                      ? "Everything is on the shelf."
+                      : "All within their dates."
+                    : loans.overdue === 1
+                      ? "One is past its date."
+                      : `${loans.overdue} are past their date.`}
+                </p>
+              </CardBody>
+            </Card>
+          </Link>
+        ) : null}
+
         {actor.permissions.has("registration.view") ? (
           <Link href="/desk/registrations" className="no-underline">
             <Card tone={pending > 0 ? "shelf" : "plain"} className="h-full">
@@ -71,15 +107,21 @@ export default async function DeskPage() {
         ) : null}
       </div>
 
-      <Card tone="sunk" className="mt-8">
-        <CardTitle icon="📚" as="h3">
-          Books arrive next
-        </CardTitle>
-        <CardBody>
-          The catalogue, issuing and returning are the next phase. Right now this desk handles
-          people: registrations, readers and staff.
-        </CardBody>
-      </Card>
+      {actor.permissions.has("loan.issue") ? (
+        <Card tone="sunk" className="mt-8">
+          <CardTitle icon="📚" as="h3">
+            Someone at the desk?
+          </CardTitle>
+          <CardBody>
+            <p>Find the reader, find the book, check the date, hand it over.</p>
+            <div className="mt-4">
+              <ButtonLink href="/desk/circulation" size="lg" icon="📚">
+                Issue a book
+              </ButtonLink>
+            </div>
+          </CardBody>
+        </Card>
+      ) : null}
     </StaffShell>
   );
 }

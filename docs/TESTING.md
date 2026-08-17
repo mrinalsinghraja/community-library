@@ -169,6 +169,78 @@ anywhere on a donation. Every one of those is standard in library software,
 which is exactly why leaving them out needs something that notices: adding one
 means deleting a line from that test.
 
+## What the Phase 3 suites prove
+
+**Circulation** (61, `tests/database/circulation.test.ts`) — a book goes out to
+one child with a due date the settings decide; the copy turns `BORROWED` in the
+same transaction; an `ISSUE` event and an audit row are written. A book already
+out, lost, damaged, or archived is refused, each with its own sentence, and none
+of those states is quietly repaired by the attempt — a lost book is still lost
+afterwards. A mended book goes out once a librarian changes its condition back,
+which is the only way. A suspended reader is refused with the generic message
+and **the internal suspension reason is asserted absent from the error**. The
+loan limit stops at the configured number, the message names that number, and
+changing the setting to 1 changes the behaviour and the wording together. A
+refusal writes its own audit row.
+
+Returning closes the loan, preserves the issue date and the original due date,
+and appends rather than edits; returning twice is refused; a book that comes back
+damaged goes to `DAMAGED` and not to the shelf; a condition is **never** silently
+reset to Good; the same copy going out again is a new loan and not a reopened
+one. Renewal extends from the current due date by the configured period, keeps
+the issue date, records both dates in the `RENEW` event, stops at the maximum,
+refuses an overdue loan by default and allows one when the library configures it.
+
+Cancellation keeps the loan, frees the book, requires a reason, and needs
+`loan.correct` — a librarian without it is refused.
+
+**The database's own guarantees** — a copy marked `BORROWED` with no active loan
+is rejected *by the database*; a copy taken off `BORROWED` while a loan is open
+is rejected; a second active loan inserted straight past every service check is
+rejected; a `RENEW` event without both dates is rejected.
+
+**Overdue** — asserted to have no representation at all: no column matching
+`%overdue%` on `loan`, `loan_event` or `book_copy`, and `LoanStatus` exactly
+`ACTIVE, RETURNED, CANCELLED`. Moving a due date into the past makes a loan
+overdue everywhere with no job having run; returning it stops it being overdue
+immediately.
+
+**Privacy** — a child sees their own books; a child with none sees none even when
+another child has one; a serialised reader response is asserted not to contain
+another child's name or id; a cancelled loan is absent from a child's history;
+staff get `null` rather than an empty shelf. **A member cannot reach
+`listLoansForStaff`, `countDeskLoans`, `searchReaders` or `searchCopies` despite
+holding `loan.view`** — the Phase 3 version of the `book.view` lesson. Reader
+search results are asserted to contain no guardian, apartment or date-of-birth
+field.
+
+**Concurrency** (11, `tests/database/circulation-concurrency.test.ts`) — real
+parallel requests through the real services against real PostgreSQL, asserting
+the state the database is left in rather than which caller won. Two librarians on
+one book → exactly one; ten at once → exactly one, with no orphan loan and
+exactly one `ISSUE` event. A child holding 1 of 2 hit with two simultaneous
+issues ends with 2, never 3 — the test the member-row lock exists for — and five
+at once from empty also ends with 2, with exactly two copies left reading
+`BORROWED`. Two different children with two different books both succeed, which
+is what proves the lock is not too broad. Returning twice, renewing twice,
+return-versus-renew and return-versus-cancel each land exactly once. And a
+deliberately messy afternoon — six children grabbing at six books, 36 requests in
+parallel — leaves no copy incoherent and nobody over the limit.
+
+**Circulation vocabulary** (20, `tests/unit/circulation.test.ts`) — the overdue
+derivation across a timezone boundary: 20:00 UTC is already tomorrow in Kolkata,
+so a book due today is one day over, and a library computing this in the
+server's timezone would disagree with the book on the shelf. The due date is the
+last day a child may keep it, not the first day they are late.
+
+And the words. A late child's screen is asserted to contain none of *overdue,
+late, fine, penalty, owe, must, warning* or `!`; the desk's "7 days over" is
+asserted **absent** from what the child sees; and no message anywhere in the
+module contains *fine, fee, charge, penalty, pay* or *owe* as a whole word. The
+account-unavailable message is asserted to leak no reason. This library charges
+no fines, and the copy is the only place that promise is visible to the person it
+is a promise to.
+
 ## What the database suite proves
 
 **The double-issue guard** — two concurrent `Promise.allSettled` inserts of the

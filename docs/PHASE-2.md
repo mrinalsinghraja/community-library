@@ -2,8 +2,15 @@
 
 The library can now say what it owns, and a child can find it.
 
-**Read this after [`PHASE-1.1.md`](PHASE-1.1.md).** Phase 3 (borrowing) has not
-been started. The full field-by-field reference is [`CATALOGUE.md`](CATALOGUE.md).
+**Read this after [`PHASE-1.1.md`](PHASE-1.1.md), then
+[`PHASE-3.md`](PHASE-3.md).** The full field-by-field reference is
+[`CATALOGUE.md`](CATALOGUE.md).
+
+> **Superseded in one place.** Phase 3 took ownership of `AVAILABLE ↔ BORROWED`
+> and removed `BORROWED` from `SELECTABLE_STATUSES`, so the statements below
+> about a librarian being able to state that a book is borrowed no longer hold.
+> Everything else about the catalogue is unchanged. See
+> [`CIRCULATION.md`](CIRCULATION.md).
 
 ---
 
@@ -138,8 +145,13 @@ And, unchanged from Phase 1.1 and still the top blocker before any real child's
 data is entered: **the consent wording has not been legally reviewed**, and
 **what verification strength production requires is still the owner's call**.
 
-## 9. Not started
+## 9. What came next
 
-Phase 3. No issue, no return, no renewal, no due dates, no overdue handling, no
-borrowing history. The `loan` model stays in the schema exactly as Phase 0 left
-it, and nothing in Phase 2 writes to it.
+Phase 3 — issue, return, renewal, due dates, derived overdue and borrowing
+history — shipped on 17 August 2026. See [`PHASE-3.md`](PHASE-3.md) and
+[`CIRCULATION.md`](CIRCULATION.md).
+
+It changed exactly one thing in the catalogue: `BORROWED` left
+`SELECTABLE_STATUSES`, because a copy now reads BORROWED only when a loan says
+so and the database enforces that. `renewal_request` is the one model still
+exactly as Phase 0 left it.

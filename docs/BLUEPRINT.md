@@ -237,6 +237,15 @@ Librarian → /desk  → [Give a book]
 Return is one step: find the copy → the screen shows who has it → **[It's back!]** → available.
 Renew: **[Keep it longer]** → checks `renewalCount < settings.maxRenewals` → extends by `settings.renewalPeriodDays`.
 
+*(Built in Phase 3, 17 August 2026. Three refinements to the sketch above, all
+recorded in [`CIRCULATION.md`](CIRCULATION.md): the reader's row is locked
+before the copy's, which is what makes the loan-limit check safe under
+concurrency and not merely the copy index; `settings.blockOnOverdueDays` is
+**not** wired to issuing — an overdue book blocks renewal, not borrowing, and the
+column stands unused; and a deferred constraint trigger, not the service, is what
+guarantees `copy.status = BORROWED` and an ACTIVE loan agree. Renewal extends
+from the current due date rather than from today.)*
+
 ### 5.5 Child's day-to-day
 
 Log in → **My Books** (what I have, when it goes back) · **Find a Book** (search + browse) · **Books Due Soon** · **New Books** · **My Reading History** · **Thank You, Book Donors**.

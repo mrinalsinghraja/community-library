@@ -100,8 +100,56 @@ SELECT l.*, c.copy_code FROM loan l
 SELECT * FROM loan_event WHERE loan_id = '…' ORDER BY occurred_at;
 ```
 
-Return it through the desk UI rather than editing rows, so the event and audit
-records are written.
+**Return it through the desk, at `/desk/loans`.** Do not edit rows: the database
+will refuse you anyway. A deferred constraint trigger enforces that a copy reads
+`BORROWED` if and only if it has exactly one `ACTIVE` loan, so setting the status
+by hand fails with
+
+```
+ERROR: Book MJCL-B0042 is on loan but reads AVAILABLE;
+       a book somebody has must read BORROWED
+```
+
+If the book genuinely should never have gone out — wrong child, wrong book —
+use **"Issued by mistake"** on the loan row. That needs `loan.correct`, asks for
+a reason, and leaves the loan, its events and an audit row behind it. Nothing is
+deleted.
+
+### "Which books did the Phase 3 upgrade put back on the shelf?"
+
+Migration 6 reset any copy that read `BORROWED` with no loan — a status set by
+hand before circulation existed, with nobody attached to it. It invented no
+borrower, and it named every book it touched:
+
+```sql
+SELECT occurred_at,
+       metadata->>'copyCode' AS book,
+       metadata->>'reason'   AS why
+  FROM audit_log
+ WHERE actor_label = 'System (Phase 3 reconciliation)'
+ ORDER BY occurred_at;
+```
+
+Each of those is a shelf worth checking: the library does not know where the
+book is, only that no loan ever recorded it leaving.
+
+### "Who has this book out, and how late is it?"
+
+```sql
+SELECT c.copy_code, t.title, u.display_name AS reader,
+       l.issued_at::date, l.due_at::date,
+       greatest(0, (current_date - l.due_at::date)) AS days_over
+  FROM loan l
+  JOIN book_copy c ON c.id = l.copy_id
+  JOIN book_title t ON t.id = c.title_id
+  JOIN app_user u ON u.id = l.member_user_id
+ WHERE l.status = 'ACTIVE'
+ ORDER BY l.due_at;
+```
+
+The desk's **Late** filter at `/desk/loans?filter=overdue` runs the same
+comparison. There is no overdue column to consult and none to repair — the
+answer is computed when you ask, so it cannot be stale.
 
 ### "Something is wrong and I need to know who did what"
 
