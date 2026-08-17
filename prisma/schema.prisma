@@ -895,7 +895,9 @@ model RenewalRequest {
   @@map("renewal_request")
 }
 
-/// Allocator for human-facing codes (MJCL-0001, MJCL-R0042).
+/// Allocator for human-facing codes (LIB-R0001 for a book, LIB-R0042 for a card).
+/// The two kinds are separate sequences even where a deployment gives them the
+/// same prefix, so the same string can name both a book and a reader.
 /// Allocation is a single atomic `UPDATE ... RETURNING`, which takes a row lock
 /// for the duration of the statement. Two librarians adding books at the same
 /// moment therefore cannot receive the same number — there is no read-then-write

@@ -95,7 +95,7 @@ intact:
 ```sql
 SELECT l.*, c.copy_code FROM loan l
   JOIN book_copy c ON c.id = l.copy_id
- WHERE c.copy_code = 'MJCL-0042' ORDER BY l.issued_at DESC;
+ WHERE c.copy_code = 'MJCL-R0042' ORDER BY l.issued_at DESC;
 
 SELECT * FROM loan_event WHERE loan_id = '…' ORDER BY occurred_at;
 ```

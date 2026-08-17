@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { hash as argon2Hash, type Algorithm } from "@node-rs/argon2";
 
+import { formatCode } from "../../src/lib/codes";
 import { ROLE_KEYS } from "../../src/lib/permissions";
 import { CONSENT_TEXT } from "./library-config";
 
@@ -121,7 +122,7 @@ async function seedDemoUsers(prisma: PrismaClient, libraryId: string): Promise<v
         memberProfile: {
           create: {
             libraryId,
-            memberCode: `${settings.memberCodePrefix}${"1".padStart(settings.memberCodePadding, "0")}`,
+            memberCode: formatCode(settings.memberCodePrefix, 1, settings.memberCodePadding),
             dateOfBirth: new Date("2016-04-12"),
             apartment: "A101",
             avatarKey: "fox",
@@ -254,7 +255,7 @@ async function seedDemoBooks(prisma: PrismaClient, libraryId: string): Promise<v
         data: {
           libraryId,
           titleId: title.id,
-          copyCode: `${settings.copyCodePrefix}-${String(sequence).padStart(settings.copyCodePadding, "0")}`,
+          copyCode: formatCode(settings.copyCodePrefix, sequence, settings.copyCodePadding),
           status: "AVAILABLE",
           condition: "GOOD",
           acquisitionType: "RESIDENT_DONATION",

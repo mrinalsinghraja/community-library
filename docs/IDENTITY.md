@@ -52,6 +52,37 @@ password (it is on the blocklist for that member's own password).
 
 See `DATABASE.md` §4 and ADR-010.
 
+### Two kinds of code, one prefix
+
+This deployment sets `copy_code_prefix` and `member_code_prefix` to the same
+value, `MJCL-R`, so that a volunteer learns one house style instead of two. The
+two sequences are independent, which means the collision is not a possibility
+but a certainty: **`MJCL-R0007` is both the seventh library card and the seventh
+book**, and every book on the shelf carries a string that is also a valid card
+number.
+
+What that does and does not change:
+
+- **It does not grant access.** A card code is an identifier, not a credential.
+  Sign-in still requires that member's password, still throttles, and still
+  answers every failure with the one generic message.
+- **It does not confuse the lookup.** `member_code` and `copy_code` live in
+  different tables and are only ever queried by column. `findUserByIdentifier`
+  reads `member_profile` and cannot return a book; catalogue search reads
+  `book_copy` and cannot return a child.
+- **It does remove one obstacle for an attacker already inside the building.**
+  Before, a valid card number had to be obtained from a child or a card. Now it
+  can be read off any spine. Against 8-character member passwords with no
+  complexity rule (ADR-013), that is a real if modest weakening: the unknown
+  half of the pair is now only the password.
+- **It does make desk conversation ambiguous.** "Look up MJCL-R0007" has two
+  answers.
+
+This is the owner's explicit decision, taken after the alternative (`MJCL` for
+books, `MJCL-R` for cards) was in place and reviewed. Reversing it is one seed
+value plus a rename of existing `copy_code` rows; nothing in the application
+reads or parses the prefix.
+
 ## 4. Roles
 
 Five roles, seeded per library, each a row:

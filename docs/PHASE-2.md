@@ -103,7 +103,7 @@ run.
 
 Walked in a browser on 17 August 2026, all twenty-five steps: the librarian
 signing in; Add Book showing four real `<select>` controls and **no** Language
-or ISBN field and **no** Book ID field; a book saved and given `MJCL-0010`
+or ISBN field and **no** Book ID field; a book saved and given its code
 automatically; its cover stored at 70 bytes with every metadata chunk stripped,
 `PRIVATE`, no public URL, outside `public/`; the book found by title, by partial
 author and by code; edited, with the status and condition changes landing as
@@ -117,9 +117,10 @@ horizontal overflow at 375px.
 
 ## 8. Still open
 
-1. **The Book ID prefix.** Book copies read `MJCL-0001`; the brief's example was
-   `MJCL-R0001`, which is the format already printed on library *cards*. Left as
-   `MJCL` so the two cannot be confused. One seed value if that is wrong.
+1. **The Book ID prefix — settled.** Book copies now read `MJCL-R0001`, the same
+   house style as library cards, at the owner's direction after review. The two
+   sequences are independent, so a given string is both a card and a book. The
+   consequences are written out in `IDENTITY.md` §3.
 2. **Donor name and flat are optional on the form.** A blank name means no
    donation record, which is right for a purchased book — but it is a choice the
    brief did not specify.

@@ -2,11 +2,13 @@ import "server-only";
 
 import type { Prisma } from "@prisma/client";
 
+import { formatCode } from "@/lib/codes";
 import { prisma } from "@/server/db";
 
 /**
- * Allocation of human-facing codes: MJCL-0001 for a book copy, MJCL-R0042 for a
- * reader's library card.
+ * Allocation of human-facing codes: one for a book copy, one for a reader's
+ * library card. The *shape* of a code lives in `@/lib/codes`, which the seed and
+ * the sign-in pages share; this file is only about handing out the next number.
  *
  * Correctness under concurrency matters here: two librarians cataloguing books
  * at the same desk must never be handed the same number. A read-then-write
@@ -30,32 +32,8 @@ export const CODE_SEQUENCE_KINDS = {
 
 export type CodeSequenceKind = (typeof CODE_SEQUENCE_KINDS)[keyof typeof CODE_SEQUENCE_KINDS];
 
-/**
- * Formats a prefix and a number into a code.
- *
- *   formatCode("LIB",   51, 4)  →  "LIB-0051"
- *   formatCode("LIB-R", 42, 4)  →  "LIB-R0042"
- *
- * The rule: a prefix made only of letters and digits gets a "-" inserted before
- * the number; a prefix that already contains punctuation is treated as complete
- * and the number is appended directly. Without this, a member prefix of "LIB-R"
- * would produce "LIB-R-0042" — not what the card printed for that child says.
- */
-export function formatCode(prefix: string, value: number, padding: number): string {
-  const trimmed = prefix.trim();
-  if (!trimmed) throw new Error("Code prefix must not be empty");
-  if (!Number.isInteger(value) || value < 1) {
-    throw new RangeError(`Code value must be a positive integer, got ${value}`);
-  }
-  if (!Number.isInteger(padding) || padding < 1 || padding > 10) {
-    throw new RangeError(`Code padding must be between 1 and 10, got ${padding}`);
-  }
-
-  const prefixIsComplete = /[^A-Za-z0-9]/.test(trimmed);
-  const separator = prefixIsComplete ? "" : "-";
-
-  return `${trimmed}${separator}${String(value).padStart(padding, "0")}`;
-}
+/** Re-exported so callers of the allocator do not need a second import. */
+export { formatCode };
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -87,7 +65,7 @@ export async function allocateSequenceValue(
   return allocated;
 }
 
-/** Allocates and formats the next book copy code, e.g. `MJCL-0051`. */
+/** Allocates and formats the next book copy code, e.g. `LIB-R0051`. */
 export async function allocateCopyCode(
   db: Db,
   libraryId: string,
@@ -98,7 +76,7 @@ export async function allocateCopyCode(
   return formatCode(prefix, value, padding);
 }
 
-/** Allocates and formats the next member card code, e.g. `MJCL-R0042`. */
+/** Allocates and formats the next member card code, e.g. `LIB-R0042`. */
 export async function allocateMemberCode(
   db: Db,
   libraryId: string,

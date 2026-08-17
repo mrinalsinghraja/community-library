@@ -65,9 +65,9 @@ a choice nobody has made.
 
 ```
 book_title   The Jungle Book · Rudyard Kipling · Adventure & Fantasy · 8–10 years
-  └─ book_copy  MJCL-0010   Good      Available   donated by Mrinal, P15
-  └─ book_copy  MJCL-0028   Fair      Borrowed    donated by the Iyer family
-  └─ book_copy  MJCL-0047   Good      Available   (bought)
+  └─ book_copy  MJCL-R0010  Good      Available   donated by Mrinal, P15
+  └─ book_copy  MJCL-R0028  Fair      Borrowed    donated by the Iyer family
+  └─ book_copy  MJCL-R0047  Good      Available   (bought)
 ```
 
 One thing that can be *described*, three things that can be *borrowed*. Every
@@ -315,7 +315,7 @@ internal database ids · audit information · donor contact details ·
 administrative notes · storage paths · book condition · **any information about
 who has borrowed anything**.
 
-The URL carries the code printed on the book's own label (`/books/MJCL-0010`) —
+The URL carries the code printed on the book's own label (`/books/MJCL-R0010`) —
 the thing a child can read off the object in their hand — not a UUID.
 
 **No child's name appears anywhere in this catalogue.** Verified in the browser

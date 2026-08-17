@@ -54,7 +54,13 @@ export async function createLibraryFixture(): Promise<Fixture> {
       slug: "test-childrens-library",
       settings: {
         create: {
-          copyCodePrefix: "TST",
+          /*
+           * Both prefixes end in punctuation, mirroring the real deployment
+           * where book labels and library cards share one house style. That
+           * also keeps the tests on the branch of formatCode that appends the
+           * number directly — the branch a hand-rolled seed got wrong.
+           */
+          copyCodePrefix: "TST-R",
           memberCodePrefix: "TST-R",
           borrowingPeriodDays: 14,
           maxActiveLoans: 2,
@@ -98,7 +104,7 @@ export async function createLibraryFixture(): Promise<Fixture> {
     });
   }
 
-  return { libraryId: library.id, memberCodePrefix: "TST-R", copyCodePrefix: "TST" };
+  return { libraryId: library.id, memberCodePrefix: "TST-R", copyCodePrefix: "TST-R" };
 }
 
 /** The library's "Stories" shelf, which every fixture book is filed on. */

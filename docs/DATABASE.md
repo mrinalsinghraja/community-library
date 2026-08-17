@@ -100,8 +100,17 @@ burning a code. Codes are never reused, even after archiving — a code is a lab
 stuck to a real book.
 
 Format rule: a prefix of letters and digits gets a `-` before the number
-(`MJCL` → `MJCL-0051`); a prefix that already contains punctuation is treated as
-complete (`MJCL-R` → `MJCL-R0042`).
+(`LIB` → `LIB-0051`); a prefix that already contains punctuation is treated as
+complete (`MJCL-R` → `MJCL-R0042`). The rule lives in `src/lib/codes.ts` — one
+pure function, deliberately *not* `server-only`, because the allocator, the
+sign-in pages and the development seed must all format a code the same way. They
+did not: the seed re-implemented the rule and produced `MJCL-R-0001` for a prefix
+the allocator writes as `MJCL-R0001`.
+
+**Both prefixes are `MJCL-R` in this deployment** (the owner's house style), so
+`MJCL-R0007` may be both a book's label and a reader's card. Nothing in the code
+depends on telling them apart — they live in different tables and are only ever
+looked up by column — but see `IDENTITY.md` §3 for what it means at sign-in.
 
 ## 5. Migration workflow
 

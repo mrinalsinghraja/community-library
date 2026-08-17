@@ -73,7 +73,7 @@ describe("sequence allocation", () => {
       settings.copyCodePadding,
     );
 
-    expect(code).toMatch(/^TST-\d{4,}$/);
+    expect(code).toMatch(/^TST-R\d{4,}$/);
   });
 
   it("rolls the reservation back when the surrounding transaction fails", async () => {

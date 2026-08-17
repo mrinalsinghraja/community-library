@@ -68,7 +68,14 @@ export const MANA_JARDIN: LibraryConfigInput = {
     maxRenewals: 1,
     renewalPeriodDays: 7,
     blockOnOverdueDays: 7,
-    copyCodePrefix: "MJCL",
+    /*
+     * The owner's decision: book labels and library cards share one house
+     * style, "MJCL-R" + a four-digit number, so a volunteer only has to learn
+     * one shape. The two sequences are independent, so the same string can be
+     * both a card number and a book number — see docs/IDENTITY.md §"Two kinds
+     * of code, one prefix" for what that does and does not mean at sign-in.
+     */
+    copyCodePrefix: "MJCL-R",
     copyCodePadding: 4,
     memberCodePrefix: "MJCL-R",
     memberCodePadding: 4,
