@@ -18,7 +18,7 @@ import { ValidationError } from "@/server/lib/errors";
 export const UPLOAD_PURPOSES = {
   /** A child's photograph. Always private, always behind an authorization check. */
   CHILD_PHOTO: "child_photo",
-  /** A book jacket. Public — it is a picture of a book, not of a child. */
+  /** A book jacket. Not personal data — but see the note on visibility below. */
   BOOK_COVER: "book_cover",
   /** Library or community logo. Public by definition. */
   BRANDING: "branding",
@@ -39,9 +39,25 @@ export const UPLOAD_RULES: Record<UploadPurpose, UploadRules> = {
     visibility: "PRIVATE",
     allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   },
+  /*
+   * A book cover is PRIVATE at the storage layer, and that needs explaining,
+   * because a book jacket is obviously not sensitive.
+   *
+   * PRIVATE here means exactly one thing: **no public URL is ever minted**. The
+   * catalogue defaults to MEMBER_ONLY (`library_settings.catalogue_visibility`),
+   * and a CDN URL is a way around the front door that no permission check can
+   * close afterwards. Serving covers through /api/media/[id] keeps the answer
+   * to "who may see the shelf?" in one place, where the setting can change it.
+   *
+   * The *authorization rule* for a cover is still completely different from a
+   * child's photograph, and deliberately so — see getAuthorizedMedia(). Any
+   * signed-in member may see any cover; a child's photograph is visible to that
+   * child and to specific staff, and to nobody else. Same storage posture,
+   * different question being asked.
+   */
   [UPLOAD_PURPOSES.BOOK_COVER]: {
     maxBytes: 5 * 1024 * 1024,
-    visibility: "PUBLIC",
+    visibility: "PRIVATE",
     allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   },
   [UPLOAD_PURPOSES.BRANDING]: {

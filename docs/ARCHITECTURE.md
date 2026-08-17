@@ -154,11 +154,34 @@ No multi-tenant machinery has been built. Row-level security is deliberately
 not used: the browser never talks to the database, so authorization belongs in
 the service layer where it can be read and tested.
 
-## 8. What is deliberately absent
+## 8. Phase boundaries inside the catalogue
+
+The catalogue (Phase 2) and circulation (Phase 3) are separated on purpose, and
+the seam is worth knowing because it looks like an omission:
+
+`catalogue-service.ts` never creates a `loan` row, never computes a due date and
+never moves a copy between `AVAILABLE` and `BORROWED` as a side effect. A
+librarian may *set* a status, because the shelf existed before this software did
+and a book may already be in a child's bag on the day it is catalogued — but
+that is a statement of fact, not a workflow.
+
+`SELECTABLE_STATUSES` in `src/lib/catalogue.ts` is the single line Phase 3 will
+change. The `loan`, `loan_event` and `renewal_request` models stay exactly as
+Phase 0 left them, unused.
+
+Reader-facing types (`ReaderBookCard`, `ReaderBookDetail`) are **projections,
+not filtered renders**: they have no field for a database id, an audit trail, a
+storage path, a condition, or anything about who has borrowed something. A
+template cannot leak a field that never left the server. See `CATALOGUE.md` §14.
+
+## 9. What is deliberately absent
 
 - No payment, billing or subscription code of any kind.
 - No analytics, tracking pixels, ad networks or third-party scripts.
 - No Redis — throttling is DB-backed, which is right for tens of logins a week.
 - No reservation workflow (the `RESERVED` status ships; no code path sets it).
+- No delete anywhere in the catalogue — books are archived, never removed.
+- No donation counter, total, rank or score, at any layer. There is no column to
+  hang a leaderboard on, which is the most reliable way not to have one.
 - No custom cryptography: tokens are `crypto.randomBytes`, hashing is argon2id,
   cookie encryption is Auth.js.

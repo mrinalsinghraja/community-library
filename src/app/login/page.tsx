@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/app/login/login-form";
 import { PublicShell } from "@/components/layout/site-shell";
 import { Card } from "@/components/ui/card";
+import { getActor } from "@/server/authz";
 import { formatCode } from "@/server/lib/codes";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Sign in" };
 
 export default async function LoginPage({
@@ -16,6 +19,16 @@ export default async function LoginPage({
 }) {
   const branding = await getBrandingSafe();
   const { next, activated, reset, changed } = await searchParams;
+
+  /*
+   * Somebody genuinely signed in has no reason to be here.
+   *
+   * This used to live in the proxy, which can only see that a cookie exists —
+   * so a session that had gone idle bounced between /account and /login for
+   * ever, and the reader could not get back in. Resolving the real session is
+   * the difference between "you are signed in" and "you have a cookie".
+   */
+  if (await getActor()) redirect("/account");
 
   // A worked example of this library's own card format, so the hint is right
   // whichever community is running the platform.

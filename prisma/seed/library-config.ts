@@ -10,6 +10,7 @@
  * src/, so the platform cannot quietly become single-tenant.
  */
 
+import { DEFAULT_CATEGORIES } from "../../src/lib/catalogue";
 import { CONSENT_VERSION as CONSENT_VERSION_VALUE } from "../../src/lib/consent";
 
 export interface LibraryConfigInput {
@@ -80,22 +81,16 @@ export const MANA_JARDIN: LibraryConfigInput = {
     timezone: "Asia/Kolkata",
     consentVersion: CONSENT_VERSION_VALUE,
   },
-  categories: [
-    { name: "Story Books", slug: "story-books", icon: "📖" },
-    { name: "Picture Books", slug: "picture-books", icon: "🎨" },
-    { name: "Comics", slug: "comics", icon: "💥" },
-    { name: "Adventure", slug: "adventure", icon: "🗺️" },
-    { name: "Fantasy", slug: "fantasy", icon: "🐉" },
-    { name: "Animals", slug: "animals", icon: "🦊" },
-    { name: "Space", slug: "space", icon: "🚀" },
-    { name: "Science", slug: "science", icon: "🔬" },
-    { name: "General Knowledge", slug: "general-knowledge", icon: "🌍" },
-    { name: "History", slug: "history", icon: "🏛️" },
-    { name: "Biography", slug: "biography", icon: "⭐" },
-    { name: "Educational", slug: "educational", icon: "✏️" },
-    { name: "Activity Books", slug: "activity-books", icon: "🧩" },
-    { name: "Young Readers", slug: "young-readers", icon: "🌱" },
-  ],
+  /*
+   * The seven starting shelves, from src/lib/catalogue.ts.
+   *
+   * Not listed here because they are not specific to this community — every new
+   * library starts with the same seven, and an administrator adds more from the
+   * admin screens afterwards. Phase 0 seeded fourteen; Version 1 of the
+   * catalogue deliberately narrows that to a list a volunteer can hold in their
+   * head. `npm run db:seed` retires the unused ones (see seedCategories).
+   */
+  categories: DEFAULT_CATEGORIES,
 };
 
 /**

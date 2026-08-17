@@ -3,11 +3,12 @@ import "server-only";
 import type { MediaObject, Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db";
-import { requireActor, requirePermission, type Actor } from "@/server/authz";
+import { getActor, requirePermission, type Actor } from "@/server/authz";
 import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
 import { NotFoundError, ValidationError } from "@/server/lib/errors";
+import { catalogueIsPubliclyVisible, getCurrentLibrary } from "@/server/lib/settings";
 import { storage } from "@/server/lib/storage";
-import { UPLOAD_PURPOSES, validateUpload } from "@/server/lib/uploads";
+import { UPLOAD_PURPOSES, validateUpload, type UploadPurpose } from "@/server/lib/uploads";
 
 /**
  * Child photographs.
@@ -75,9 +76,49 @@ export async function storeChildPhoto(params: {
   originalFilename?: string;
   uploadedById?: string | null;
 }): Promise<StoredPhoto> {
+  return storeUpload({ ...params, purpose: UPLOAD_PURPOSES.CHILD_PHOTO });
+}
+
+/**
+ * Validates and stores a book cover, unclaimed.
+ *
+ * Same pipeline as a child's photograph — same magic-byte check, same
+ * executable refusal, same size cap, same generated key, same metadata
+ * stripping, same unclaimed deadline. A cover is not sensitive, but a book
+ * jacket uploaded from a phone still carries EXIF, and an ELF binary named
+ * `cover.jpg` is exactly as unwelcome here as anywhere else.
+ *
+ * What differs is only who may later read it. See `getAuthorizedMedia`.
+ */
+export async function storeBookCover(params: {
+  libraryId: string;
+  bytes: Uint8Array;
+  declaredMimeType?: string;
+  originalFilename?: string;
+  uploadedById?: string | null;
+}): Promise<StoredPhoto> {
+  return storeUpload({ ...params, purpose: UPLOAD_PURPOSES.BOOK_COVER });
+}
+
+/**
+ * The one path bytes take into storage.
+ *
+ * The bytes hit storage BEFORE the row exists, deliberately. A storage failure
+ * then leaves no row at all, which is the cheaper of the two inconsistent
+ * states — the alternative is a row whose bytes were never written, which every
+ * later read would have to defend against.
+ */
+async function storeUpload(params: {
+  libraryId: string;
+  bytes: Uint8Array;
+  purpose: UploadPurpose;
+  declaredMimeType?: string;
+  originalFilename?: string;
+  uploadedById?: string | null;
+}): Promise<StoredPhoto> {
   const validated = validateUpload({
     bytes: params.bytes,
-    purpose: UPLOAD_PURPOSES.CHILD_PHOTO,
+    purpose: params.purpose,
     declaredMimeType: params.declaredMimeType,
     originalFilename: params.originalFilename,
   });
@@ -94,10 +135,13 @@ export async function storeChildPhoto(params: {
   const media = await prisma.mediaObject.create({
     data: {
       libraryId: params.libraryId,
-      visibility: "PRIVATE",
+      visibility: validated.visibility,
       storageKey: stored.storageKey,
-      // Never, for a child photograph — the CHECK constraint agrees.
-      publicUrl: null,
+      // Null for everything a parent or a librarian uploads. The CHECK
+      // constraint pairs PUBLIC with a URL and PRIVATE with none, and both
+      // child photographs and book covers are stored PRIVATE — see UPLOAD_RULES
+      // for why a book jacket is in that list.
+      publicUrl: stored.publicUrl,
       mimeType: validated.mimeType,
       byteSize: validated.byteSize,
       checksumSha256: validated.checksumSha256,
@@ -202,13 +246,29 @@ export interface AuthorizedMedia {
  *
  * Nobody else. Not another child, not a signed-out visitor, not a member with a
  * borrowed link, not the public catalogue.
+ *
+ * **A book cover is a different question and gets a different answer.** It is a
+ * picture of a book, so any signed-in member of this library may see any cover,
+ * and a signed-out visitor may too when the catalogue is configured PUBLIC.
+ * That rule is written out separately below rather than folded in, because the
+ * one mistake that would matter most here is a change meant for covers
+ * loosening what applies to a child's photograph.
  */
 export async function getAuthorizedMedia(mediaId: string): Promise<AuthorizedMedia> {
-  // Signed in first. An unauthenticated caller learns nothing at all.
-  const actor = await requireActor();
+  const actor = await getActor();
+
+  /*
+   * Always scoped to one library, signed in or not. For a signed-in viewer that
+   * is their own, from the session; for a visitor it is this deployment's,
+   * which is the only one they could have seen a page from. Leaving the lookup
+   * unscoped for visitors would make an id from a second community readable the
+   * day a second community exists — a tenancy hole that would be invisible
+   * while there is only one.
+   */
+  const libraryId = actor?.libraryId ?? (await getCurrentLibrary()).library.id;
 
   const media = await prisma.mediaObject.findFirst({
-    where: { id: mediaId, libraryId: actor.libraryId },
+    where: { id: mediaId, libraryId },
     select: {
       id: true,
       visibility: true,
@@ -219,16 +279,32 @@ export async function getAuthorizedMedia(mediaId: string): Promise<AuthorizedMed
       pendingDeletionAt: true,
       memberProfile: { select: { userId: true } },
       registrationRequests: { select: { id: true, status: true } },
+      bookTitles: { select: { id: true } },
     },
   });
 
-  if (!media) throw new NotFoundError(`Media ${mediaId} not found in library ${actor.libraryId}`);
+  if (!media) throw new NotFoundError(`Media ${mediaId} not found`);
 
   // An object already scheduled for deletion is gone as far as readers are
   // concerned, whether or not the sweeper has caught up with the bytes.
   if (media.pendingDeletionAt) {
     throw new NotFoundError(`Media ${mediaId} is pending deletion`);
   }
+
+  // --- Book covers ---------------------------------------------------------
+  // Gated by the same setting that gates the catalogue pages themselves, so
+  // that opening the shelf to the public later is one switch and not a hunt for
+  // every place a cover is rendered.
+  if (media.purpose === UPLOAD_PURPOSES.BOOK_COVER) {
+    if (actor) return readBytes(media);
+    if (await catalogueIsPubliclyVisible()) return readBytes(media);
+    throw new NotFoundError(`Signed-out request for cover ${mediaId} while catalogue is member-only`);
+  }
+
+  // --- Everything else -----------------------------------------------------
+  // From here down the object is personal, and an unauthenticated caller learns
+  // nothing at all.
+  if (!actor) throw new NotFoundError(`Signed-out request for private media ${mediaId}`);
 
   if (media.visibility === "PUBLIC") {
     return readBytes(media);
@@ -389,6 +465,38 @@ export async function replaceMemberPhoto(params: {
   if (previousPhotoId) await purgeScheduledMedia(previousPhotoId);
 
   return { mediaId: stored.mediaId };
+}
+
+/**
+ * Claims a freshly uploaded book cover, and refuses anything else.
+ *
+ * The cover twin of `claimUnclaimedChildPhoto`, and separate for the same
+ * reason: the purpose is part of what is being checked. Posting a book form
+ * carrying a *child photograph's* media id must not move that photograph onto a
+ * public-facing book page, and a single conditional UPDATE on
+ * (id, library, purpose, unclaimed) is what makes that impossible rather than
+ * merely unlikely.
+ */
+export async function claimUnclaimedBookCover(
+  db: Db,
+  params: { mediaId: string; libraryId: string },
+): Promise<void> {
+  const { count } = await db.mediaObject.updateMany({
+    where: {
+      id: params.mediaId,
+      libraryId: params.libraryId,
+      purpose: UPLOAD_PURPOSES.BOOK_COVER,
+      pendingDeletionAt: { not: null },
+    },
+    data: { pendingDeletionAt: null },
+  });
+
+  if (count !== 1) {
+    throw new ValidationError(
+      { cover: "That cover picture could not be attached. Please choose it again." },
+      `Refused to claim media ${params.mediaId}: not an unclaimed book cover in library ${params.libraryId}`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

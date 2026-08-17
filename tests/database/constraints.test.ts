@@ -5,6 +5,7 @@ import {
   createLibraryFixture,
   createMember,
   db,
+  defaultCategory,
   resetDatabase,
   type Fixture,
 } from "./helpers";
@@ -109,8 +110,15 @@ describe("one active loan per physical copy", () => {
 
 describe("unique identifiers", () => {
   it("refuses a duplicate book copy code within a library", async () => {
+    const category = await defaultCategory(fixture.libraryId);
     const title = await db.bookTitle.create({
-      data: { libraryId: fixture.libraryId, title: "Duplicate Code Test", authors: ["A"] },
+      data: {
+        libraryId: fixture.libraryId,
+        title: "Duplicate Code Test",
+        authors: ["A"],
+        ageGroup: "ALL_AGES",
+        categoryId: category.id,
+      },
     });
 
     await db.bookCopy.create({

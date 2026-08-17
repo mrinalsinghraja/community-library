@@ -61,6 +61,48 @@ export function Field({
   );
 }
 
+type SelectProps = ComponentPropsWithoutRef<"select"> & {
+  invalid?: boolean;
+  describedBy?: string;
+};
+
+/**
+ * A real `<select>`, not a div pretending to be one.
+ *
+ * The native control gets the platform's own picker — a full-height wheel on a
+ * phone, keyboard type-ahead on a desktop, and screen-reader support nobody has
+ * to reimplement. A custom listbox would look tidier in a screenshot and be
+ * worse for a seven-year-old on a tablet.
+ *
+ * `appearance-none` plus a drawn chevron, because the default arrow is tiny and
+ * the field has to read as tappable at 56px.
+ */
+export function Select({ invalid, describedBy, className, children, ...rest }: SelectProps) {
+  return (
+    <div className="relative">
+      <select
+        {...rest}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
+        className={cn(
+          "min-h-14 w-full appearance-none rounded-[var(--radius-field)] border-2 bg-surface",
+          "ps-4 pe-12 text-lg text-ink",
+          invalid ? "border-danger" : "border-control-border",
+          className,
+        )}
+      >
+        {children}
+      </select>
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-ink-soft"
+      >
+        ▾
+      </span>
+    </div>
+  );
+}
+
 type TextInputProps = ComponentPropsWithoutRef<"input"> & {
   invalid?: boolean;
   describedBy?: string;

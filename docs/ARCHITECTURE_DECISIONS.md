@@ -392,3 +392,78 @@ early, and never on an object something still points at.
 **Cost.** An object can outlive its usefulness by up to a day if the cron does not
 run. That is why the sweep is daily rather than weekly, and why removal and
 replacement also purge inline rather than relying on it.
+
+## ADR-020 — Version 1 of the catalogue removes fields rather than hiding them
+
+**Decision.** ISBN, publisher, language and description are **dropped** from
+`book_title` in migration 4, not left as unused nullable columns. The catalogue
+stores eleven things and no more.
+
+**Why.** A nullable column nobody fills in is not neutral: it is a field a future
+screen grows back by accident, and "it was already there" is how a one-minute
+form becomes a fifteen-field one. The people cataloguing this collection are
+volunteers and, in time, children; every field they do not have to answer is a
+book that actually gets on the shelf.
+
+Re-adding any of them now costs a migration and a decision. That is the right
+price for a change that makes the form longer.
+
+**Enforcement.** `tests/unit/catalogue.test.ts` reads `schema.prisma` and asserts
+each field's absence. Adding one requires deleting a line from a test, which is a
+conversation rather than a commit.
+
+**Cost.** If the library ever wants ISBN lookup, it is a migration away rather
+than a column away. Judged worth it: the alternative is carrying eleven dead
+columns on the guess that one of them might be wanted.
+
+## ADR-021 — Book covers are stored private, with a different rule from child photographs
+
+**Decision.** A book cover goes through the identical storage pipeline as a
+child's photograph — same validation, same generated key, same metadata
+stripping, same `PRIVATE` visibility, same lifecycle — but `getAuthorizedMedia`
+answers a **separate, explicitly written branch** for it: any signed-in member
+may see any cover, and a signed-out visitor may too when
+`catalogue_visibility` is `PUBLIC`.
+
+**Why private storage.** A book jacket is not sensitive. But the catalogue
+defaults to MEMBER_ONLY, and a public CDN URL is a way around the front door
+that no later permission check can close. Keeping every read behind
+`/api/media/[id]` means the answer to "who may see the shelf?" lives in one
+setting rather than in whichever URLs have leaked.
+
+**Why a separate branch rather than a shared rule.** The single mistake that
+would matter most here is a change intended for book covers quietly loosening
+what applies to a child's photograph. Two branches that share no condition
+cannot do that. `claimUnclaimedBookCover` is likewise scoped by purpose, so a
+book form carrying a child photo's media id is refused.
+
+**Cost.** Covers are not CDN-cached and are re-read from the object store on
+every request. At this scale — tens of books, a handful of concurrent readers —
+that is cheaper than the class of mistake it prevents.
+
+## ADR-022 — There is no delete in the catalogue, and no counter on a donation
+
+**Decision.** Two absences, treated as architecture rather than as scope:
+
+1. **No delete.** A book that leaves the shelf is `LOST`, `DAMAGED` or
+   `ARCHIVED`. No service function removes a `book_copy` or a `book_title`.
+2. **No count, total, rank or score on a donation.** Not in the schema, not in
+   the service, not in a projection.
+
+**Why no delete.** Somebody in this community gave that book. The record of the
+gift outliving the object is the point, and a busy desk plus a delete button is
+how a donation from three years ago disappears because a spine fell off.
+
+**Why no counter.** A leaderboard turns a gift into a scoreboard, and a family
+who cannot afford to donate would feel it every time they opened the page.
+Donating is never a condition of membership, and the thank-you page must not
+quietly reintroduce one.
+
+The enforcement is structural rather than editorial: **there is no column to hang
+a leaderboard on**, and `DonorCredit` carries exactly one field — the sentence to
+render. Adding "sort by generosity" would require first adding a number that
+deliberately does not exist. A test asserts both.
+
+**Cost.** "How many books has the library received?" needs a query rather than a
+column. Acceptable: that question is asked once a year, by an adult, and does not
+need to be on a child's screen.

@@ -1,0 +1,351 @@
+"use client";
+
+import Link from "next/link";
+import { useActionState, useId, useState } from "react";
+import { useFormStatus } from "react-dom";
+
+import { Button } from "@/components/ui/button";
+import { Field, Select, TextInput } from "@/components/ui/field";
+import { Callout } from "@/components/ui/states";
+import { AGE_GROUPS, CATALOGUE_LIMITS, CONDITIONS, SELECTABLE_STATUSES, statusDefinition } from "@/lib/catalogue";
+import {
+  createBookAction,
+  updateBookAction,
+  type BookFormState,
+} from "@/server/actions/catalogue-actions";
+
+/**
+ * Add Book / Edit Book.
+ *
+ * The librarian may well be twelve years old, so this form is built for speed
+ * and for being hard to get wrong:
+ *
+ *   * ten fields, in the order somebody holding a book would fill them in;
+ *   * four of them are dropdowns, so there is nothing to spell;
+ *   * three arrive already answered — condition Good, status Available, donated
+ *     today — because those are right most of the time;
+ *   * the Book ID is not on the form at all. It is issued by the database and
+ *     shown afterwards, so two people cataloguing at once cannot clash and
+ *     nobody has to remember where the numbering got to.
+ *
+ * A book should take about a minute. Every field that is not here is part of
+ * why.
+ */
+
+const initialState: BookFormState = { status: "idle" };
+
+export interface BookFormCategory {
+  id: string;
+  name: string;
+  icon: string | null;
+}
+
+export interface BookFormValues {
+  copyId: string;
+  title: string;
+  author: string;
+  categoryId: string;
+  ageGroup: string;
+  condition: string;
+  status: string;
+  donorName: string;
+  donorFlat: string;
+  donatedOn: string;
+  hasCover: boolean;
+  copyCode: string;
+}
+
+export function BookForm({
+  mode,
+  categories,
+  values,
+  today,
+}: {
+  mode: "create" | "edit";
+  categories: BookFormCategory[];
+  values?: BookFormValues;
+  /** Today in the library's timezone, as YYYY-MM-DD. Never the browser's idea of it. */
+  today: string;
+}) {
+  const [state, formAction] = useActionState(
+    mode === "create" ? createBookAction : updateBookAction,
+    initialState,
+  );
+  const ids = useId();
+  const field = (name: string) => `${ids}-${name}`;
+  const errors = state.fieldErrors ?? {};
+
+  return (
+    /*
+     * No encType here. React sets multipart itself for a form whose action is a
+     * function, and specifying one is overridden with a console warning.
+     */
+    <form action={formAction} className="flex flex-col gap-6">
+      {values ? <input type="hidden" name="copyId" value={values.copyId} /> : null}
+
+      {state.status === "error" && state.message ? (
+        <Callout tone="warn" title="Not saved yet">
+          {state.message}
+        </Callout>
+      ) : null}
+
+      {state.status === "success" ? (
+        <Callout tone="success" title={mode === "create" ? "Added 🎉" : "Saved"}>
+          {state.message}
+        </Callout>
+      ) : null}
+
+      <Field
+        id={field("title")}
+        label="Book title"
+        required
+        error={errors.title}
+        hint="Exactly as it appears on the front of the book."
+      >
+        <TextInput
+          id={field("title")}
+          name="title"
+          defaultValue={values?.title}
+          maxLength={CATALOGUE_LIMITS.titleMax}
+          autoComplete="off"
+          required
+          invalid={Boolean(errors.title)}
+          describedBy={errors.title ? `${field("title")}-error` : undefined}
+        />
+      </Field>
+
+      <Field id={field("author")} label="Author" required error={errors.author}>
+        <TextInput
+          id={field("author")}
+          name="author"
+          defaultValue={values?.author}
+          maxLength={CATALOGUE_LIMITS.authorMax}
+          autoComplete="off"
+          required
+          invalid={Boolean(errors.author)}
+        />
+      </Field>
+
+      <Field
+        id={field("categoryId")}
+        label="Shelf"
+        required
+        error={errors.categoryId}
+        hint="Where it lives in the room."
+      >
+        <Select
+          id={field("categoryId")}
+          name="categoryId"
+          defaultValue={values?.categoryId ?? ""}
+          required
+          invalid={Boolean(errors.categoryId)}
+        >
+          {/* An empty first option, so nobody accidentally files every book on
+              whichever shelf happens to sort first. */}
+          <option value="" disabled>
+            Choose a shelf…
+          </option>
+          {categories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.icon ? `${category.icon} ` : ""}
+              {category.name}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      <Field
+        id={field("ageGroup")}
+        label="Recommended age"
+        required
+        error={errors.ageGroup}
+        hint="A guide, not a rule — anyone may borrow anything."
+      >
+        <Select
+          id={field("ageGroup")}
+          name="ageGroup"
+          defaultValue={values?.ageGroup ?? ""}
+          required
+          invalid={Boolean(errors.ageGroup)}
+        >
+          <option value="" disabled>
+            Choose an age…
+          </option>
+          {AGE_GROUPS.map((group) => (
+            <option key={group.value} value={group.value}>
+              {group.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      <CoverField
+        fieldId={field("cover")}
+        error={errors.cover}
+        hasCover={values?.hasCover ?? false}
+      />
+
+      <fieldset className="flex flex-col gap-6 rounded-[var(--radius-card)] bg-surface-sunk p-5">
+        <legend className="px-2 font-display text-lg font-bold text-ink">
+          Was it donated?
+        </legend>
+        <p className="-mt-2 text-base text-ink-soft">
+          Optional. Leave the name blank for a book the library bought — nothing
+          in the library depends on a donation, and nobody is ranked by it.
+        </p>
+
+        <Field id={field("donorName")} label="Donated by" error={errors.donorName}>
+          <TextInput
+            id={field("donorName")}
+            name="donorName"
+            defaultValue={values?.donorName}
+            maxLength={CATALOGUE_LIMITS.donorNameMax}
+            autoComplete="off"
+            invalid={Boolean(errors.donorName)}
+          />
+        </Field>
+
+        <Field id={field("donorFlat")} label="Flat number" error={errors.donorFlat}>
+          <TextInput
+            id={field("donorFlat")}
+            name="donorFlat"
+            defaultValue={values?.donorFlat}
+            maxLength={CATALOGUE_LIMITS.donorFlatMax}
+            autoComplete="off"
+            invalid={Boolean(errors.donorFlat)}
+          />
+        </Field>
+
+        <Field
+          id={field("donatedOn")}
+          label="Donated on"
+          error={errors.donatedOn}
+          hint="Today, unless you are catching up on older books."
+        >
+          <TextInput
+            id={field("donatedOn")}
+            name="donatedOn"
+            type="date"
+            max={today}
+            defaultValue={values?.donatedOn || today}
+            invalid={Boolean(errors.donatedOn)}
+          />
+        </Field>
+      </fieldset>
+
+      <Field
+        id={field("condition")}
+        label="Condition"
+        required
+        error={errors.condition}
+        hint={CONDITIONS.map((condition) => `${condition.label} — ${condition.hint}`).join("  ")}
+      >
+        <Select
+          id={field("condition")}
+          name="condition"
+          defaultValue={values?.condition ?? "GOOD"}
+          required
+          invalid={Boolean(errors.condition)}
+        >
+          {CONDITIONS.map((condition) => (
+            <option key={condition.value} value={condition.value}>
+              {condition.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      <Field
+        id={field("status")}
+        label="Where is it now?"
+        required
+        error={errors.status}
+        hint="Issuing and returning books arrives in the next phase — for now this just records where the book is."
+      >
+        <Select
+          id={field("status")}
+          name="status"
+          defaultValue={values?.status ?? "AVAILABLE"}
+          required
+          invalid={Boolean(errors.status)}
+        >
+          {SELECTABLE_STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {statusDefinition(status).staffLabel}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <SaveButton mode={mode} />
+        <Link
+          href="/admin/books"
+          className="rounded-full border-2 border-control-border px-6 py-3.5 text-lg font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
+        >
+          Cancel
+        </Link>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Disabled while the action is in flight, so a slow upload does not become two
+ * books. `useFormStatus` has to live in a child of the form to see it.
+ */
+function SaveButton({ mode }: { mode: "create" | "edit" }) {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button type="submit" size="lg" icon="💾" disabled={pending}>
+      {pending ? "Saving…" : mode === "create" ? "Save this book" : "Save changes"}
+    </Button>
+  );
+}
+
+/**
+ * The cover picture: optional, and secondary to everything above it.
+ *
+ * A file input reveals the chosen filename only after the browser accepts it,
+ * so the name is echoed back — otherwise a librarian who tapped the wrong photo
+ * has no way to know before saving.
+ */
+function CoverField({
+  fieldId,
+  error,
+  hasCover,
+}: {
+  fieldId: string;
+  error?: string;
+  hasCover: boolean;
+}) {
+  const [chosen, setChosen] = useState<string | null>(null);
+
+  return (
+    <Field
+      id={fieldId}
+      label="Cover picture"
+      error={error}
+      hint="Optional. A photo of the front cover is plenty — books without one get a drawn cover instead."
+    >
+      <input
+        id={fieldId}
+        name="cover"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={(event) => setChosen(event.target.files?.[0]?.name ?? null)}
+        className="min-h-14 w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface px-4 py-3 text-base file:me-4 file:rounded-full file:border-0 file:bg-primary file:px-4 file:py-2 file:text-base file:font-bold file:text-white"
+      />
+
+      {chosen ? <p className="text-base text-ink-soft">Chosen: {chosen}</p> : null}
+
+      {hasCover ? (
+        <p className="text-base text-ink-soft">
+          This book already has a cover. Choosing a new picture replaces it; to take it away
+          entirely, use Remove cover next to the picture.
+        </p>
+      ) : null}
+    </Field>
+  );
+}

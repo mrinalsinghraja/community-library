@@ -19,8 +19,22 @@ const SESSION_COOKIE_NAMES = ["__Host-library.session", "library.session"] as co
 /** Route prefixes that require *some* session. Permissions are checked later. */
 const PROTECTED_PREFIXES = ["/reader", "/desk", "/admin", "/account"] as const;
 
-/** Signed-in users have no reason to see these. */
-const AUTH_ONLY_PREFIXES = ["/login"] as const;
+/*
+ * There is deliberately no "bounce a signed-in visitor away from /login" rule
+ * here any more, and removing it fixed a real lock-out.
+ *
+ * This layer can only see that a cookie *exists*. A session whose idle window
+ * has passed leaves a perfectly good-looking cookie in the browser and no live
+ * row behind it, and the bounce then produced a loop with no way out:
+ *
+ *   /account  → page resolves no actor → redirect /login
+ *   /login    → cookie present → redirect /
+ *   /         → "My library" → /account → …
+ *
+ * A child whose session had simply gone idle could not reach the sign-in form
+ * at all. The check belongs where the answer is known: the login page resolves
+ * the actual session and redirects only a genuinely signed-in visitor.
+ */
 
 function hasSessionCookie(request: NextRequest): boolean {
   return SESSION_COOKIE_NAMES.some((name) => Boolean(request.cookies.get(name)?.value));
@@ -62,10 +76,6 @@ export default function proxy(request: NextRequest): NextResponse {
     // Only ever a same-origin path, so this cannot become an open redirect.
     loginUrl.searchParams.set("next", `${pathname}${search}`);
     return NextResponse.redirect(loginUrl);
-  }
-
-  if (signedIn && AUTH_ONLY_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
-    return NextResponse.redirect(new URL("/", request.url));
   }
 
   const requestHeaders = new Headers(request.headers);

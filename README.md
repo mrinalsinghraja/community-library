@@ -87,6 +87,11 @@ Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md) | The original approved design |
 | [`docs/PHASE-0.md`](docs/PHASE-0.md) | The foundation phase |
 | [`docs/PHASE-1.md`](docs/PHASE-1.md) | Identity, registration, account lifecycle |
+| [`docs/PHASE-1.1.md`](docs/PHASE-1.1.md) | Child photographs, and consent vs guardian verification |
+| [`docs/PHASE-2.md`](docs/PHASE-2.md) | The catalogue |
+| [`docs/CATALOGUE.md`](docs/CATALOGUE.md) | Every field, and what Version 1 refuses to store |
+| [`docs/MEDIA.md`](docs/MEDIA.md) | Uploads, authorization, the deletion lifecycle |
+| [`docs/GUARDIAN_VERIFICATION.md`](docs/GUARDIAN_VERIFICATION.md) | What a tickbox is worth — **legal review required** |
 | [`docs/IDENTITY.md`](docs/IDENTITY.md) | Who exists, how they are told apart, roles |
 | [`docs/AUTHENTICATION.md`](docs/AUTHENTICATION.md) | Sessions, tokens, password policy |
 | [`docs/REGISTRATION.md`](docs/REGISTRATION.md) | Join → approve → activate |

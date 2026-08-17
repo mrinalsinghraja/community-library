@@ -110,7 +110,7 @@ Password policy differs by audience by design — see ADR-006.
 | Area | Control |
 |---|---|
 | Authorization | `requirePermission()` at every service entry point; deny by default |
-| Edge middleware | Cookie-presence gate only. It is **not** authorization — the edge has no database access and cannot distinguish a valid cookie from a forged one |
+| Edge middleware | Cookie-presence gate only. It is **not** authorization — the edge has no database access and cannot distinguish a valid cookie from a forged one, nor a live session from an expired one. Anything that needs the second answer belongs on the page |
 | Input | Zod at every boundary, including server action FormData |
 | SQL injection | Parameterised Prisma queries; the few raw statements are parameterised |
 | XSS | React escaping; no `dangerouslySetInnerHTML` anywhere |
@@ -121,6 +121,49 @@ Password policy differs by audience by design — see ADR-006.
 | Secrets | Environment variables only; `.env` gitignored; gitleaks in CI |
 | Audit | Every mutation logged in the same transaction; a recursive redactor strips anything resembling a credential |
 | Dependencies | Pinned; `npm ci` in CI |
+
+### Verified in Phase 2
+
+- **A permission that was the wrong guard.** Every reader holds `book.view` —
+  that is what lets a child browse — so guarding the librarian's screens with it
+  would have shown any nine-year-old the staff book list, donor names and
+  condition notes included. The desk now requires
+  `book.create`/`book.edit`/`book.archive`, at the service and at the page, and
+  a test asserts a member is refused. Found while writing the authorization
+  tests, not by reading the code.
+- A member calling the catalogue services directly cannot create, edit, archive,
+  change a status or change donor information: `NOT_AUTHORIZED` from the service,
+  with the record unchanged afterwards.
+- A child loading `/admin/books` or `/admin/books/new` is redirected to their own
+  account.
+- **A book cover cannot be a child's photograph.** `claimUnclaimedBookCover` is
+  scoped by purpose, so a book form carrying a child photo's media id is refused
+  and no book is created. Covers keep a *different* authorization rule from child
+  photographs, written as its own branch so a change meant for one cannot loosen
+  the other.
+- Covers are stored `PRIVATE` with no public URL, because the catalogue is
+  `MEMBER_ONLY` and a CDN link would bypass the front door. Verified live: `200`
+  for a signed-in member with `no-store` and `default-src 'none'; sandbox`
+  intact, `404` signed out — byte-identical to an unknown id.
+- A cover uploaded from the browser reached storage EXIF-stripped (70 bytes,
+  `IHDR`/`IDAT`/`IEND` only), under a generated key, outside `public/`.
+- Donor names are **not searchable**: `?q=Mrinal` returns nothing, so the
+  catalogue cannot be enumerated by who lives where.
+- A wildcard in a search term (`%`) matches literally rather than the whole
+  catalogue.
+- Sort order comes from a fixed map, never from the query string — `Prisma.raw`
+  escapes nothing.
+- A book copy id belonging to another library resolves to `NOT_FOUND`, never
+  "forbidden".
+- Nothing reader-facing carries a database id, a storage path, a condition, an
+  audit field, or any child's name — verified across the browse grid, a detail
+  page and `/donors`.
+- **A lock-out fixed on the way through.** The proxy bounced any request carrying
+  a session cookie away from `/login`, but the edge can only see that a cookie
+  *exists*. A session that had gone idle therefore bounced `/account` → `/login`
+  → `/` for ever, and the reader could not sign in again. The check now lives on
+  the login page, which resolves the real session. Availability, not
+  confidentiality — nothing else about authentication changed.
 
 ### Verified in Phase 1.1
 

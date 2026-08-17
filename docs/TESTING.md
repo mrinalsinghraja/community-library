@@ -1,7 +1,7 @@
 # Testing
 
-**252 tests** at the end of Phase 1.1: 107 unit, 145 against a real PostgreSQL.
-(Phase 0 ended at 110; Phase 1 at 188.)
+**340 tests** at the end of Phase 2: 138 unit, 202 against a real PostgreSQL.
+(Phase 0 ended at 110; Phase 1 at 188; Phase 1.1 at 252.)
 
 The guiding rule: **do not write tests that assert the mock works.** The most
 important guarantees in this system live in the database, so they are tested
@@ -114,6 +114,61 @@ an unknown value throws rather than scoring zero; a self-declaration never
 satisfies any real requirement; `OTHER` is worth nothing by default; and the
 development banner's wording is asserted so a later edit cannot soften it.
 
+## What the Phase 2 suites prove
+
+**The catalogue** (57, `tests/database/catalogue.test.ts`) — one form produces a
+title, a copy, an allocated code and a donation; a second copy of the same book
+shares the title and gets its own code, while the same title by a different
+author is a different book; a book with no title, no author, an unknown age
+band, `WORN`, a category from another library, a retired category, or a status a
+librarian may not set by hand is refused, and nothing is created on the way;
+`ARCHIVED` cannot be picked from a list; five concurrent additions get five
+distinct codes; a book with no donor is accepted and recorded as a purchase; a
+donation dated next year is refused.
+
+A member cannot create, edit, archive, change a status or change donor
+information, **and cannot reach the librarian's book list at all** — the test
+that exists because `book.view`, which every reader holds, was briefly the guard
+on it. A copy id from another library is `NOT_FOUND`, never "forbidden".
+
+Search finds a book by part of its title, part of its author and its code, in
+any case; does **not** find it by donor name; treats `%` as a literal; and
+returns nothing rather than everything for an unmatched term. Filters narrow by
+shelf, age, condition and status; paging never loses a row, and a page number
+past the end clamps to the last page rather than showing an empty one.
+
+Covers go through the child-photo pipeline and get a different authorization
+rule: a valid one is stored `PRIVATE` with no public URL and claimed in the same
+transaction that links it; an ELF binary and an oversized file are refused with
+nothing reaching storage; **a child photograph's media id cannot be attached as
+a book cover**; removal and replacement leave no orphan row and no orphan bytes.
+
+Donors are credited exactly as they chose — named, flat only, or "a neighbour" —
+the acknowledgement appears on the book's page and the browse card has no donor
+field to leak one from; three books from two families produce two thank-yous,
+each carrying exactly one field so there is nothing to rank by; and a donor whose
+book has been archived is still thanked.
+
+Archiving removes a book from the reader's shelf and from `/books/[code]` while
+keeping its code, its donation and its history; an archived book is out of the
+staff list until asked for; editing one is refused; restoring clears
+`archived_at` as well as the status, which the CHECK constraint requires.
+
+**Catalogue vocabulary** (31, `tests/unit/catalogue.test.ts`) — the age bands,
+conditions and statuses are asserted to be *exactly* the agreed lists rather than
+merely to contain them, because the point of Version 1 is what it leaves out.
+`NEW` and `WORN` are no longer conditions; `ARCHIVED` and `RESERVED` are not
+selectable; no reader-facing status wording contains "overdue", "fine",
+"penalty" or "late fee"; a date picker's value is read as that day *in the
+library's timezone*, and 31 February is refused rather than rolled forward.
+
+And a structural test that the schema has **no** language, ISBN, publisher,
+publication year, series, description, tags, keywords, rating, review or price
+field on a book, no donor contact details, and no count, total, rank or score
+anywhere on a donation. Every one of those is standard in library software,
+which is exactly why leaving them out needs something that notices: adding one
+means deleting a line from that test.
+
 ## What the database suite proves
 
 **The double-issue guard** — two concurrent `Promise.allSettled` inserts of the
@@ -175,6 +230,25 @@ Worth recording, because they justify the effort:
    policy. Found by probing the live response in the browser — reading the route
    file would never have shown it. `api/media` is now excluded from the matcher.
 
+## And in Phase 2
+
+8. **A permission that was the wrong guard, caught by writing its test.** The
+   librarian's book list was guarded by `book.view` — which every reader holds,
+   because it is what lets a child browse. Writing "a member cannot reach the
+   staff list" is what surfaced it. The desk now requires
+   `book.create`/`book.edit`/`book.archive`.
+9. **A nested `<form>` that only the browser could report.** The "Remove cover"
+   control had its own `<form>` inside the Add/Edit form. React renders that
+   without complaint on the server and then fails to hydrate the whole page;
+   nothing in typecheck, lint, the test suite or the production build said a
+   word. Found in the browser console during the walkthrough — which is the
+   argument for walking it.
+10. **A login lock-out found by trying to sign in.** A stale session cookie made
+    `/login` unreachable: the proxy bounced it to `/`, and `/account` bounced
+    back to `/login`, for ever. Only reproducible by actually holding a dead
+    cookie — which is the state a reader is in the moment their session goes
+    idle.
+
 ## Running one file
 
 ```bash
@@ -199,13 +273,18 @@ otherwise `@` matches first, or `@/server/auth` swallows
 
 ## Not yet covered
 
-Honest gaps at the end of Phase 1:
+Honest gaps at the end of Phase 2:
 
-- **No browser end-to-end suite.** Every phase's flows were verified manually
-  against the running application — Phase 1.1 included registration with and
-  without a photograph, the librarian's queue, photo replace and remove, the
-  production gate closing and reopening, and cross-child photo isolation.
-  Playwright is the right next step now that there are real forms to drive.
+- **No browser end-to-end suite, and Phase 2 made the case for one.** Every
+  phase's flows are verified manually against the running application; Phase 2
+  walked twenty-five steps from the librarian signing in to a child opening a
+  book's page. Two of the three bugs listed above were invisible to typecheck,
+  lint, 340 tests *and* a production build, and only the browser reported them.
+  Playwright is now overdue.
+- **No test asserts the rendered UI.** The service layer is tested thoroughly and
+  the components are not tested at all, so "the donor line is on the detail page
+  and not on the card" rests on a projection type having no field for it — which
+  is a good guarantee, but a structural one rather than a rendering one.
 - **Images are not re-encoded or resized.** Metadata is stripped (see
   `MEDIA.md`), but the pixel data is stored as uploaded, so a 5 MB photograph
   stays 5 MB. Thumbnailing needs a native image library and has not been judged

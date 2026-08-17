@@ -62,12 +62,24 @@ export const AUDIT_ACTIONS = {
   MEMBER_PHOTO_REMOVED: "member.photo.removed",
 
   // Catalogue
+  //
+  // Condition, status and category each get their own action rather than
+  // hiding inside a generic "updated": those are the three answers somebody
+  // asks the log about later ("when did this become Damaged?", "who took it
+  // off the shelf?"), and grepping a metadata blob for them is not an answer.
   BOOK_TITLE_CREATED: "book.title.created",
   BOOK_TITLE_UPDATED: "book.title.updated",
   BOOK_COPY_CREATED: "book.copy.created",
   BOOK_COPY_UPDATED: "book.copy.updated",
   BOOK_COPY_ARCHIVED: "book.copy.archived",
+  BOOK_COPY_STATUS_CHANGED: "book.copy.status_changed",
+  BOOK_COPY_CONDITION_CHANGED: "book.copy.condition_changed",
+  BOOK_CATEGORY_CHANGED: "book.title.category_changed",
+  BOOK_COVER_ADDED: "book.cover.added",
+  BOOK_COVER_REPLACED: "book.cover.replaced",
+  BOOK_COVER_REMOVED: "book.cover.removed",
   DONATION_RECORDED: "donation.recorded",
+  DONATION_UPDATED: "donation.updated",
 
   // Circulation
   LOAN_ISSUED: "loan.issued",

@@ -196,12 +196,14 @@ async function seedDemoUsers(prisma: PrismaClient, libraryId: string): Promise<v
 }
 
 const DEMO_BOOKS = [
-  { title: "The Gruffalo", authors: ["Julia Donaldson"], category: "picture-books", ageMin: 3, ageMax: 7, copies: 2 },
-  { title: "Matilda", authors: ["Roald Dahl"], category: "story-books", ageMin: 8, ageMax: 12, copies: 1 },
-  { title: "Charlotte's Web", authors: ["E. B. White"], category: "animals", ageMin: 7, ageMax: 11, copies: 1 },
-  { title: "The Magic Faraway Tree", authors: ["Enid Blyton"], category: "fantasy", ageMin: 6, ageMax: 10, copies: 1 },
-  { title: "A Wrinkle in Time", authors: ["Madeleine L'Engle"], category: "space", ageMin: 10, ageMax: 14, copies: 1 },
-  { title: "The Story of Babur", authors: ["Anuradha Sharma"], category: "history", ageMin: 9, ageMax: 14, copies: 1 },
+  { title: "The Gruffalo", authors: ["Julia Donaldson"], category: "stories", ageGroup: "AGE_5_7", copies: 2 },
+  { title: "Matilda", authors: ["Roald Dahl"], category: "stories", ageGroup: "AGE_8_10", copies: 1 },
+  { title: "Charlotte's Web", authors: ["E. B. White"], category: "stories", ageGroup: "AGE_8_10", copies: 1 },
+  { title: "The Magic Faraway Tree", authors: ["Enid Blyton"], category: "adventure-and-fantasy", ageGroup: "AGE_5_7", copies: 1 },
+  { title: "A Wrinkle in Time", authors: ["Madeleine L'Engle"], category: "adventure-and-fantasy", ageGroup: "AGE_11_14", copies: 1 },
+  { title: "The Story of Babur", authors: ["Anuradha Sharma"], category: "science-and-knowledge", ageGroup: "AGE_11_14", copies: 1 },
+  { title: "Tinkle Double Digest", authors: ["Anant Pai"], category: "comics", ageGroup: "ALL_AGES", copies: 1 },
+  { title: "The Big Book of Puzzles", authors: ["Nita Berry"], category: "activity-and-learning", ageGroup: "ALL_AGES", copies: 1 },
 ] as const;
 
 const DEMO_DONORS = [
@@ -227,7 +229,9 @@ async function seedDemoBooks(prisma: PrismaClient, libraryId: string): Promise<v
     });
     if (existing) continue;
 
-    const category = await prisma.bookCategory.findUnique({
+    // Required, not optional: every title is filed on a shelf. A demo book
+    // pointing at a category the seed never created is a bug worth stopping on.
+    const category = await prisma.bookCategory.findUniqueOrThrow({
       where: { libraryId_slug: { libraryId, slug: book.category } },
       select: { id: true },
     });
@@ -237,10 +241,8 @@ async function seedDemoBooks(prisma: PrismaClient, libraryId: string): Promise<v
         libraryId,
         title: book.title,
         authors: [...book.authors],
-        categoryId: category?.id ?? null,
-        ageMin: book.ageMin,
-        ageMax: book.ageMax,
-        language: "English",
+        categoryId: category.id,
+        ageGroup: book.ageGroup,
       },
     });
 

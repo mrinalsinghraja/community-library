@@ -88,6 +88,32 @@ export function ageInYears(dateOfBirth: Date, timezone: string, now: Date = new 
   return age;
 }
 
+/**
+ * Turns a date picker's `YYYY-MM-DD` into the instant that day *began* in the
+ * library's timezone.
+ *
+ * `new Date("2026-08-17")` parses as midnight **UTC**, which in Asia/Kolkata is
+ * already 05:30 on the 17th — and for a timezone behind UTC it would be the
+ * previous day entirely. A librarian picking "today" must get today, so the
+ * conversion happens here rather than being re-derived at each call site.
+ *
+ * Returns null for anything that is not a real calendar date, so a caller can
+ * report a field error instead of storing an Invalid Date.
+ */
+export function dateOnlyInTimezone(value: string, timezone: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+
+  const [, year, month, day] = match.map(Number) as [unknown, number, number, number];
+  const local = new TZDate(year, month - 1, day, 0, 0, 0, 0, timezone);
+
+  // Rejects 31 February and friends, which the constructor would roll forward.
+  if (local.getFullYear() !== year || local.getMonth() !== month - 1 || local.getDate() !== day) {
+    return null;
+  }
+  return new Date(local.getTime());
+}
+
 /** Formats an instant for display in the library's timezone. */
 export function formatInTimezone(
   instant: Date,

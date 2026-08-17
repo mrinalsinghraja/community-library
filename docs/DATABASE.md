@@ -1,7 +1,7 @@
 # Database
 
 PostgreSQL via Prisma. 28 application tables plus Prisma's migration table,
-across three migrations.
+across four migrations.
 All timestamps are `timestamptz` stored in UTC; every business date decision is
 made in the library's configured timezone.
 
@@ -72,6 +72,12 @@ in `tests/database/constraints.test.ts`.
 | Verification is about somebody | at least one of guardian / member / request |
 | A verification claiming to have happened records when | `VERIFIED` requires `verified_at` |
 | `evidence_note` cannot become a document store | capped at 500 characters |
+| A book has a title and at least one author | `btrim(title) <> ''`, `array_length(authors, 1) >= 1` |
+| A book is always filed on a shelf | `book_title.category_id` NOT NULL, `onDelete: Restrict` |
+| Archiving is a real event | `(status = 'ARCHIVED') = (archived_at IS NOT NULL)` — both directions |
+| A donation credits somebody | `btrim(donor_name) <> ''`, and no donation dated in the future |
+| Only real ages, conditions and statuses exist | enums: `AgeGroup`, `CopyCondition`, `CopyStatus` |
+| Book IDs are unique per library | `book_copy_library_code_key` |
 
 **Overdue is not a column.** It is derived as `due_at < now()` at read time, so
 no failed scheduled job can leave the library believing something untrue.
@@ -147,6 +153,27 @@ timestamp must sort after the previous migration.** The local clock produced
 `20260817013517`, which sorts *before* migration 2's `20260817120000` — renamed
 to `20260817140000`. Worth checking on any machine whose clock disagrees with the
 existing migration names.
+
+### Migration 4 — the catalogue
+
+`20260817160000_phase2_catalogue` reshapes `book_title` and `book_copy` for
+Phase 2. Three parts needed a human after `prisma migrate diff`:
+
+1. **`CopyCondition` loses two members and gains one** (`NEW`/`WORN` out,
+   `DAMAGED` in). Prisma's generated `USING ("condition"::text::…)` would fail on
+   every existing row, so the mapping is written out:
+   `NEW → GOOD`, `WORN → DAMAGED`.
+2. **`age_group` is NOT NULL on a table that may already hold rows.** Added
+   nullable, backfilled from the `age_min`/`age_max` bounds it replaces, then
+   tightened.
+3. **`category_id` becomes NOT NULL** for the same reason, so unfiled titles are
+   moved onto the library's "Other" shelf, creating it if that library has none.
+
+It also **drops** `language`, `publisher`, `isbn13`, `isbn10` and `description` —
+see `CATALOGUE.md` §2 for why dropping beats leaving them nullable.
+
+Same lexicographic-ordering rule as migration 3: `20260817160000` was chosen to
+sort after `20260817140000`, not taken from the clock.
 
 ### ⚠ The gotcha that will bite you
 

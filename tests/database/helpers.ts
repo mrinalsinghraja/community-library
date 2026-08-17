@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 
+import { DEFAULT_CATEGORIES } from "../../src/lib/catalogue";
 import { ROLE_DEFINITIONS } from "../../src/lib/permissions";
 import { PERMISSIONS } from "../../src/lib/permissions";
 
@@ -83,7 +84,28 @@ export async function createLibraryFixture(): Promise<Fixture> {
     await db.codeSequence.create({ data: { libraryId: library.id, kind, nextValue: 1 } });
   }
 
+  // The same seven shelves the real seed creates. Every book_title needs one,
+  // so a fixture without them describes a library that could not exist.
+  for (const [index, category] of DEFAULT_CATEGORIES.entries()) {
+    await db.bookCategory.create({
+      data: {
+        libraryId: library.id,
+        name: category.name,
+        slug: category.slug,
+        icon: category.icon,
+        sortOrder: (index + 1) * 10,
+      },
+    });
+  }
+
   return { libraryId: library.id, memberCodePrefix: "TST-R", copyCodePrefix: "TST" };
+}
+
+/** The library's "Stories" shelf, which every fixture book is filed on. */
+export async function defaultCategory(libraryId: string) {
+  return db.bookCategory.findUniqueOrThrow({
+    where: { libraryId_slug: { libraryId, slug: "stories" } },
+  });
 }
 
 let memberCounter = 0;
@@ -206,8 +228,16 @@ export async function createBookCopy(libraryId: string) {
   copyCounter += 1;
   const suffix = String(copyCounter).padStart(4, "0");
 
+  const category = await defaultCategory(libraryId);
+
   const title = await db.bookTitle.create({
-    data: { libraryId, title: `Test Book ${suffix}`, authors: ["Test Author"] },
+    data: {
+      libraryId,
+      title: `Test Book ${suffix}`,
+      authors: ["Test Author"],
+      ageGroup: "ALL_AGES",
+      categoryId: category.id,
+    },
   });
 
   return db.bookCopy.create({

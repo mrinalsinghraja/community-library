@@ -49,6 +49,9 @@ export function StaffShell({
       badge: pendingRegistrations,
     },
     { href: "/desk/members", label: "Readers", permission: "member.view" },
+    // book.edit, not book.view: every reader holds book.view, and this link
+    // must only appear for somebody who can actually manage the collection.
+    { href: "/admin/books", label: "Books", permission: "book.edit" },
     { href: "/admin/staff", label: "Staff", permission: "user.manage_staff" },
   ];
 

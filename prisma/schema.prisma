@@ -133,11 +133,29 @@ enum CopyStatus {
   ARCHIVED
 }
 
+/// The three words a librarian actually uses about a physical book. Phase 0 had
+/// five; Version 1 of the catalogue deliberately has three, because a dropdown
+/// a nine-year-old volunteer can answer correctly beats a taxonomy nobody
+/// applies consistently. See docs/CATALOGUE.md.
 enum CopyCondition {
-  NEW
   GOOD
   FAIR
-  WORN
+  DAMAGED
+}
+
+/// Recommended reading age, as a small fixed vocabulary rather than free text.
+///
+/// Stored structurally so that no part of the application ever parses "8–10
+/// years" back into numbers. The bounds and the labels live in exactly one
+/// place, src/lib/catalogue.ts, and the human labels are rendered from there.
+///
+/// These are catalogue *shelf bands*, not the library's membership age range —
+/// that stays in library_settings.age_min/age_max and is a different question.
+enum AgeGroup {
+  AGE_5_7
+  AGE_8_10
+  AGE_11_14
+  ALL_AGES
 }
 
 enum AcquisitionType {
@@ -666,6 +684,11 @@ model GuardianVerification {
 // Catalogue
 // ---------------------------------------------------------------------------
 
+/// Shelves, in the sense a child understands: "where do the comics live?".
+///
+/// A table rather than an enum so that an administrator can add one later
+/// without a deploy. Version 1 seeds exactly seven — a short list somebody can
+/// actually choose from beats a taxonomy nobody applies consistently.
 model BookCategory {
   id        String  @id @default(uuid(7))
   libraryId String  @map("library_id")
@@ -682,38 +705,54 @@ model BookCategory {
   @@map("book_category")
 }
 
-/// Bibliographic truth. One row per work, however many physical copies exist.
+/// What the book *is*: one row per work, however many physical copies exist.
+///
+/// Deliberately holds no ISBN, publisher, publication year, series, language,
+/// description, tags, ratings or reviews. Version 1 of this catalogue is run by
+/// volunteers and read by children; every field it does not have is a field
+/// nobody has to fill in, get wrong, or maintain. See docs/CATALOGUE.md §2.
+///
+/// `authors` stays an array because the search index is built over it and a
+/// second author costs nothing to store. The Add Book form offers a single
+/// Author box, which is all Version 1 exposes.
 model BookTitle {
-  id          String   @id @default(uuid(7))
-  libraryId   String   @map("library_id")
-  title       String
-  authors     String[]
-  publisher   String?
-  isbn13      String?
-  isbn10      String?
-  language    String   @default("English")
-  description String?
-  ageMin      Int?     @map("age_min")
-  ageMax      Int?     @map("age_max")
-  categoryId  String?  @map("category_id")
-  coverMediaId String? @map("cover_media_id")
+  id           String   @id @default(uuid(7))
+  libraryId    String   @map("library_id")
+  title        String
+  authors      String[]
+  /// Recommended reading age band. Required: a book with no shelf band cannot
+  /// be filtered, and "which of these is for me?" is the question the child
+  /// catalogue exists to answer.
+  ageGroup     AgeGroup @map("age_group")
+  categoryId   String   @map("category_id")
+  coverMediaId String?  @map("cover_media_id")
 
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdById String?  @map("created_by_id")
 
-  library    Library       @relation(fields: [libraryId], references: [id], onDelete: Cascade)
-  category   BookCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  coverMedia MediaObject?  @relation(fields: [coverMediaId], references: [id], onDelete: SetNull)
+  library  Library      @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  // Restrict, not SetNull: a category with books on its shelf cannot be deleted
+  // out from under them, and every title always has one.
+  category BookCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  // SetNull: losing a cover picture must never take the book off the shelf.
+  coverMedia MediaObject? @relation(fields: [coverMediaId], references: [id], onDelete: SetNull)
   copies     BookCopy[]
 
   @@index([libraryId, categoryId])
-  @@index([libraryId, isbn13])
+  @@index([libraryId, ageGroup])
   @@map("book_title")
 }
 
 /// A physical object on a shelf, with its own permanent code, condition and
 /// history. Codes are never reused, even after archiving.
+///
+/// `status` is the field the phase boundary runs through. Phase 2 lets a
+/// librarian set the initial status and correct a mistake; the AVAILABLE ↔
+/// BORROWED transition belongs to Phase 3 circulation and no Phase 2 code path
+/// performs it. RESERVED is reserved for the same reason and nothing sets it.
+/// ARCHIVED is how a book leaves the shelf permanently — nothing is ever
+/// hard-deleted, so the donation and its history survive.
 model BookCopy {
   id        String          @id @default(uuid(7))
   libraryId String          @map("library_id")
@@ -738,13 +777,23 @@ model BookCopy {
 
   @@unique([libraryId, copyCode], map: "book_copy_library_code_key")
   @@index([libraryId, status])
+  @@index([libraryId, condition])
   @@index([titleId])
   @@map("book_copy")
 }
 
 /// Attached to a copy, not a title: the community gave this particular book.
-/// displayConsent governs every public rendering. There is deliberately no
-/// aggregate/count column anywhere — gratitude, not competition.
+/// displayConsent governs every public rendering.
+///
+/// Two deliberate absences:
+///
+///   * **No contact details.** A name and a flat number are enough to say thank
+///     you. No phone, no email, no address, no identity document — the
+///     catalogue is not a directory of who lives where with what number.
+///   * **No aggregate, count, rank or score column, anywhere.** There is no
+///     "top donor", no leaderboard, no most-generous-family. Gratitude, not
+///     competition. A schema with no counter cannot grow a leaderboard by
+///     accident.
 model Donation {
   id        String @id @default(uuid(7))
   libraryId String @map("library_id")

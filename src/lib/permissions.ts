@@ -52,6 +52,10 @@ export const PERMISSIONS = {
   "book.edit": { category: "catalogue", description: "Edit book details" },
   "book.archive": { category: "catalogue", description: "Archive a copy (reversible)" },
   "book.delete": { category: "catalogue", description: "Permanently delete a book record" },
+  "category.manage": {
+    category: "catalogue",
+    description: "Add, rename or retire the shelves books are filed under",
+  },
 
   // --- Donations ------------------------------------------------------------
   "donation.view": { category: "donations", description: "See donation records" },
@@ -126,6 +130,7 @@ const LIBRARIAN_PERMISSIONS = [
   "book.create",
   "book.edit",
   "book.archive",
+  "category.manage",
   "donation.view",
   "donation.record",
   "donation.view_private",

@@ -104,6 +104,26 @@ async function seedRoles(prisma: PrismaClient, libraryId: string): Promise<void>
   );
 }
 
+/**
+ * Book categories, reconciled against the configured list.
+ *
+ * Phase 0 seeded fourteen; Version 1 of the catalogue narrows that to seven.
+ * Reconciling rather than only inserting is what makes that narrowing actually
+ * happen on an existing database.
+ *
+ * Retirement is careful, in this order:
+ *
+ *   * a category with books on its shelf is never touched — the `onDelete:
+ *     Restrict` on `book_title.category_id` agrees, and would refuse anyway;
+ *   * a category with no books is deleted, because an empty shelf label nobody
+ *     chose is clutter rather than history;
+ *   * anything an administrator added by hand is left alone — only slugs this
+ *     seed originally created are candidates.
+ *
+ * Categories an administrator adds later are not in `config.categories`, so
+ * the last rule matters: without it, `npm run db:seed` would quietly delete
+ * their work.
+ */
 async function seedCategories(
   prisma: PrismaClient,
   libraryId: string,
@@ -119,12 +139,53 @@ async function seedCategories(
         icon: category.icon,
         sortOrder: (index + 1) * 10,
       },
-      update: { name: category.name, icon: category.icon },
+      update: { name: category.name, icon: category.icon, sortOrder: (index + 1) * 10 },
     });
+  }
+
+  const keep = new Set(config.categories.map((category) => category.slug));
+  const retired = await prisma.bookCategory.findMany({
+    where: {
+      libraryId,
+      slug: { in: [...RETIRABLE_SEED_CATEGORY_SLUGS].filter((slug) => !keep.has(slug)) },
+    },
+    select: { id: true, name: true, _count: { select: { bookTitles: true } } },
+  });
+
+  for (const category of retired) {
+    if (category._count.bookTitles > 0) {
+      console.log(
+        `  • category "${category.name}" has books on its shelf — left in place`,
+      );
+      continue;
+    }
+    await prisma.bookCategory.delete({ where: { id: category.id } });
   }
 
   console.log(`  ✓ ${config.categories.length} book categories`);
 }
+
+/**
+ * Slugs earlier seeds created, and which this seed may therefore remove again.
+ *
+ * An explicit list rather than "anything not in the config": that would delete
+ * every category an administrator has added since, which is precisely the
+ * flexibility `book_category` exists to provide.
+ */
+const RETIRABLE_SEED_CATEGORY_SLUGS: readonly string[] = [
+  "story-books",
+  "picture-books",
+  "adventure",
+  "fantasy",
+  "animals",
+  "space",
+  "science",
+  "general-knowledge",
+  "history",
+  "biography",
+  "educational",
+  "activity-books",
+];
 
 /** One allocator row per kind of code. Without these, nothing can be catalogued. */
 async function seedCodeSequences(prisma: PrismaClient, libraryId: string): Promise<void> {

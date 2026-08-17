@@ -47,6 +47,20 @@ export function SiteHeader({
         </Link>
 
         <nav aria-label="Main" className="ms-auto flex shrink-0 items-center gap-2">
+          {/*
+            Only for signed-in readers, because the catalogue defaults to
+            MEMBER_ONLY. Offering a door that answers "sign in first" is worse
+            than not showing it, and the setting that decides this is read on
+            the page itself.
+          */}
+          {signedIn ? (
+            <Link
+              href="/books"
+              className="rounded-full px-2 py-2.5 text-base font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink sm:px-4 sm:text-lg"
+            >
+              Books
+            </Link>
+          ) : null}
           <Link
             href="/rules"
             /* Kept visible at every width: there is no hamburger menu, so
