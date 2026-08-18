@@ -863,3 +863,110 @@ community, not to a default.
 **Verification.** `tests/database/notifications.test.ts` asserts the disabled
 path sends nothing and claims nothing, and that a send cannot alter a loan.
 `tests/unit/circulation.test.ts` pins the settings a deployment actually reads.
+
+---
+
+## ADR-033 — The consent version is shown on the settings screen and cannot be edited there
+
+**Status:** Accepted, 18 August 2026 (Phase 5).
+
+**Context.** Phase 5 gave the library a settings screen, and
+`library_settings.consent_version` is a column on the row that screen edits. The
+obvious thing to do was to render it as a text field beside the others.
+
+**Decision.** It is rendered as read-only text.
+
+The words a guardian agrees to live in `src/lib/consent.ts`, and every
+`consent_record` stores `consent_text_snapshot` — a verbatim copy of what was
+shown at the time (ADR-011). The version string names those words. If a Super
+Admin could type a new version without the words changing, every consent record
+written afterwards would claim to describe wording that never existed; and if
+they typed an *old* version back, two different texts would share one name.
+
+New wording is therefore a release: the text changes in the repository, the
+version changes with it, and the next guardian to agree gets a record naming the
+text they actually saw. **Existing records are never touched by any of this** —
+not by a settings change, not by a release.
+
+**Consequence.** Changing the consent wording needs a deploy. For a document
+that a lawyer or a knowledgeable resident is supposed to review before it
+changes (`CONSENT.md`), needing a release is a feature and not a friction.
+
+**Alternatives rejected.** A version field plus a wording field on the settings
+screen: that is a legal-text editor in a children's library admin, and it would
+let somebody publish unreviewed consent wording in one click.
+
+---
+
+## ADR-034 — A logo may not be an SVG, even though the upload gate allows one
+
+**Status:** Accepted, 18 August 2026 (Phase 5).
+
+**Context.** `UPLOAD_RULES[BRANDING]` has permitted `image/svg+xml` since Phase
+1, when nothing uploaded branding. Phase 5 built the screen that does.
+
+**Decision.** `storeBrandingImage()` refuses SVG and accepts PNG, JPEG and WebP.
+The rule in `UPLOAD_RULES` is left as it is.
+
+Two independent reasons, either sufficient:
+
+1. **An SVG is a document that can carry script**, and a logo is the one image
+   in this application shown to people who have not signed in — the front page
+   and the sign-in screen. `SECURITY.md` already noted that SVG must only ever
+   be served from a restrictive-CSP path; refusing it entirely is simpler than
+   maintaining that guarantee for a decorative image.
+2. **Next's image optimiser refuses SVG by default.** An uploaded one would
+   render as a broken mark on every screen in the library, which is a worse
+   outcome than not offering the format.
+
+**Why the gate keeps the rule.** `UPLOAD_RULES` describes what the format check
+*can* validate; the service describes what the library *wants*. Deleting the
+rule would lose the record that SVG was considered, and would make the branding
+purpose look identical to a book cover, which it is not.
+
+**Consequence.** A community with an SVG logo must export a PNG. The refusal
+happens after the bytes reach storage, so the row it created is scheduled for
+deletion immediately and the sweeper collects it — no orphan, no leak.
+
+---
+
+## ADR-035 — The audit viewer shows details for configuration changes only
+
+**Status:** Accepted, 18 August 2026 (Phase 5).
+
+**Context.** `audit_log` has been written since Phase 0, in the same transaction
+as every mutation, with `redactMetadata()` stripping anything credential-shaped
+at write time. Phase 5 built the first screen that reads it.
+
+**Decision.** `listAuditEvents()` returns the row — when, who, what action,
+which kind of record — for everything, and returns `metadata` for
+`settings.updated` and `branding.updated` only. Every other action's metadata is
+dropped in the service, before the page renders.
+
+**Reasoning.** The two configuration actions carry a before/after of the
+library's own policy numbers: `borrowingPeriodDays: 14 → 21`. No person appears
+in them. Across the rest of the application, metadata carries children's names,
+book titles, guardians' verification methods and refusal reasons — written there
+deliberately, because the log is where "why did this child go home empty
+handed?" is answered. A screen that printed every blob would turn an operations
+tool into a place to browse children.
+
+The row itself stays readable, which is what an operations screen needs: a Super
+Admin can see that a photograph was removed, by whom, and when, without the
+screen also telling them the reason somebody typed.
+
+**This is a narrowing, not a replacement.** `redactMetadata()` still runs at
+write time and nothing here relaxes it. The two protections are independent: one
+stops credentials ever being stored, the other stops personal detail being
+displayed.
+
+**Consequence.** Answering "why was that photo removed?" still means SQL. That
+is the correct amount of friction for reading a note about a child, and the
+decision can be revisited per-action rather than wholesale — the list is one
+`Set` in `audit-service.ts`.
+
+**Alternatives rejected.** Showing everything (turns the screen into a
+children's-detail viewer); showing nothing (makes the settings history
+unreadable, and the settings history is the reason the screen exists); a
+per-action redaction map (invents a schema for metadata nobody has agreed on,
+and would go stale silently the first time a service added a field).

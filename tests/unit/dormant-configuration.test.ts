@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { ACTIVE_CIRCULATION_SETTINGS, DORMANT_CIRCULATION_SETTINGS } from "@/lib/circulation";
 import { DORMANT_PERMISSIONS, PERMISSIONS, type PermissionKey } from "@/lib/permissions";
+import { EDITABLE_SETTING_FIELDS, UNAVAILABLE_FEATURES } from "@/lib/settings-schema";
 
 /**
  * Settings and permissions that exist and do nothing.
@@ -41,6 +42,10 @@ function sourceFiles(directory: string): string[] {
 const APPLICATION_SOURCE = sourceFiles(SRC)
   .filter((path) => !path.endsWith(join("lib", "circulation.ts")))
   .filter((path) => !path.endsWith(join("lib", "permissions.ts")))
+  // Phase 5's declaration file. Like the two above it, it names these things in
+  // order to say they do nothing; the tests below prove that claim from the
+  // other side, by requiring every dormant name to appear in its list.
+  .filter((path) => !path.endsWith(join("lib", "settings-schema.ts")))
   .map((path) => ({ path, text: readFileSync(path, "utf8") }));
 
 describe("dormant settings", () => {
@@ -76,16 +81,35 @@ describe("dormant settings", () => {
     }
   });
 
-  it("has no configuration screen that could render one", () => {
-    // There is no settings UI in Version 1 at all, which is the simplest
-    // possible way of not showing a librarian an inert control. If one is ever
-    // built, this test fails and the builder has to decide what to do about the
-    // dormant fields — which is the whole point.
-    const settingsScreens = sourceFiles(join(SRC, "app")).filter((path) =>
-      /\/settings\//.test(path),
-    );
+  it("cannot be written by the settings screen", () => {
+    /*
+     * Phase 5 built the configuration screen this file used to assert did not
+     * exist. The guarantee is now made by construction rather than by absence:
+     * `updateLibrarySettings` assembles its update from EDITABLE_SETTING_FIELDS
+     * one key at a time and never spreads the parsed form, so a column that is
+     * not on that list has no path into the database through this screen.
+     */
+    for (const setting of DORMANT_CIRCULATION_SETTINGS) {
+      expect(EDITABLE_SETTING_FIELDS as readonly string[]).not.toContain(setting);
+    }
+  });
 
-    expect(settingsScreens).toEqual([]);
+  it("is named on the screen as something the library cannot do", () => {
+    // The other half of the promise: a librarian who wonders whether the
+    // library can do one of these reads a plain "not available yet" instead of
+    // finding a column in the database later and assuming it works.
+    const backing = UNAVAILABLE_FEATURES.map((feature) => feature.backedBy).join(" ");
+
+    // The screen names columns in SQL, which is what an operator sees in a dump.
+    const asColumn: Record<string, string> = {
+      blockOnOverdueDays: "block_on_overdue_days",
+      renewalBlockedWhenReserved: "renewal_blocked_when_reserved",
+      emailEnabled: "email_enabled",
+    };
+
+    for (const setting of DORMANT_CIRCULATION_SETTINGS) {
+      expect(backing).toContain(asColumn[setting] ?? setting);
+    }
   });
 });
 
@@ -111,6 +135,14 @@ describe("dormant permissions", () => {
       );
 
       expect(guards).toEqual([]);
+    }
+  });
+
+  it("is named on the settings screen as unavailable", () => {
+    const backing = UNAVAILABLE_FEATURES.map((feature) => feature.backedBy).join(" ");
+
+    for (const key of DORMANT_PERMISSIONS) {
+      expect(backing).toContain(key);
     }
   });
 

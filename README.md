@@ -5,9 +5,10 @@ library. Built for readers aged roughly 5–14, run by volunteers, and designed 
 the children themselves can eventually operate it.
 
 **First deployment:** Mana Jardin Children's Library
-**Status:** Phase 4 complete — identity, guardian verification, catalogue,
-circulation, and now reminders plus renewal requests.
-See [`docs/PHASE-4.md`](docs/PHASE-4.md).
+**Status:** Phase 5 complete — identity, guardian verification, catalogue,
+circulation, reminders and renewal requests, and now a settings, branding and
+audit screen so the library can be configured without touching the database.
+See [`docs/PHASE-5.md`](docs/PHASE-5.md).
 
 ---
 
@@ -105,6 +106,8 @@ Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | [`docs/SECURITY.md`](docs/SECURITY.md) | Controls, threat notes, children's data and consent |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub, Neon, Vercel, custom domain |
 | [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md) | Every variable, what it does, how to generate it |
+| [`docs/SETTINGS.md`](docs/SETTINGS.md) | Every setting, its range, and what a change does not touch |
+| [`docs/PHASE-5.md`](docs/PHASE-5.md) | Administration: settings, branding, audit viewer |
 | [`docs/TESTING.md`](docs/TESTING.md) | What is tested and why those things |
 | [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) | Tokens, measured contrast, component rules |
 

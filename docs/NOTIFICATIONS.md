@@ -17,6 +17,10 @@ Phase 4. Before it, nothing was sent at all.
 > daily job returns `{ enabled: false, due: 0, sent: 0, … }`, claims nothing and
 > writes nothing. **No real message has ever left this application**; in
 > development mail is captured to `.mail/` and read at `/dev/mail`.
+>
+> Since Phase 5 the switch has a screen — `/admin/settings` — and that screen
+> refuses to enable it while `EMAIL_PROVIDER=console`: there is no control at
+> all, and the service behind it throws if asked anyway. See `SETTINGS.md`.
 
 ---
 

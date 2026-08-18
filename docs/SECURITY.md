@@ -143,6 +143,39 @@ Password policy differs by audience by design — see ADR-006.
 | Audit | Every mutation logged in the same transaction; a recursive redactor strips anything resembling a credential |
 | Dependencies | Pinned; `npm ci` in CI |
 
+### Verified in Phase 5
+
+- **Configuration is Super Admin only, and the librarian who runs the library
+  cannot change what the library is.** `/admin/settings`, `/admin/branding` and
+  `/admin/audit` refuse a librarian, a child and a signed-out request — at the
+  page, which redirects, and at the service, which throws.
+- **The reminder switch is refused, not merely hidden.** With
+  `EMAIL_PROVIDER=console` the page renders no control at all and
+  `setOverdueReminders(true)` throws. A tampered request is refused exactly as a
+  missing button is.
+- **Dormant columns have no write path.** The settings update is assembled from
+  `EDITABLE_SETTING_FIELDS` one key at a time and never spreads the parsed form,
+  so `email_enabled`, `block_on_overdue_days`, `renewal_blocked_when_reserved`,
+  `required_guardian_verification` and `consent_version` are unaffected by
+  anything a settings submission contains. Proved by a test that submits all
+  five and asserts the row is unchanged.
+- **Guardian verification cannot be weakened by accident.** The change is on its
+  own form, needs an explicit confirmation, refuses `NONE` and refuses
+  `IDENTITY_PROVIDER` (which nothing implements and which would make every
+  approval impossible), and writes an audit row naming the before and after.
+- **Consent records are immutable from the admin screens.** The consent version
+  is read-only there; no settings or branding path can touch a `consent_record`
+  (ADR-033). Tested directly.
+- **A logo may not be an SVG** (ADR-034) — it is the one image served to
+  signed-out visitors, and an SVG is a document that can carry script. The
+  refusal happens after the bytes reach storage, and the object it created is
+  scheduled for deletion immediately.
+- **The audit viewer is read-only and shows details for configuration changes
+  only** (ADR-035). Every other action's metadata — children's names, book
+  titles, refusal reasons — is dropped in the service before the page renders,
+  on top of the write-time redaction that already existed. Tenancy is scoped to
+  the actor's own library.
+
 ### Verified in Phase 3
 
 - **The same wrong-guard trap, one phase later.** `loan.view` is held by every
@@ -300,7 +333,14 @@ These are honest limitations, not oversights:
 11. **Email confirmation proves control of an inbox, not parenthood**, and
    opening the emailed link is enough to complete it, so a prefetching mail
    client could spend the token. Reasoning in `GUARDIAN_VERIFICATION.md` §7.
-12. **Verification never expires.** The model carries `expires_at` and the read
+12. **A settings screen exists now, and it is a new surface.** Everything on it
+   is Super Admin only and every write is audited, but the blast radius of that
+   one account grew in Phase 5: it can now change the loan rules, the guardian
+   verification requirement and the library's public text without database
+   access. There is no second-approver requirement and no settings history
+   screen — the audit log is the record. Proportionate at this size; revisit if
+   the library ever has more than one administrator who is not the owner.
+13. **Verification never expires.** The model carries `expires_at` and the read
    path honours it, but nothing sets it: the retention and reverification policy
    is still an open question for the owner.
 

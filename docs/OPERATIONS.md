@@ -43,6 +43,30 @@ Check it manually:
 curl -H "Authorization: Bearer $CRON_SECRET" https://library.msrx.co.in/api/cron/daily
 ```
 
+## Changing how the library works
+
+Since Phase 5 a Super Admin does this on a screen, not in `psql`:
+
+| What | Where |
+|---|---|
+| Loan period, book limit, renewals, ages, prefixes, timezone, catalogue visibility | `/admin/settings` |
+| Required guardian verification strength | `/admin/settings`, behind a confirmation |
+| The reminder switch | `/admin/settings` — **refused while `EMAIL_PROVIDER=console`** |
+| Name, colour, welcome message, rules text, contact details, logo | `/admin/branding` |
+| Who changed what, and when | `/admin/audit` |
+
+Two things to know before you touch any of it:
+
+* **A setting decides the future.** Changing the loan period does not move a due
+  date a child has already been told, and changing a code prefix does not
+  renumber a card or a label. Only the next issue, the next renewal and the next
+  code use the new value.
+* **Consent wording is not editable there.** It lives in the code and changes
+  with a release, so that no consent record can end up describing wording nobody
+  saw (ADR-033).
+
+Full reference: [`SETTINGS.md`](SETTINGS.md).
+
 ## Backups — required
 
 Neon's free tier gives a **6-hour** point-in-time restore window. That is not a

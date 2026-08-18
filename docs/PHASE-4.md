@@ -215,3 +215,12 @@ repeating the question.
    prerequisite of turning reminders on, not a separate feature.
 3. Carried from Phase 3, still open: no renewal of an overdue book; no general
    correction screen; `LoanStatus` dropping LOST and WRITTEN_OFF.
+
+---
+
+## 8. What came next
+
+**Phase 5 — Administration & Configuration** (`docs/PHASE-5.md`): settings,
+branding and a read-only audit viewer. It changed nothing about notifications or
+renewal requests except one thing — the reminder switch now has a screen, which
+refuses to enable it while `EMAIL_PROVIDER=console`. Reminders remain off.

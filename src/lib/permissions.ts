@@ -105,8 +105,14 @@ export const PERMISSIONS = {
   },
 
   // --- Library operations ---------------------------------------------------
-  "report.view": { category: "reports", description: "See library reports" },
-  "announcement.manage": { category: "operations", description: "Publish library announcements" },
+  "report.view": {
+    category: "reports",
+    description: "Not yet implemented — nothing in the application reads this",
+  },
+  "announcement.manage": {
+    category: "operations",
+    description: "Not yet implemented — nothing in the application reads this",
+  },
 
   // --- Administration -------------------------------------------------------
   "settings.view": { category: "administration", description: "View library settings" },
@@ -139,8 +145,17 @@ export const PERMISSION_KEYS = Object.keys(PERMISSIONS) as PermissionKey[];
  * owner's to define, not the code's to guess. Take a key off this list in the
  * same change that makes it do something.
  */
-export const DORMANT_PERMISSIONS = ["loan.override_rules", "loan.mark_lost"] as const satisfies
-  readonly PermissionKey[];
+export const DORMANT_PERMISSIONS = [
+  "loan.override_rules",
+  "loan.mark_lost",
+  // Joined the list in Phase 5. Both were seeded in Phase 0 and neither has ever
+  // guarded anything: there are no reports and no announcements. They are named
+  // on the settings screen under "Not available yet" for the same reason the
+  // other two are — a permission that looks like a capability and is not one is
+  // a promise the software will not keep.
+  "report.view",
+  "announcement.manage",
+] as const satisfies readonly PermissionKey[];
 
 export function isDormantPermission(key: PermissionKey): boolean {
   return (DORMANT_PERMISSIONS as readonly PermissionKey[]).includes(key);

@@ -113,3 +113,19 @@ In-app notifications; WhatsApp; SMS; return confirmations; any message about a
 renewal request being decided. The blueprint's pluggable `NotificationService`
 is not built either — there is one channel, and an abstraction with nothing to
 hold is a shape, not a design.
+
+
+---
+
+## Turning reminders on
+
+Since Phase 5, `overdue_reminders_enabled` is changed on `/admin/settings` by a
+Super Admin rather than by an `UPDATE`. The screen renders **no control** while
+`EMAIL_PROVIDER=console`, and `setOverdueReminders(true)` refuses regardless of
+what reaches it — a mail transport that captures to `.mail/` cannot reach a
+family, and a librarian must never be told "saved" about a message nobody will
+get.
+
+The other three preconditions from ADR-032 — a sending domain, SPF/DKIM, and the
+consent decisions — are not enforced in code, because a server cannot check them.
+They are the operator's, and they are listed in `SETTINGS.md` and `DEPLOYMENT.md`.

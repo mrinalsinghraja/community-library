@@ -44,7 +44,7 @@ export function LibraryLogo({
       role="img"
       aria-label={`${libraryName} logo`}
     >
-      <rect x="2" y="2" width="60" height="60" rx="16" fill="var(--color-primary)" />
+      <rect x="2" y="2" width="60" height="60" rx="16" fill="var(--brand-primary)" />
 
       {/* three books of different heights, leaning together on a shelf */}
       <rect x="15" y="20" width="9" height="26" rx="2.5" fill="#FDF8F0" />

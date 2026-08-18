@@ -101,6 +101,45 @@ export async function storeBookCover(params: {
 }
 
 /**
+ * Stores a library logo.
+ *
+ * Same pipeline again, with one narrowing: **SVG is refused here**, even though
+ * `UPLOAD_RULES` permits it for this purpose. Two reasons, and either alone
+ * would be enough. An SVG is a document that can carry script, and a logo is
+ * the one image in this application that is shown to signed-out visitors on the
+ * front page. And Next's image optimiser refuses SVG by default, so an uploaded
+ * one would render as a broken mark on every screen in the library.
+ *
+ * The rule stays in `UPLOAD_RULES` rather than being deleted from it: the gate
+ * describes what the format check can accept, and this service describes what
+ * the library actually wants. See ADR-034.
+ */
+export async function storeBrandingImage(params: {
+  libraryId: string;
+  bytes: Uint8Array;
+  declaredMimeType?: string;
+  originalFilename?: string;
+  uploadedById?: string | null;
+}): Promise<StoredPhoto> {
+  const stored = await storeUpload({ ...params, purpose: UPLOAD_PURPOSES.BRANDING });
+
+  if (stored.mimeType === "image/svg+xml") {
+    // Already written to storage, so unwind it rather than leaving bytes the
+    // sweeper would collect fifteen minutes later.
+    await prisma.mediaObject.update({
+      where: { id: stored.mediaId },
+      data: { pendingDeletionAt: new Date() },
+    });
+    throw new ValidationError(
+      { file: "Please use a PNG, JPEG or WebP picture for the logo." },
+      "SVG refused for branding upload",
+    );
+  }
+
+  return stored;
+}
+
+/**
  * The one path bytes take into storage.
  *
  * The bytes hit storage BEFORE the row exists, deliberately. A storage failure
@@ -299,6 +338,14 @@ export async function getAuthorizedMedia(mediaId: string): Promise<AuthorizedMed
     if (actor) return readBytes(media);
     if (await catalogueIsPubliclyVisible()) return readBytes(media);
     throw new NotFoundError(`Signed-out request for cover ${mediaId} while catalogue is member-only`);
+  }
+
+  // --- Branding ------------------------------------------------------------
+  // A library's logo is on the front page, the sign-in screen and the bottom of
+  // every email. It is public by definition, and it is the one purpose where a
+  // signed-out request is the normal case rather than a probe.
+  if (media.purpose === UPLOAD_PURPOSES.BRANDING) {
+    return readBytes(media);
   }
 
   // --- Everything else -----------------------------------------------------

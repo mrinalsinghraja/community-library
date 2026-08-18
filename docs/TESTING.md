@@ -253,13 +253,21 @@ is the guard against the silent repair being reintroduced by someone who finds
 the failed deploy annoying. The rest cover the three operator resolutions, each
 of which demands a name and a reason before it will do anything.
 
-**Dormant configuration** (9, `tests/unit/dormant-configuration.test.ts`) — walks
+**Dormant configuration** (12, `tests/unit/dormant-configuration.test.ts`) — walks
 every `.ts`/`.tsx` file under `src/` and asserts that nothing reads
-`block_on_overdue_days`, `renewal_blocked_when_reserved`,
-`overdue_reminder_offsets`, `loan.override_rules` or `loan.mark_lost`. They are
-labelled "not yet implemented", and this is what keeps the label true. One test
-runs the other way and asserts a working permission is never labelled dormant,
-because the reverse mistake misleads just as badly.
+`block_on_overdue_days`, `renewal_blocked_when_reserved`, `email_enabled`,
+`loan.override_rules`, `loan.mark_lost`, `report.view` or `announcement.manage`.
+They are labelled "not yet implemented", and this is what keeps the label true.
+One test runs the other way and asserts a working permission is never labelled
+dormant, because the reverse mistake misleads just as badly.
+
+This file changed in Phase 5, and how it changed is the point. It used to assert
+that **no settings screen existed at all** — "if one is ever built, this test
+fails and the builder has to decide what to do about the dormant fields". One was
+built, it failed, and the decision replaced it with two assertions that carry the
+same promise on a screen that now exists: a dormant column is never on
+`EDITABLE_SETTING_FIELDS`, and every dormant column and permission is named in
+`UNAVAILABLE_FEATURES` as something the library cannot do.
 
 **Member eligibility** (11 across the two circulation suites) — all five account
 states, issued against and renewed against. Only `ACTIVE` lends. The unit suite

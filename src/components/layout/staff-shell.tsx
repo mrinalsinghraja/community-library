@@ -71,6 +71,11 @@ export function StaffShell({
     // must only appear for somebody who can actually manage the collection.
     { href: "/admin/books", label: "Books", permission: "book.edit" },
     { href: "/admin/staff", label: "Staff", permission: "user.manage_staff" },
+    // Administration. Three links, not fifteen: how the library works, what it
+    // looks like, and what has been done to it.
+    { href: "/admin/settings", label: "Settings", permission: "settings.view" },
+    { href: "/admin/branding", label: "Branding", permission: "branding.edit" },
+    { href: "/admin/audit", label: "Audit", permission: "audit.view" },
   ];
 
   const visible = navItems.filter((item) => actor.permissions.has(item.permission));

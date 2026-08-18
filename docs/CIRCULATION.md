@@ -401,12 +401,18 @@ They are listed as dormant in code — `DORMANT_CIRCULATION_SETTINGS` in
 their permission descriptions say "Not yet implemented" in as many words. Tests
 assert that nothing under `src/` reads any of them.
 
-There is **no settings screen in Version 1**, so none of these is currently
-rendered anywhere; a librarian cannot tick a box and go home believing the
-library behaves differently. The lists exist so that whoever builds that screen
-has to decide what to do about these fields rather than discovering the problem
-afterwards. A control that looks like a rule and is not one is worse than a
-missing feature: it is a promise the software breaks silently.
+Phase 5 built the settings screen these lists were written for, and the decision
+they demanded was made: **none of them is rendered as a control.** They appear on
+`/admin/settings` under "Not available yet" as a sentence each, saying plainly
+what the library cannot do and why. The guarantee is structural rather than
+cosmetic — `updateLibrarySettings` builds its update from
+`EDITABLE_SETTING_FIELDS` one key at a time, so a dormant column has no path into
+the database through that screen whatever a tampered form contains. A control
+that looks like a rule and is not one is worse than a missing feature: it is a
+promise the software breaks silently. See `SETTINGS.md` §4.
+
+`report.view` and `announcement.manage` joined the dormant permission list in the
+same phase, for the same reason: seeded in Phase 0, read by nothing since.
 
 Implementing one means defining its semantics, and those are the owner's to
 define. Take a name off the dormant list in the same change that makes it do
