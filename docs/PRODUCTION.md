@@ -20,13 +20,9 @@ that looks deployed and cannot onboard anybody.
 
 | # | Step | Who | Blocks |
 |---|---|---|---|
-| 1 | Neon production project | Owner (browser) | everything |
+| 1 | Neon production project, **Singapore** | Owner (browser — see §4a) | everything |
 | 2 | Vercel project linked to the GitHub repository | Owner (browser) | 3–8 |
-| 3 | Vercel Blob store linked | Owner (browser) | photographs |
-
-The store that exists is the wrong mode and the wrong region — see §2b and §2c.
-It holds zero bytes and is connected to no project, so replacing it costs
-nothing.
+| 3 | ~~Vercel Blob store linked~~ | done | — |
 | 4 | Email provider + verified sending domain | Owner (browser + DNS) | every activation link |
 | 5 | Environment variables set in Vercel | Owner | the build |
 | 6 | `prisma migrate deploy` + `npm run db:seed` | Anyone with the connection string | first sign-in |
@@ -92,11 +88,16 @@ which also means the library's logo is stored private and served through
 `/api/media/[id]` like every other image — it always was, in practice; the CDN
 URL was written to the database and read by nothing (ADR-036).
 
-The store to create:
+Done, 18 August 2026. The public `iad1` store was deleted while it held zero
+bytes and was connected to nothing, and replaced by:
 
 ```bash
 vercel blob create-store library-media --access private --region bom1
 ```
+
+`store_rdothAa5AItHOiQe` — **bom1, private**, connected to `community-library`
+at **Production scope only**, which added `BLOB_READ_WRITE_TOKEN` there and
+nowhere else.
 
 ## 2a. One thing that has never run for real
 
@@ -136,7 +137,7 @@ reference: [`ENVIRONMENT_VARIABLES.md`](ENVIRONMENT_VARIABLES.md).
 | `AUTH_TRUST_HOST` | `true` | required behind Vercel |
 | `NEXT_PUBLIC_APP_URL` | `https://library.msrx.co.in` | the only public variable |
 | `CRON_SECRET` | `openssl rand -base64 32` | without it `/api/cron/daily` returns 503 |
-| `BLOB_READ_WRITE_TOKEN` | injected by Vercel | link the Blob store; do not paste it by hand |
+| `BLOB_READ_WRITE_TOKEN` | set by connecting the store | Production only. Never paste it by hand |
 | `EMAIL_PROVIDER` | `resend` or `smtp` | **not** `console` |
 | `EMAIL_FROM` | `Mana Jardin Children's Library <library@…>` | domain must have SPF and DKIM |
 | `APP_TIMEZONE` | `Asia/Kolkata` | bootstrap only; the library's own setting wins afterwards |
@@ -146,6 +147,26 @@ Never set: `TEST_DATABASE_URL` (the suite truncates every table in it),
 request.
 
 There is no bootstrap token. The first administrator is created by CLI.
+
+## 4a. Creating the Neon resource
+
+This is the one step no tooling here can perform. `vercel integration add neon`
+answers:
+
+> This resource must be provisioned through the Web UI.
+
+and there is no API path that does not amount to guessing a provider's schema.
+So, in the dashboard:
+
+1. <https://vercel.com/mrinals-projects-fccb1068/community-library/stores>
+2. **Create Database** → **Neon** → **Continue**
+3. Region: **Singapore — `aws-ap-southeast-1`**. Neon has no India region; this
+   is the nearest of the eight it has
+4. Plan: **Free**
+5. Connect to `community-library`, and set the environment to **Production
+   only** — not Preview
+6. Say when it is done and the old `iad1` resource gets deleted, the variables
+   get re-verified, and the migration in §4 runs
 
 ## 4. Database
 
