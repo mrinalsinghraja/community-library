@@ -802,3 +802,64 @@ codes), so the resolution is unambiguous.
 **Verification.** `tests/database/renewal-requests.test.ts` — another child's
 book, a fictional code, and a returned book all produce the identical refusal,
 and a second reader's screen never contains the first's request.
+
+---
+
+## ADR-032 — Reminders ship switched off, and three carried questions are settled
+
+**Status.** Owner decision, 18 August 2026. This record does not change anything
+ADR-029, ADR-030 or ADR-031 decided; it closes questions those records left for
+the owner, and it supersedes the corresponding open items in `docs/PHASE-3.md`
+§4 and `docs/PHASE-4.md` §7, which now point here.
+
+**Decision 1 — `overdue_reminders_enabled` stays `false`.** The notification
+system is built, tested and reachable, and it sends nothing. It stays that way
+until four things are true: a production email provider is configured, a sending
+domain exists, SPF and DKIM are published for it, and the consent and privacy
+questions about writing to guardians are settled.
+
+**Why.** Every one of those four is a precondition for a message that reaches a
+parent's inbox rather than their spam folder — and the last is a precondition for
+the library being allowed to send it at all. A switch that is off is the honest
+representation of a feature whose prerequisites are unmet. Nothing is stubbed,
+nothing pretends, and the day the four are true the change is one `UPDATE`.
+
+**What "off" means, precisely.** `library_settings.overdue_reminders_enabled`
+defaults to `false` in the schema and is deliberately **not written by the
+seed** — a value absent from `prisma/seed/library-config.ts` cannot be turned on
+by re-running a seed. `sendCirculationReminders` returns
+`{ enabled: false, due: 0, sent: 0, … }` and claims nothing, so no
+`loan_notification` row exists to make a later run think a message was already
+handled. In development, mail is captured to `.mail/` and read at `/dev/mail`;
+no real message has ever left this application.
+
+**Decision 2 — `renewal_period_days` is 14, and this is final.** It matches the
+worked example the library runs on: issued 17 August, due 31 August, renewed to
+14 September. The platform default of 7 stands for other deployments. This is no
+longer an open question in `docs/PHASE-3.md` §4.
+
+**Decision 3 — the internal state stays `DECLINED`.** The enum shipped in
+migration 1 with that word and keeps it; no migration. The brief's "REJECTED" is
+a synonym, and renaming a state that appears in a database, a Prisma enum, an
+audit action and a test suite in exchange for a synonym is a migration bought
+with nothing. Child-facing wording stays friendly and stays separate from the
+enum — the screen says **"Not this time"**, and a declined ask reads *"The
+librarian would like this one back. Please bring it in."* The librarian's note is
+never shown to the child.
+
+**Decision 4 — retry and delivery tracking are production-readiness work, not
+Phase 4 work.** Two gaps are documented and deliberately unclosed: a claimed
+occurrence that fails to send is not retried, and a crash between claiming and
+sending leaves a `QUEUED` row that nothing surfaces. Both are stated in
+`docs/NOTIFICATIONS.md` §4 and `docs/OPERATIONS.md`. No queue, worker, second
+provider or delivery dashboard was added — building retry machinery for a
+feature that is switched off would be inventing operational behaviour before the
+operation exists.
+
+**Cost.** The library gets no reminders until somebody decides it should. That
+is the intended cost: the decision to start writing to families belongs to the
+community, not to a default.
+
+**Verification.** `tests/database/notifications.test.ts` asserts the disabled
+path sends nothing and claims nothing, and that a send cannot alter a loan.
+`tests/unit/circulation.test.ts` pins the settings a deployment actually reads.

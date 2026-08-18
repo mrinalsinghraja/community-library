@@ -41,6 +41,11 @@ this way.
 Four states, from the enum that shipped in migration 1. `DECLINED` is the
 enum's word; the screens say "Not this time".
 
+**The word stays `DECLINED`** — decided by the owner on 18 August 2026
+(ADR-032), no migration. The internal state and the child's sentence are
+deliberately different things: the database records what happened, and the screen
+says it kindly.
+
 A decided request is **final**. A child who still wants the book asks again,
 which is a new row — because "the librarian said no on Tuesday" is part of what
 happened and must not be overwritten. Both asks survive; a test says so.

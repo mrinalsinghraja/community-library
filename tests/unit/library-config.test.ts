@@ -68,3 +68,25 @@ describe("seeded code prefixes", () => {
     expect(formatCode(copyCodePrefix, 1, copyCodePadding)).toMatch(/^\w+-B0001$/);
   });
 });
+
+/*
+ * The owner's Phase 4 decisions, held still (ADR-032).
+ *
+ * Both are one word in one object, and both are the kind of thing a later
+ * edit changes without noticing: a seed that starts writing
+ * `overdueRemindersEnabled` would switch a library's reminders on the next time
+ * somebody re-ran it, and a renewal period nudged to the platform's 7 would
+ * quietly shorten every child's second fortnight.
+ */
+describe("the owner's locked settings", () => {
+  it("does not write the reminder switch at all, so a re-seed cannot turn it on", () => {
+    expect(Object.keys(MANA_JARDIN.settings)).not.toContain("overdueRemindersEnabled");
+    expect("overdueRemindersEnabled" in MANA_JARDIN.settings).toBe(false);
+  });
+
+  it("keeps one renewal at fourteen days: 17 Aug -> 31 Aug -> 14 Sep", () => {
+    expect(MANA_JARDIN.settings.renewalPeriodDays).toBe(14);
+    expect(MANA_JARDIN.settings.borrowingPeriodDays).toBe(14);
+    expect(MANA_JARDIN.settings.maxRenewals).toBe(1);
+  });
+});

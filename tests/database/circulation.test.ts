@@ -2,6 +2,7 @@ import type { UserStatus } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { __setSessionHandle } from "../stubs/auth-stub";
+import { DEFAULT_TIMEZONE, daysUntilDue } from "@/lib/dates";
 import { createSession } from "@/server/auth/session-store";
 import { AUDIT_ACTIONS } from "@/server/lib/audit";
 import { archiveBook, updateBook, type BookInput } from "@/server/services/catalogue-service";
@@ -165,10 +166,17 @@ describe("issuing a book", () => {
     expect(issued.copyCode).toBe(copy.copyCode);
     expect(issued.readerName).toBe("Aarav Sharma");
 
-    // 14 days, from library_settings — not a literal anywhere in src/.
-    const days = Math.round(
-      (issued.dueAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000),
-    );
+    /*
+     * 14 days, from library_settings — not a literal anywhere in src/.
+     *
+     * Counted in **calendar days in the library's timezone**, which is the only
+     * count that matches what a due date means. This assertion used to divide
+     * milliseconds and round: a due date is the *end* of its day, so the span
+     * is 14 days plus whatever is left of today, and the rounding flipped to 15
+     * whenever the suite ran before noon in Asia/Kolkata. The library was
+     * always right; the arithmetic in the test was not.
+     */
+    const days = daysUntilDue(issued.dueAt, DEFAULT_TIMEZONE);
     expect(days).toBe(settings.borrowingPeriodDays);
 
     const loan = await db.loan.findFirstOrThrow({ where: { copyId: copy.id } });
@@ -578,9 +586,8 @@ describe("renewing a loan", () => {
 
     const { dueAt } = await renewLoan({ loanId: issued.loanId });
 
-    const added = Math.round(
-      (dueAt.getTime() - issued.dueAt.getTime()) / (24 * 60 * 60 * 1000),
-    );
+    // Calendar days in the library's timezone, for the same reason as above.
+    const added = daysUntilDue(dueAt, DEFAULT_TIMEZONE, issued.dueAt);
     expect(added).toBe(settings.renewalPeriodDays);
   });
 

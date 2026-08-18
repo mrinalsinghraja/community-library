@@ -364,8 +364,13 @@ writes `14`, `2` or `1` into a business decision.
 | `overdue_reminder_offsets` | [-2, 0, 3, 7] | **[-2, 0, 3, 7]** |
 
 `renewal_period_days` differs from the platform default on purpose: 14 makes one
-renewal double the loan, matching the worked example above. It is a judgement,
-and it is flagged for the owner's approval in `docs/PHASE-3.md`.
+renewal double the loan, matching the worked example above. **The owner locked
+this at 14 on 18 August 2026 (ADR-032).** It is a settled judgement, not an open
+question.
+
+`overdue_reminders_enabled` is `false` and stays false until a production email
+provider, a sending domain, SPF and DKIM, and the consent questions are all in
+place — also ADR-032. The reminder system is built and tested; it sends nothing.
 
 The loan-limit message is generated from the setting, so a library that lends
 four books gets a message that says four, and one that lends a single book gets a

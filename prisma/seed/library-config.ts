@@ -76,8 +76,12 @@ export const MANA_JARDIN: LibraryConfigInput = {
      * doubles the loan: issued 17 August, due 31 August, renewed to 14
      * September. The platform default is 7 — a shorter second stretch, which
      * suits a busier library — and this deployment deliberately differs from
-     * it. **This value is a judgement, not a derivation, and is flagged for the
-     * owner's approval in docs/PHASE-3.md.**
+     * it. **The owner locked this at 14 on 18 August 2026; see ADR-032.**
+     *
+     * Note what is absent from this file: `overdueRemindersEnabled`. Reminders
+     * are off, and a value the seed does not write cannot be switched on by
+     * re-running the seed. Turning them on is a deliberate act on a live
+     * database, and only once the conditions in ADR-032 are met.
      */
     borrowingPeriodDays: 14,
     maxActiveLoans: 2,

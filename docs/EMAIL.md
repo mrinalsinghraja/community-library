@@ -98,6 +98,11 @@ Due-soon reminders and overdue nudges were built in **Phase 4** and run in the
 daily cron. Two templates — `loan_due_soon` and `loan_overdue` — both to the
 guardian, both governed by `overdue_reminders_enabled` (off by default).
 
+**They are off here and stay off** until a production provider, a sending
+domain, SPF and DKIM, and the consent questions are all settled — ADR-032. Until
+then every reminder is captured to `.mail/` and read at `/dev/mail`, which is
+correct for development and means nothing reaches a family.
+
 They are the only mail this system sends that nobody asked for by taking an
 action, which is why the duplicate-suppression design is worth reading before
 changing anything: **`docs/NOTIFICATIONS.md`**.

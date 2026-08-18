@@ -247,6 +247,20 @@ describe("the switch", () => {
     expect(await db.loanNotification.count()).toBe(0);
   });
 
+  /*
+   * Off is the database's own answer, not something the application remembers
+   * to ask for. A library created by any route — the seed, a migration, a hand
+   * INSERT — starts silent. ADR-032.
+   */
+  it("is off in the column default, so a new library starts silent", async () => {
+    const [column] = await db.$queryRaw<{ column_default: string | null }[]>`
+      SELECT column_default FROM information_schema.columns
+       WHERE table_name = 'library_settings'
+         AND column_name = 'overdue_reminders_enabled'`;
+
+    expect(column?.column_default).toBe("false");
+  });
+
   it("sends nothing when a library has configured no offsets", async () => {
     const reader = await createMember(fixture.libraryId);
     await attachGuardian(fixture.libraryId, reader.id);

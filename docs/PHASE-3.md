@@ -196,6 +196,10 @@ that is out.
 is +14. That makes one renewal double the loan. If the intent was a shorter
 second stretch, this is one `UPDATE` on `library_settings`.
 
+> **Resolved 18 August 2026: 14 stands, final.** The owner confirmed the worked
+> example is the intent. See ADR-032. Left above as it was asked, because a
+> question that was open for a phase is part of the record.
+
 **2. Overdue books cannot be renewed** (`allow_renewal_when_overdue = false`).
 Recommended in the brief and adopted. A late book comes to the desk, is returned,
 and may go straight back out — same outcome, with somebody holding the book.

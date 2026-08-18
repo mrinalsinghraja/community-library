@@ -166,17 +166,21 @@ how it is verified.
 
 ## 6. Known limitations
 
+- **Reminders are switched off**, and stay off until a production email provider,
+  a sending domain, SPF and DKIM, and the consent decisions are all in place.
+  Locked by the owner on 18 August 2026 — ADR-032. Not a gap: a precondition.
 - **A failed reminder is not retried.** The occurrence is spent and the row
   reads `FAILED`. Reasoned in ADR-029; the trade is deliberate.
 - **A crash between claiming and sending loses that occurrence.** The row stays
-  `QUEUED`. Nothing surfaces `QUEUED` rows today — a report would, and reports
-  are a later phase.
+  `QUEUED`. Nothing surfaces `QUEUED` rows today.
+- Those two together are the **production-readiness item**: reliable retry and
+  delivery tracking are a later phase's work, to be designed when the system is
+  actually sending. No queue, worker, second provider or delivery dashboard was
+  built for a feature that is off (ADR-032, decision 4).
 - **No screen shows the delivery log.** "Did the guardian get it?" is answerable
   from `email_event` with SQL, not from the UI.
 - **No email when a request is decided.** By design, but it means a child who
   does not open the app does not learn the answer until they next look.
-- **Reminders are off in this deployment** until somebody turns
-  `overdue_reminders_enabled` on. That is an owner decision, listed below.
 - **`/my-books` was verified in the browser this phase** — including the ask,
   the pending state and the decided state — but the child-side sign-in is the
   step that failed in Phase 3, so see §7 for exactly what was and was not
@@ -185,22 +189,29 @@ how it is verified.
 
 ---
 
-## 7. Decisions needing the owner
+## 7. Decisions — settled, and still open
 
-1. **Turn reminders on?** `overdue_reminders_enabled` is false. Nothing is sent
-   until it is true. It is not set in `prisma/seed/library-config.ts` because
-   deciding to write to families is a community's call, not a default.
-2. **The offsets.** `[-2, 0, 3, 7]` — two days before, on the day, then three
+### Settled by the owner, 18 August 2026 (ADR-032)
+
+| Question | Decision |
+|---|---|
+| Turn reminders on? | **No.** `overdue_reminders_enabled` stays `false` until a provider, a sending domain, SPF/DKIM and the consent questions are all done |
+| `renewal_period_days` — 14 or the platform's 7? | **14**, final. 17 Aug → 31 Aug → 14 Sep is the library's own worked example |
+| `DECLINED` or `REJECTED`? | **`DECLINED` stays**, no migration. Child-facing wording stays friendly and separate: "Not this time" |
+| Retry and delivery tracking? | **Not now.** Documented as a production-readiness item, not built |
+
+These are no longer open, and the documentation no longer asks about them.
+`docs/PHASE-3.md` §4.1 and `docs/CIRCULATION.md` §10 point here rather than
+repeating the question.
+
+### Still open
+
+1. **The offsets.** `[-2, 0, 3, 7]` — two days before, on the day, then three
    and seven days after. Reasonable, but they are a judgement about how often it
-   is acceptable to write to a parent.
-3. **A real sending domain.** Nothing can leave this server until
-   `EMAIL_PROVIDER` is configured with SPF and DKIM (`docs/EMAIL.md`). Until
-   then reminders are captured to `.mail/`, which is correct for development and
-   useless in production.
-4. **The word "DECLINED".** The enum shipped in migration 1 with that word; the
-   screens say "Not this time". Changing the enum is a migration, and it was not
-   worth one — but the brief said "REJECTED", so the difference is flagged
-   rather than assumed.
-5. Carried from Phase 3, still open: `renewal_period_days = 14` versus the
-   platform default of 7; no renewal of an overdue book; no general correction
-   screen; `LoanStatus` dropping LOST and WRITTEN_OFF.
+   is acceptable to write to a parent, and nothing is sent until reminders are
+   enabled anyway.
+2. **A real sending domain.** Nothing can leave this server until
+   `EMAIL_PROVIDER` is configured with SPF and DKIM (`docs/EMAIL.md`). This is a
+   prerequisite of turning reminders on, not a separate feature.
+3. Carried from Phase 3, still open: no renewal of an overdue book; no general
+   correction screen; `LoanStatus` dropping LOST and WRITTEN_OFF.

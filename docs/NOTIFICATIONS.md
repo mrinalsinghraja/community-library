@@ -5,6 +5,19 @@ machinery that stops it saying the same thing twice.
 
 Phase 4. Before it, nothing was sent at all.
 
+> ## Reminders are switched off
+>
+> `library_settings.overdue_reminders_enabled` is `false` in this deployment and
+> stays false until **all four** of these are true: a production email provider
+> is configured, a sending domain exists, SPF and DKIM are published for it, and
+> the consent and privacy questions about writing to guardians are settled.
+> Locked by the owner on 18 August 2026 — ADR-032.
+>
+> Everything below is built, tested and reachable. With the switch off, the
+> daily job returns `{ enabled: false, due: 0, sent: 0, … }`, claims nothing and
+> writes nothing. **No real message has ever left this application**; in
+> development mail is captured to `.mail/` and read at `/dev/mail`.
+
 ---
 
 ## 1. There are exactly two
@@ -121,6 +134,32 @@ would produce a second copy the next morning, and a library that cannot be
 trusted not to spam is a library whose reminders get filtered. A missed reminder
 is recoverable — the next configured occasion comes round, and the desk's
 overdue list never depended on email in the first place.
+
+### The window between claiming and sending
+
+Claiming happens first and sending second, which leaves a window: if the process
+dies between the two, the row stays `QUEUED` and that occurrence is lost in the
+other direction — nothing was sent, and the claim stops a later run from trying.
+The window is small, and the ordering is the right way round. The reverse — send,
+then record — turns a crash into a **duplicate** message, and duplicates are the
+failure this whole mechanism exists to prevent.
+
+Nothing surfaces `QUEUED` rows today. The query is in `docs/OPERATIONS.md` under
+*"Did the reminder actually go out?"*, and an old `QUEUED` row is the signature.
+
+### Retry and delivery tracking are production-readiness work
+
+Both gaps above — the spent failure and the crash window — are known, documented
+and deliberately unclosed. Reliable retry and delivery tracking belong to the
+production-readiness phase, to be designed against a provider that is actually
+sending, with its real failure modes in hand. **No queue, background worker,
+second provider or delivery dashboard was built** (ADR-032, decision 4). Building
+retry machinery for a feature that is switched off would mean inventing
+operational behaviour before the operation exists.
+
+Neither gap can corrupt anything. A `loan_notification` row is not the source of
+truth for a loan, a due date or an overdue state; deleting every row in the table
+would change nothing except which reminders a later run considers unsent.
 
 ---
 

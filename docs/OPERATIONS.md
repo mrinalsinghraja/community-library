@@ -15,7 +15,10 @@ login-attempt rows older than 30 days, lapsed verification challenges, and the
 media sweep.
 
 **Then reminders**, since Phase 4: due-soon and overdue notes to guardians, if
-`overdue_reminders_enabled` is on. They run last and inside a `try` that cannot
+`overdue_reminders_enabled` is on. **It is off in this deployment and stays
+off** — see ADR-032 for the four conditions that must be met before it is turned
+on. With it off the pass claims nothing, sends nothing, and reports
+`"reminders": { "enabled": false, … }`. They run last and inside a `try` that cannot
 fail the rest — a mail server having a bad morning must not stop the library's
 own housekeeping. The response says what was sent:
 
