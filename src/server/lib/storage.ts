@@ -102,9 +102,17 @@ export class LocalStorageDriver implements StorageDriver {
 /**
  * Vercel Blob driver.
  *
- * Private objects use `access: "private"`, so the stored key is not a URL that
- * anyone can fetch. Public objects (book covers, the library logo) get a real
- * CDN URL — they are pictures of books, not of children.
+ * **The production store is private, and a Blob store's access mode is fixed
+ * when it is created.** "Private storage requires a private Blob store" — the
+ * mode is not a per-upload choice, whatever the `access` argument on `put()`
+ * suggests. A public store would hand out a CDN URL for every byte in it,
+ * including a child's photograph, so there is one store and it is private.
+ *
+ * That leaves nowhere for a PUBLIC object to go, which is fine: no upload
+ * purpose asks for one any more, and nothing in the application ever rendered
+ * `publicUrl`. Every image — a child's photograph, a book cover, the library's
+ * logo — is served through `/api/media/[id]`, which already answers a
+ * signed-out request for a logo and answers nothing else.
  */
 export class BlobStorageDriver implements StorageDriver {
   readonly name = "vercel-blob";
@@ -115,29 +123,49 @@ export class BlobStorageDriver implements StorageDriver {
     contentType: string,
     visibility: "PUBLIC" | "PRIVATE",
   ): Promise<StoredObject> {
+    if (visibility === "PUBLIC") {
+      // Refuse rather than silently store it privately and hand back a URL that
+      // will not resolve. If a public object is ever genuinely needed it needs
+      // its own public store and its own credential, which is a decision, not
+      // a fallback.
+      throw new Error(
+        "The production Blob store is private: a PUBLIC object has no store to go to",
+      );
+    }
+
     const { put } = await import("@vercel/blob");
 
     const result = await put(key, Buffer.from(bytes), {
-      access: visibility === "PUBLIC" ? "public" : "private",
+      access: "private",
       contentType,
       token: env.BLOB_READ_WRITE_TOKEN,
       addRandomSuffix: false,
     });
 
-    return {
-      storageKey: result.pathname,
-      publicUrl: visibility === "PUBLIC" ? result.url : null,
-    };
+    return { storageKey: result.pathname, publicUrl: null };
   }
 
+  /**
+   * Reads bytes back.
+   *
+   * This used to call `head()` and then `fetch` the URL it returned. That is
+   * correct for a public blob and wrong for a private one: a private blob's URL
+   * "is not publicly accessible", so the fetch would have failed and every
+   * child's photograph would have 404ed in production while rendering perfectly
+   * in development. `get()` is the documented private read and carries the
+   * credential itself.
+   */
   async get(key: string): Promise<Uint8Array | null> {
-    const { head } = await import("@vercel/blob");
+    const { get } = await import("@vercel/blob");
 
     try {
-      const meta = await head(key, { token: env.BLOB_READ_WRITE_TOKEN });
-      const response = await fetch(meta.url);
-      if (!response.ok) return null;
-      return new Uint8Array(await response.arrayBuffer());
+      const result = await get(key, {
+        access: "private",
+        token: env.BLOB_READ_WRITE_TOKEN,
+      });
+
+      if (!result || result.statusCode !== 200) return null;
+      return new Uint8Array(await new Response(result.stream).arrayBuffer());
     } catch {
       return null;
     }

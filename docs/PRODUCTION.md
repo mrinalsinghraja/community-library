@@ -24,19 +24,9 @@ that looks deployed and cannot onboard anybody.
 | 2 | Vercel project linked to the GitHub repository | Owner (browser) | 3–8 |
 | 3 | Vercel Blob store linked | Owner (browser) | photographs |
 
-A store named **`library-media`** already exists (`store_x9oo4U7u7vYZkuzR`) but
-is **in `iad1`, Washington DC, and is not linked to the project**. It was
-created with the CLI's default region before the region flag was noticed, and
-neither linking nor deleting a store can be done without a token that only
-linking provides. Either link it in the dashboard, or delete it and create one
-nearer the children whose photographs it holds:
-
-```bash
-vercel blob create-store library-media --region bom1
-```
-
-Where a child's photograph is physically stored is worth one deliberate
-decision rather than a default.
+The store that exists is the wrong mode and the wrong region — see §2b and §2c.
+It holds zero bytes and is connected to no project, so replacing it costs
+nothing.
 | 4 | Email provider + verified sending domain | Owner (browser + DNS) | every activation link |
 | 5 | Environment variables set in Vercel | Owner | the build |
 | 6 | `prisma migrate deploy` + `npm run db:seed` | Anyone with the connection string | first sign-in |
@@ -70,20 +60,43 @@ succeeds, the database row points at a key, and the bytes are gone by the next
 request. There is no safe fallback for that, so there is no longer one — the
 process refuses to start an upload without a Blob store.
 
-## 2b. Both stores are in `iad1`
+## 2b. Where the data physically sits
 
-The Neon resource `neon-yellow-paddle` (Neon project `empty-truth-77069745`) and
-the Blob store `library-media` both report `region: iad1` — Northern Virginia.
-Neither was chosen; both are CLI/marketplace defaults.
+Both stores were created in **`iad1`** — Northern Virginia — by default rather
+than by decision. That is where children's names, dates of birth, apartment
+numbers, photographs and guardian contact details would live.
 
-That is where the children's names, dates of birth, apartment numbers,
-photographs and guardian contact details would live. It is a decision worth
-making on purpose rather than inheriting, and **a Neon project's region cannot
-be changed after creation** — moving it means deleting the resource and adding
-it again, which is free and instant while the database is empty and is neither
-once it is not.
+What is actually available, checked rather than assumed:
 
-This is a question for the owner, not an answer this document should give.
+| | Nearest to Bengaluru | Notes |
+|---|---|---|
+| **Neon** | **Singapore, `aws-ap-southeast-1`** | Neon has **no** India region. Active regions are N. Virginia, Ohio, Oregon, Frankfurt, London, Singapore, Sydney, São Paulo. Azure regions are deprecated and closed to new projects |
+| **Vercel Blob** | **Mumbai, `bom1` (`ap-south-1`)** | One of Vercel's 20 regions; selectable with `--region` at creation |
+
+So the photographs can sit in India; the database cannot, and Singapore is as
+close as it gets.
+
+**Neither region can be changed after creation.** Moving means deleting the
+resource and creating it again — free and instant while both are empty, and
+neither once they are not.
+
+## 2c. The Blob store's access mode
+
+A Blob store is private or public, decided at creation and **fixed** — "private
+storage requires a private Blob store". The `access` argument on `put()` reads
+like a per-object choice and is not.
+
+The store that exists, `library-media`, is **public**. A child's photograph in a
+public store gets a URL that anyone holding it can fetch. It must be private,
+which also means the library's logo is stored private and served through
+`/api/media/[id]` like every other image — it always was, in practice; the CDN
+URL was written to the database and read by nothing (ADR-036).
+
+The store to create:
+
+```bash
+vercel blob create-store library-media --access private --region bom1
+```
 
 ## 2a. One thing that has never run for real
 

@@ -970,3 +970,47 @@ children's-detail viewer); showing nothing (makes the settings history
 unreadable, and the settings history is the reason the screen exists); a
 per-action redaction map (invents a schema for metadata nobody has agreed on,
 and would go stale silently the first time a service added a field).
+
+---
+
+## ADR-036 — One private Blob store, and the logo goes through the same door
+
+**Status:** Accepted, 18 August 2026 (production rollout).
+
+**Context.** A Vercel Blob store's access mode is chosen when the store is
+created and **cannot be changed afterwards**, and Vercel's own documentation is
+explicit that "private storage requires a private Blob store". The `access`
+argument on `put()` reads like a per-object choice. It is not: it has to agree
+with the store.
+
+The store that had been created was **public**. Three upload purposes existed:
+`CHILD_PHOTO` and `BOOK_COVER` private, `BRANDING` public — so no single store
+could have served the application, and the one that existed was the wrong mode
+for a child's photograph.
+
+**Decision.** One store, private, and `BRANDING` becomes `PRIVATE` with it.
+`BlobStorageDriver.put()` refuses a `PUBLIC` object outright rather than storing
+it privately and returning a URL that would not resolve.
+
+**Why this way round.** The public visibility was buying nothing. `publicUrl`
+was written to the database and read by no component: every image in the
+application — a child's photograph, a book cover, the library's logo — is
+fetched through `/api/media/[id]`, and that route has allowed a signed-out
+request for a `BRANDING` object since Phase 1.1. The logo already worked without
+a CDN URL; the CDN URL was the part nobody used.
+
+The alternative was a second, public store with a second credential, so that a
+logo could be delivered a few milliseconds sooner. For a library serving 140
+flats that is a worse trade in every direction: another token to leak, another
+store to keep straight, and a public bucket sitting one wrong `visibility`
+constant away from a child's photograph.
+
+**Consequence.** The logo is served by a function rather than the CDN. At this
+scale that is not measurable. `publicUrl` remains in the schema and is now
+always null in production; the database CHECK that forbids a private object from
+carrying a public URL is unaffected and still correct.
+
+**Held by test.** `tests/unit/production-guards.test.ts` asserts that no upload
+purpose is `PUBLIC` and that the driver throws when handed one. Adding a public
+purpose fails there, where the answer is a decision, rather than in production,
+where the answer would be a second store.

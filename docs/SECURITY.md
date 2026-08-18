@@ -341,6 +341,10 @@ These are honest limitations, not oversights:
 5. **SVG is accepted for branding uploads only** (a Super Admin action). SVG can
    carry script and must always be served from a restrictive-CSP path, never
    inlined. It is refused for anything a parent can upload.
+
+   Since the production rollout the logo is stored **private** like everything
+   else and served through `/api/media/[id]`, so it never has a CDN URL of its
+   own (ADR-036). SVG remains refused for a logo (ADR-034).
 6. **No account-deletion flow yet.** The schema supports archival; the workflow
    is later-phase work.
 7. **Backups** — Neon's free tier gives only a 6-hour point-in-time restore
@@ -379,9 +383,12 @@ public issue tracker.
     one — see `PRODUCTION.md` for what is still the owner's to do. Everything
     above was verified locally or by test.
 
-15. **The Vercel Blob path is unverified.** The photograph pipeline is tested
-    against the local driver and a fake, because that is all a laptop and a CI
-    container have. Private reads in particular use `head()` plus a plain
-    fetch, which is right for a public object and may not be for a private one.
-    A photograph must be uploaded, re-read and removed on production before any
-    real child's photograph is stored — `PRODUCTION.md` §2a.
+15. **The Vercel Blob path is still unverified against a real store**, though
+    one confirmed fault in it has been fixed: private reads used `head()` plus a
+    plain fetch of the URL it returned, and a private blob's URL is documented
+    as not publicly accessible — every child's photograph would have 404ed in
+    production while rendering in development. It now uses `get(pathname, {
+    access: "private" })`. The pipeline is still exercised only against the
+    local driver and a fake, so a photograph must be uploaded, re-read and
+    removed on production before any real child's photograph is stored —
+    `PRODUCTION.md` §2a.

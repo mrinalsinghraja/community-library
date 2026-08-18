@@ -7,7 +7,8 @@ import {
   SmtpEmailProvider,
   selectEmailProvider,
 } from "@/server/lib/email/providers";
-import { LocalStorageDriver, selectStorageDriver } from "@/server/lib/storage";
+import { BlobStorageDriver, LocalStorageDriver, selectStorageDriver } from "@/server/lib/storage";
+import { UPLOAD_RULES } from "@/server/lib/uploads";
 
 /**
  * Two pieces of configuration that used to fail quietly in production.
@@ -63,5 +64,28 @@ describe("object storage in production", () => {
 
   it("uses the Blob store when one is linked", () => {
     expect(selectStorageDriver(true, "vercel_blob_rw_example").name).toBe("vercel-blob");
+  });
+});
+
+/**
+ * A Vercel Blob store's access mode is fixed when the store is created, and a
+ * private object needs a private store. One store therefore has to be private,
+ * which means nothing this application uploads may ask to be public. These
+ * tests exist so that adding a "public" upload purpose fails here rather than
+ * in production, where the fix would be a second store and a second credential.
+ */
+describe("one private Blob store is enough", () => {
+  it("stores every upload purpose privately, the logo included", () => {
+    const publicPurposes = Object.entries(UPLOAD_RULES)
+      .filter(([, rules]) => rules.visibility === "PUBLIC")
+      .map(([purpose]) => purpose);
+
+    expect(publicPurposes).toEqual([]);
+  });
+
+  it("refuses a public object rather than storing it privately and lying about the URL", async () => {
+    await expect(
+      new BlobStorageDriver().put("k", new Uint8Array([1]), "image/png", "PUBLIC"),
+    ).rejects.toThrow(/private/i);
   });
 });

@@ -60,9 +60,19 @@ export const UPLOAD_RULES: Record<UploadPurpose, UploadRules> = {
     visibility: "PRIVATE",
     allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   },
+  /*
+   * The logo is the one image a signed-out visitor sees, and it used to be
+   * stored PUBLIC so it could carry a CDN URL. Nothing ever rendered that URL —
+   * every image in the application is fetched through `/api/media/[id]`, which
+   * already answers a signed-out request for a logo and refuses everything
+   * else — and a public object needs a *public* Blob store, whose access mode
+   * is fixed at creation and would then apply to the whole store. One private
+   * store holding a logo costs a function call; one public store holding a
+   * child's photograph costs rather more (ADR-036).
+   */
   [UPLOAD_PURPOSES.BRANDING]: {
     maxBytes: 2 * 1024 * 1024,
-    visibility: "PUBLIC",
+    visibility: "PRIVATE",
     allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/svg+xml"],
   },
 };
