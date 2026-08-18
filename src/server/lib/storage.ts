@@ -155,11 +155,35 @@ export class BlobStorageDriver implements StorageDriver {
 
 let cachedDriver: StorageDriver | null = null;
 
+/**
+ * Chooses the driver. Split from `storage()` so the production rule can be
+ * tested without a production process.
+ *
+ * The old version fell back to the local driver whenever the Blob token was
+ * absent, production or not. On a serverless platform that means a child's
+ * photograph is written to a container's own disk: it succeeds, the row points
+ * at a key, and the bytes are gone by the next request — a photograph that
+ * exists in the database and nowhere else, discovered by a family, not by us.
+ * There is no safe fallback for that, so there is no fallback.
+ */
+export function selectStorageDriver(
+  production: boolean,
+  blobToken: string | undefined,
+): StorageDriver {
+  if (!production) return new LocalStorageDriver();
+
+  if (!blobToken) {
+    throw new Error(
+      "BLOB_READ_WRITE_TOKEN is not set: link a Vercel Blob store before deploying. " +
+        "Refusing to store uploads on a filesystem that does not survive the request.",
+    );
+  }
+
+  return new BlobStorageDriver();
+}
+
 export function storage(): StorageDriver {
-  cachedDriver ??=
-    isProduction && env.BLOB_READ_WRITE_TOKEN
-      ? new BlobStorageDriver()
-      : new LocalStorageDriver();
+  cachedDriver ??= selectStorageDriver(isProduction, env.BLOB_READ_WRITE_TOKEN);
   return cachedDriver;
 }
 

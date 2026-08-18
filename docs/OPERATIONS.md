@@ -3,6 +3,9 @@
 The runbook. Written for whoever is holding the library on a Saturday morning,
 which may not be the person who built it.
 
+Going live for the first time is a different document:
+[`PRODUCTION.md`](PRODUCTION.md), and then [`PILOT_TESTING.md`](PILOT_TESTING.md).
+
 ---
 
 ## Daily job

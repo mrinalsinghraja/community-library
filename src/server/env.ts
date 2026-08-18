@@ -67,9 +67,10 @@ const serverEnvSchema = z.object({
     .optional()
     .transform((v) => v === "true"),
 
-  // --- One-time bootstrap ---------------------------------------------------
-  /** Enables /setup while the database has zero users. Unset it after use. */
-  SETUP_TOKEN: z.string().min(16).optional(),
+  // There is deliberately no bootstrap token here. An earlier plan had a
+  // one-time /setup route guarded by SETUP_TOKEN; it was never built, and the
+  // variable outlived it. `npm run create-admin` needs no HTTP route at all,
+  // which is one fewer public path that can create an administrator.
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

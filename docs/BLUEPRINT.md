@@ -738,10 +738,10 @@ SENTRY_DSN=                # error reporting; omit to disable
 
 ## 21. Initial Super Admin (secure bootstrap)
 
-No default credentials exist anywhere in the codebase. Two supported paths, both documented in `docs/SETUP.md`:
+No default credentials exist anywhere in the codebase. One supported path, documented in `docs/SETUP.md`:
 
-1. **CLI (preferred):** `npm run create-admin` — prompts for name, email and password on the terminal (never echoed, never logged), validates strength, writes the user with `SUPER_ADMIN` role, writes an audit row. Run locally against the production `DIRECT_URL`, or via `vercel env pull`.
-2. **One-time claim link:** if the database has zero users, `/setup` becomes reachable and accepts a single admin creation, guarded by `SETUP_TOKEN` from the environment. The route self-disables permanently the moment a user exists.
+1. **CLI, and only the CLI:** `npm run create-admin` — prompts for name, email and password on the terminal (never echoed, never logged), validates strength, writes the user with `SUPER_ADMIN` role, writes an audit row. Run locally against the production `DIRECT_URL`, or via `vercel env pull`.
+A second path was planned — a one-time `/setup` claim link guarded by `SETUP_TOKEN` — and deliberately **not built**. A public route that can create an administrator is a public route that can create an administrator, and the CLI needs no route at all. `SETUP_TOKEN` no longer exists in the environment.
 
 ---
 

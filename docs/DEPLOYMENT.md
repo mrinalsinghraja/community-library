@@ -61,10 +61,14 @@ AUTH_URL              https://library.msrx.co.in
 AUTH_TRUST_HOST       true
 NEXT_PUBLIC_APP_URL   https://library.msrx.co.in
 CRON_SECRET           openssl rand -base64 32
-EMAIL_PROVIDER        console        (until email is configured in a later phase)
+EMAIL_PROVIDER        resend | smtp  (NOT console — see PRODUCTION.md §2)
+EMAIL_FROM            the verified sending address
+BLOB_READ_WRITE_TOKEN injected by linking a Blob store — do not paste by hand
 ```
 
-Full reference: [`ENVIRONMENT_VARIABLES.md`](ENVIRONMENT_VARIABLES.md).
+Full reference: [`ENVIRONMENT_VARIABLES.md`](ENVIRONMENT_VARIABLES.md). The
+order these have to happen in, and the two settings that now refuse rather than
+fall back, are in [`PRODUCTION.md`](PRODUCTION.md).
 
 ## 5. Migrate and seed production
 

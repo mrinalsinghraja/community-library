@@ -176,6 +176,30 @@ Password policy differs by audience by design — see ADR-006.
   on top of the write-time redaction that already existed. Tenancy is scoped to
   the actor's own library.
 
+### Verified before production
+
+- **The development email transport can no longer run in production.**
+  `EMAIL_PROVIDER=console` captures messages to a `.mail/` directory and returns
+  success. Deployed, that directory belongs to a container about to disappear,
+  so every activation link, guardian verification and password reset would have
+  been recorded **SENT** and delivered nowhere — a family waiting for an email
+  that was never going anywhere, with the delivery log agreeing it had arrived.
+  The transport now refuses in production and the attempt is recorded FAILED
+  with a reason. Found by reading the deployment path, not the feature code.
+- **Object storage no longer falls back to a disk that evaporates.** Without
+  `BLOB_READ_WRITE_TOKEN` the driver used to select the local filesystem
+  whatever the environment. On a serverless platform a child's photograph would
+  be written to a container's own disk: the upload succeeds, the row points at a
+  key, and the bytes are gone by the next request — a photograph that exists in
+  the database and nowhere else, discovered by a family rather than by us. There
+  is no safe fallback, so there is no fallback.
+- **The bootstrap route that was never built is gone from the environment.**
+  `SETUP_TOKEN` was validated by `env.ts` and described in two documents as
+  enabling a one-time `/setup` administrator-claim route. No such route exists.
+  A configuration variable that appears to open a public path to administrator
+  creation is worse than nothing, so it has been removed and both documents
+  corrected. `npm run create-admin` needs no HTTP route at all.
+
 ### Verified in Phase 3
 
 - **The same wrong-guard trap, one phase later.** `loan.view` is held by every
@@ -320,7 +344,8 @@ These are honest limitations, not oversights:
 6. **No account-deletion flow yet.** The schema supports archival; the workflow
    is later-phase work.
 7. **Backups** — Neon's free tier gives only a 6-hour point-in-time restore
-   window, so a scheduled logical backup is required before production use.
+   window, so a scheduled logical backup is required before production use. See
+   `PRODUCTION.md` §8.
 8. **No archival/redaction step.** `DEACTIVATED` is the terminal state in
    practice. Retention periods need a community and legal decision, and none has
    been invented — see `ACCOUNT_LIFECYCLE.md` §5.
@@ -348,3 +373,8 @@ These are honest limitations, not oversights:
 
 Security issues should go to the library's Super Admin directly, not into a
 public issue tracker.
+
+14. **No penetration test, and no production smoke test yet.** Nothing in this
+    document has been verified against a deployed instance, because there is not
+    one — see `PRODUCTION.md` for what is still the owner's to do. Everything
+    above was verified locally or by test.

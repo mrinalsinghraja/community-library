@@ -269,6 +269,15 @@ same promise on a screen that now exists: a dormant column is never on
 `EDITABLE_SETTING_FIELDS`, and every dormant column and permission is named in
 `UNAVAILABLE_FEATURES` as something the library cannot do.
 
+**Production guards** (8, `tests/unit/production-guards.test.ts`) — the two
+development defaults that used to keep working when they should stop. The
+transport selector returns the capture provider on a laptop and a refusing one
+in production, and the refusal is a recorded failure with a reason rather than a
+throw into the librarian's approval. The storage selector returns the local
+driver in development and **throws** in production without a Blob token — the
+third test asserts specifically that the thing it does not do is quietly hand
+back a local driver, because that was the bug.
+
 **Member eligibility** (11 across the two circulation suites) — all five account
 states, issued against and renewed against. Only `ACTIVE` lends. The unit suite
 asserts the allowlist has exactly one member, so widening it is a visible act

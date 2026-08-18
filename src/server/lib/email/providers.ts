@@ -3,7 +3,7 @@ import "server-only";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { env } from "@/server/env";
+import { env, isProduction } from "@/server/env";
 import type { EmailMessage, EmailProvider, EmailSendResult } from "@/server/lib/email/types";
 
 /**
@@ -141,14 +141,53 @@ function describeError(error: unknown): string {
   return "Unknown email transport error";
 }
 
-export function createEmailProvider(): EmailProvider {
-  switch (env.EMAIL_PROVIDER) {
+/**
+ * What `console` means once the application is deployed: nothing may be sent.
+ *
+ * The capture transport opens no socket. On a laptop that is the point. In
+ * production it would write every activation link, guardian verification and
+ * password reset to an ephemeral filesystem nobody reads, return `ok`, and
+ * leave `email_event` saying SENT — so a family would wait for an email that
+ * was never going anywhere and the delivery log would agree it had arrived.
+ * A library that cannot onboard a child and cannot tell is the worst outcome
+ * available here, so this refuses instead.
+ *
+ * It refuses rather than throws because a delivery failure has never been
+ * allowed to roll back the workflow that triggered it: approving a
+ * registration must still approve it. The attempt is recorded FAILED, with a
+ * reason that names the configuration.
+ */
+export class RefusingEmailProvider implements EmailProvider {
+  readonly name = "refusing";
+
+  async send(): Promise<EmailSendResult> {
+    return {
+      ok: false,
+      error:
+        "No email transport is configured for production (EMAIL_PROVIDER=console), so nothing was sent",
+    };
+  }
+}
+
+/**
+ * Chooses the transport. Split from `createEmailProvider` so the production
+ * rule can be tested without a production process.
+ */
+export function selectEmailProvider(
+  provider: typeof env.EMAIL_PROVIDER,
+  production: boolean,
+): EmailProvider {
+  switch (provider) {
     case "smtp":
       return new SmtpEmailProvider();
     case "resend":
       return new ResendEmailProvider();
     case "console":
     default:
-      return new CaptureEmailProvider();
+      return production ? new RefusingEmailProvider() : new CaptureEmailProvider();
   }
+}
+
+export function createEmailProvider(): EmailProvider {
+  return selectEmailProvider(env.EMAIL_PROVIDER, isProduction);
 }
