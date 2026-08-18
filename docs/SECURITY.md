@@ -378,3 +378,10 @@ public issue tracker.
     document has been verified against a deployed instance, because there is not
     one — see `PRODUCTION.md` for what is still the owner's to do. Everything
     above was verified locally or by test.
+
+15. **The Vercel Blob path is unverified.** The photograph pipeline is tested
+    against the local driver and a fake, because that is all a laptop and a CI
+    container have. Private reads in particular use `head()` plus a plain
+    fetch, which is right for a public object and may not be for a private one.
+    A photograph must be uploaded, re-read and removed on production before any
+    real child's photograph is stored — `PRODUCTION.md` §2a.

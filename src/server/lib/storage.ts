@@ -118,7 +118,7 @@ export class BlobStorageDriver implements StorageDriver {
     const { put } = await import("@vercel/blob");
 
     const result = await put(key, Buffer.from(bytes), {
-      access: visibility === "PUBLIC" ? "public" : ("private" as "public"),
+      access: visibility === "PUBLIC" ? "public" : "private",
       contentType,
       token: env.BLOB_READ_WRITE_TOKEN,
       addRandomSuffix: false,

@@ -76,6 +76,14 @@ Run every line. A skipped line is an untested line.
 - [ ] Borrow up to the limit, then be refused
 - [ ] Set a due date in the past and confirm the overdue reading, then undo it
 
+### Photographs — run this one first
+- [ ] Upload a photograph through the desk; it renders for the librarian
+- [ ] The same `/api/media/<id>` signed out is `404`
+- [ ] Removing it removes the bytes, not only the row
+
+The Blob driver has never run against a real store — see `PRODUCTION.md` §2a.
+If the first line fails, stop: no child's photograph goes in until it passes.
+
 ### Privacy
 - [ ] A child sees only their own books
 - [ ] `/desk/*` and `/admin/*` redirect a child

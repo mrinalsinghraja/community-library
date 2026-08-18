@@ -23,6 +23,20 @@ that looks deployed and cannot onboard anybody.
 | 1 | Neon production project | Owner (browser) | everything |
 | 2 | Vercel project linked to the GitHub repository | Owner (browser) | 3–8 |
 | 3 | Vercel Blob store linked | Owner (browser) | photographs |
+
+A store named **`library-media`** already exists (`store_x9oo4U7u7vYZkuzR`) but
+is **in `iad1`, Washington DC, and is not linked to the project**. It was
+created with the CLI's default region before the region flag was noticed, and
+neither linking nor deleting a store can be done without a token that only
+linking provides. Either link it in the dashboard, or delete it and create one
+nearer the children whose photographs it holds:
+
+```bash
+vercel blob create-store library-media --region bom1
+```
+
+Where a child's photograph is physically stored is worth one deliberate
+decision rather than a default.
 | 4 | Email provider + verified sending domain | Owner (browser + DNS) | every activation link |
 | 5 | Environment variables set in Vercel | Owner | the build |
 | 6 | `prisma migrate deploy` + `npm run db:seed` | Anyone with the connection string | first sign-in |
@@ -55,6 +69,30 @@ child's photograph would be written to a container's own disk: the upload
 succeeds, the database row points at a key, and the bytes are gone by the next
 request. There is no safe fallback for that, so there is no longer one — the
 process refuses to start an upload without a Blob store.
+
+## 2a. One thing that has never run for real
+
+The Vercel Blob driver has **never been exercised against a real Blob store**.
+Every test of the photograph pipeline runs against the local filesystem driver
+or a fake, because that is all a laptop and a CI container have.
+
+The specific doubt: private objects are read back with `head()` followed by a
+plain `fetch` of the URL it returns. That is correct for a public object. For a
+private one the SDK now offers `get(pathname, { access: "private" })`, and if
+the URL from `head()` is not fetchable without credentials, `get` returns
+`null` and **a child's photograph 404s in production while working perfectly in
+development**.
+
+So, before any real child's photograph is stored:
+
+1. Upload a photograph through the desk on production.
+2. Load it as the librarian — it must render.
+3. Load the same `/api/media/<id>` signed out — it must be `404`.
+4. Remove it, and confirm the bytes are gone.
+
+If step 2 fails, the fix is a one-line change to the read path in
+`src/server/lib/storage.ts`. It is listed here rather than guessed at, because
+changing an untested path on a hunch is how a second bug gets added to a first.
 
 ## 3. Environment variables
 
@@ -129,10 +167,17 @@ existing subdomains are live sites.
 
 | Type | Name | Value | TTL |
 |---|---|---|---|
-| CNAME | `library` | `cname.vercel-dns.com` | 600 |
+| A | `library` | `76.76.21.21` | 600 |
 
-Add `library.msrx.co.in` in Vercel → Settings → Domains first, then create the
-record it asks for. TLS is provisioned automatically.
+That is the record Vercel asked for when the domain was attached to the
+project. A `CNAME library → cname.vercel-dns.com` also works and is what the
+other `msrx.co.in` subdomains use; either is fine, but not both.
+
+The domain is already attached to the project, so the record is the only step
+left. TLS is provisioned automatically once it resolves.
+
+**Do not change the nameservers.** Vercel offers to take them over; that would
+move `www`, `weather`, `planner` and every other live subdomain with it.
 
 ## 7. Health and the daily job
 
