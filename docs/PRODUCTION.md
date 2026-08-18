@@ -70,6 +70,21 @@ succeeds, the database row points at a key, and the bytes are gone by the next
 request. There is no safe fallback for that, so there is no longer one — the
 process refuses to start an upload without a Blob store.
 
+## 2b. Both stores are in `iad1`
+
+The Neon resource `neon-yellow-paddle` (Neon project `empty-truth-77069745`) and
+the Blob store `library-media` both report `region: iad1` — Northern Virginia.
+Neither was chosen; both are CLI/marketplace defaults.
+
+That is where the children's names, dates of birth, apartment numbers,
+photographs and guardian contact details would live. It is a decision worth
+making on purpose rather than inheriting, and **a Neon project's region cannot
+be changed after creation** — moving it means deleting the resource and adding
+it again, which is free and instant while the database is empty and is neither
+once it is not.
+
+This is a question for the owner, not an answer this document should give.
+
 ## 2a. One thing that has never run for real
 
 The Vercel Blob driver has **never been exercised against a real Blob store**.
@@ -102,7 +117,7 @@ reference: [`ENVIRONMENT_VARIABLES.md`](ENVIRONMENT_VARIABLES.md).
 | Variable | Value | Notes |
 |---|---|---|
 | `DATABASE_URL` | Neon **pooled** string | runtime |
-| `DIRECT_URL` | Neon **direct** string | migrations only; a pooler breaks them |
+| `DIRECT_URL` | *not set here* | migrations only — see §4; it belongs on the machine that runs them |
 | `AUTH_SECRET` | `openssl rand -base64 32` | rotating it signs everyone out |
 | `AUTH_URL` | `https://library.msrx.co.in` | |
 | `AUTH_TRUST_HOST` | `true` | required behind Vercel |
@@ -125,13 +140,33 @@ Production is a **separate Neon project**, not a branch of development and not
 the local database. It is built from migrations, never from a dump of
 development, because development contains a fake child.
 
+**`vercel env pull` does not work for this.** The Neon integration writes its
+variables as Vercel **sensitive** env vars (`makeEnvVarsSensitive: true`), and a
+sensitive variable is write-only — it pulls back as an empty string, for the CLI
+and for the dashboard alike. Verified: every Neon variable came back blank while
+the ones set by hand came back intact.
+
+So the connection strings come from the **Neon dashboard**, once, into a local
+file that is deleted afterwards:
+
 ```bash
-vercel env pull .env.production.local      # never commit this file
+cat > .env.production.local <<'ENV'
+DATABASE_URL="<Neon pooled connection string>"
+DIRECT_URL="<Neon direct / unpooled connection string>"
+ENV
+
 npx dotenv -e .env.production.local -- npx prisma migrate deploy
 npx dotenv -e .env.production.local -- npx prisma migrate status
 npx dotenv -e .env.production.local -- npm run db:seed
 rm .env.production.local
 ```
+
+**`DIRECT_URL` belongs on the machine that runs migrations, not in Vercel.**
+Prisma refuses to load the schema without it — `P1012: Environment variable not
+found: DIRECT_URL` — but only for CLI commands that read the datasource.
+`prisma generate` (which the build runs) and Prisma Client at runtime both work
+without it; both verified. Adding it to Vercel would put a second copy of a
+production credential somewhere nothing reads it.
 
 `db:seed` creates permissions, roles, the community, the library, its settings,
 categories and code sequences — **no people, no books**. `db:seed:demo` refuses
@@ -159,6 +194,27 @@ this repository and no public route that can create an administrator.
 Then configure the library **through the admin screens**, not through SQL:
 `/admin/settings` for the rules, `/admin/branding` for the name, colour,
 welcome message and logo. Keep it minimal; the defaults were chosen on purpose.
+
+## 5a. Preview deployments are off
+
+Set on the project, not in a document:
+
+```
+Ignored Build Step:  if [ "$VERCEL_ENV" = "production" ]; then exit 1; else exit 0; fi
+```
+
+Vercel skips a build when that command exits 0, so only `main` at production
+scope ever builds. Every pull request still gets the full CI run — typecheck,
+lint, 656 tests, production build — against a throwaway Postgres, which is what
+a preview would have been for.
+
+This matters because the Neon integration scoped its variables to **Preview and
+Production together**. Those variables are integration-managed and sensitive, so
+narrowing them is a dashboard action (Storage → `neon-yellow-paddle` → the
+project's Environments), not something the API exposes. With preview builds
+disabled there is nothing for them to be injected into — but narrowing them is
+still worth doing, because a disabled build step is one setting away from being
+re-enabled by someone who does not know why it is there.
 
 ## 6. Domain
 
