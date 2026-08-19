@@ -85,6 +85,8 @@ export default async function StaffPage() {
                     <StaffRowActions
                       staffId={person.id}
                       status={person.status}
+                      mustSetPassword={person.mustSetPassword}
+                      invitationEmailSent={person.invitationEmailSent}
                       isSelf={person.id === actor.userId}
                     />
                   </td>

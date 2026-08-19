@@ -20,6 +20,7 @@ import {
 } from "@/server/services/account-service";
 import {
   createStaffAccount,
+  issueStaffActivationLink,
   deactivateStaff,
   reactivateStaff,
   reissueStaffActivation,
@@ -30,6 +31,15 @@ export interface ActionState {
   status: "idle" | "success" | "error";
   message?: string;
   fieldErrors?: Record<string, string>;
+  /**
+   * A one-time activation link, returned to the Super Admin who asked for it
+   * and to nobody else.
+   *
+   * Only `issueStaffActivationLinkAction` ever sets this. It is not stored,
+   * not logged and not persisted anywhere — it lives in one server-action
+   * response, is copied to a clipboard, and is gone.
+   */
+  activationUrl?: string;
 }
 
 async function clientIp(): Promise<string | null> {
@@ -297,6 +307,35 @@ export async function deactivateStaffAction(
     await deactivateStaff(String(formData.get("staffId") ?? ""), String(formData.get("reason") ?? ""));
     revalidatePath("/admin/staff");
     return { status: "success", message: "Account closed." };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+/**
+ * Fallback for a library whose email is not configured yet.
+ *
+ * Returns the raw activation URL to the Super Admin who asked for it. The
+ * permission is checked inside the service, as everywhere else, so a
+ * hand-written POST is refused exactly as a hidden button is.
+ *
+ * The URL is deliberately not revalidated into the page or written anywhere:
+ * it is in this response, and then it is the administrator's to deliver.
+ */
+export async function issueStaffActivationLinkAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const { url, displayName } = await issueStaffActivationLink(
+      String(formData.get("staffId") ?? ""),
+    );
+
+    return {
+      status: "success",
+      message: `One-time link for ${displayName}. It replaces any earlier link and works once.`,
+      activationUrl: url,
+    };
   } catch (error) {
     return toState(error);
   }

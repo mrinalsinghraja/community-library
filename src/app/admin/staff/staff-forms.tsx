@@ -8,6 +8,7 @@ import { Field, TextInput } from "@/components/ui/field";
 import {
   createStaffAction,
   deactivateStaffAction,
+  issueStaffActivationLinkAction,
   reactivateStaffAction,
   reissueStaffActivationAction,
   suspendStaffAction,
@@ -79,10 +80,16 @@ export function StaffRowActions({
   staffId,
   status,
   isSelf,
+  mustSetPassword,
+  invitationEmailSent,
 }: {
   staffId: string;
   status: string;
   isSelf: boolean;
+  /** They have not chosen a password yet, so the invitation still matters. */
+  mustSetPassword: boolean;
+  /** Null when nothing was ever attempted. False when the mailer refused. */
+  invitationEmailSent: boolean | null;
 }) {
   const [suspendState, suspend, suspending] = useActionState(suspendStaffAction, INITIAL);
   const [reactivateState, reactivate, reactivating] = useActionState(reactivateStaffAction, INITIAL);
@@ -108,6 +115,15 @@ export function StaffRowActions({
   return (
     <div className="flex flex-col gap-2">
       {state ? <Notice state={state} /> : null}
+
+      {/*
+        The account exists and nobody can get into it. That is the state this
+        block is for, and it is a normal state for a library whose email is not
+        configured yet — so it explains itself rather than looking like a fault.
+      */}
+      {mustSetPassword && !isPaused ? (
+        <ActivationFallback staffId={staffId} emailSent={invitationEmailSent} />
+      ) : null}
 
       {prompt ? (
         <form action={prompt === "suspend" ? suspend : deactivate} className="flex flex-col gap-2">
@@ -156,6 +172,120 @@ export function StaffRowActions({
           ) : null}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * The way in, when email is not the way in.
+ *
+ * A library can be running before its mail provider is configured, and in that
+ * state a new librarian's account exists and nobody can get into it. This is
+ * the answer: the Super Admin takes one activation link out by hand and gives
+ * it to them through a channel they trust.
+ *
+ * What it is careful about:
+ *
+ *   * **The link is minted when the button is pressed**, not when the page is
+ *     rendered. Nothing on this screen holds a live token until an
+ *     administrator deliberately asks for one, so simply opening the staff list
+ *     does not put credentials on anybody's screen.
+ *   * **It goes to the clipboard, not onto the page.** The text box below only
+ *     appears when the clipboard is unavailable — an insecure origin, or a
+ *     browser that refused — because copying it is the whole purpose and a
+ *     visible token with no way to copy it would be worse than useless.
+ *   * **It is never rendered for a librarian or a reader**, who cannot reach
+ *     this page at all, and the service checks the permission again regardless.
+ *
+ * There is still no password field here. The librarian chooses their own.
+ */
+function ActivationFallback({
+  staffId,
+  emailSent,
+}: {
+  staffId: string;
+  emailSent: boolean | null;
+}) {
+  const [state, formAction, pending] = useActionState(issueStaffActivationLinkAction, INITIAL);
+  const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
+
+  const url = state.status === "success" ? state.activationUrl : undefined;
+
+  async function copy() {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setCopyFailed(false);
+    } catch {
+      // Insecure origin, or the browser said no. Show it so it can be copied
+      // by hand rather than leaving the administrator with nothing.
+      setCopyFailed(true);
+    }
+  }
+
+  return (
+    <div className="rounded-[var(--radius-field)] bg-surface-sunk p-3">
+      <p className="font-bold text-ink">
+        {emailSent === false ? "Activation not sent" : "Waiting for them to set a password"}
+      </p>
+      <p className="mt-1 text-base text-ink-soft">
+        {emailSent === false
+          ? "The invitation email could not be sent."
+          : "They have not chosen a password yet."}
+      </p>
+
+      {!url ? (
+        <form action={formAction} className="mt-2">
+          <input type="hidden" name="staffId" value={staffId} />
+          <Button type="submit" variant="secondary" size="sm" disabled={pending} icon={<Icon name="key" />}>
+            {pending ? "Making a link…" : "Copy activation link"}
+          </Button>
+        </form>
+      ) : (
+        <div className="mt-2 flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={copy} icon={<Icon name="key" />}>
+              {copied ? "Copied" : "Copy to clipboard"}
+            </Button>
+            {copied ? (
+              <span role="status" className="text-base font-bold text-success">
+                Activation link copied.
+              </span>
+            ) : null}
+          </div>
+
+          {/*
+            Only when the clipboard would not take it. Small and plain: it has
+            to be selectable, and it has to not look like a prize.
+          */}
+          {copyFailed ? (
+            <>
+              <label htmlFor={`link-${staffId}`} className="text-base text-ink-soft">
+                Copy did not work — select this and copy it by hand:
+              </label>
+              <input
+                id={`link-${staffId}`}
+                readOnly
+                value={url}
+                onFocus={(event) => event.currentTarget.select()}
+                className="w-full rounded-lg border-2 border-control-border bg-surface px-2 py-1 font-mono text-sm text-ink-soft"
+              />
+            </>
+          ) : null}
+
+          <p className="text-base text-ink-soft">
+            Send it to them yourself. It works once, replaces any earlier link, and expires.
+          </p>
+        </div>
+      )}
+
+      {state.status === "error" ? (
+        <p role="alert" className="mt-2 text-base font-bold text-danger">
+          {state.message}
+        </p>
+      ) : null}
     </div>
   );
 }

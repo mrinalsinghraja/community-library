@@ -8,6 +8,7 @@ import { EmailService } from "@/server/lib/email";
 import { ConflictError, NotFoundError, RuleViolationError, ValidationError } from "@/server/lib/errors";
 import { mintToken, revokeTokens, TOKEN_LIFETIME } from "@/server/lib/tokens";
 import { ROLE_KEYS } from "@/lib/permissions";
+import { env } from "@/server/env";
 
 /**
  * Staff management. This is the privilege-escalation surface, so the rules are
@@ -45,6 +46,17 @@ export interface StaffSummary {
   createdAt: Date;
   lastLoginAt: Date | null;
   mustSetPassword: boolean;
+  /**
+   * Whether the invitation email actually reached a provider.
+   *
+   * Derived from `email_event`, which the mailer already writes — not a new
+   * column, and not an assumption. `false` here is the difference between
+   * "waiting for them to choose a password" and "nobody was ever written to",
+   * and the staff screen has to be able to tell an administrator which.
+   *
+   * Null when no invitation has ever been attempted for this account.
+   */
+  invitationEmailSent: boolean | null;
 }
 
 export async function listStaff(): Promise<StaffSummary[]> {
@@ -65,6 +77,33 @@ export async function listStaff(): Promise<StaffSummary[]> {
     },
   });
 
+  /*
+   * Did the invitation actually go anywhere?
+   *
+   * One query for the whole page rather than one per row. The mailer already
+   * records every attempt against the user it was about, so this reads a fact
+   * the system has, instead of inventing a column to remember it in.
+   */
+  const invitations = await prisma.emailEvent.findMany({
+    where: {
+      libraryId: actor.libraryId,
+      template: "staff_invitation",
+      relatedEntityType: "app_user",
+      relatedEntityId: { in: staff.map((user) => user.id) },
+    },
+    select: { relatedEntityId: true, status: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const latestInvitation = new Map<string, boolean>();
+  for (const event of invitations) {
+    if (!event.relatedEntityId) continue;
+    // Ordered newest first, so the first one seen for a user is the latest.
+    if (!latestInvitation.has(event.relatedEntityId)) {
+      latestInvitation.set(event.relatedEntityId, event.status === "SENT");
+    }
+  }
+
   // No password hash is selected. There is no code path that reads one outside
   // the authentication service.
   return staff.map((user) => ({
@@ -75,6 +114,7 @@ export async function listStaff(): Promise<StaffSummary[]> {
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt,
     mustSetPassword: user.mustSetPassword,
+    invitationEmailSent: latestInvitation.get(user.id) ?? null,
     roleKeys: user.userRoles.map((entry) => entry.role.key),
   }));
 }
@@ -191,6 +231,7 @@ async function loadStaff(actor: Actor, staffUserId: string) {
       displayName: true,
       email: true,
       status: true,
+      mustSetPassword: true,
       userRoles: { select: { role: { select: { key: true } } } },
     },
   });
@@ -374,6 +415,80 @@ export async function deactivateStaff(staffUserId: string, internalReason: strin
  * administrator has demoted themselves. Handing the library over is
  * `npm run create-admin`, run deliberately, by someone with the database.
  */
+
+/**
+ * Hands the Super Admin one activation link, to deliver by hand.
+ *
+ * **This exists because email might not.** A library can be set up before its
+ * mail provider is, and an account nobody can activate is not an account. The
+ * administrator copies the link and gives it to the new librarian through a
+ * channel they trust; the librarian still chooses their own password, and
+ * nobody ever sets it for them.
+ *
+ * The token is the ordinary activation token — same generator, same 7-day life,
+ * same single use, same hash-only storage. Nothing new was invented for this,
+ * and minting revokes any live one, so at most one link is ever valid.
+ *
+ * **The raw token exists only in the return value of this call.** It is not
+ * stored, not logged, and not written to the audit row — the row records that a
+ * link was issued, by whom, for whom, and when it expires. If the administrator
+ * loses the link they issue another; there is nowhere to go and look it up.
+ *
+ * Narrower than `reissueStaffActivation` on purpose: this refuses an account
+ * that has already chosen a password. Handing an administrator a live
+ * activation link for a working colleague's account would be a way to walk into
+ * it without that person ever hearing about it — the emailed path at least
+ * lands in their inbox. Someone who has forgotten their password uses the reset
+ * flow, which does write to them.
+ */
+export async function issueStaffActivationLink(
+  staffUserId: string,
+): Promise<{ url: string; expiresAt: Date; displayName: string }> {
+  const actor = await requirePermission("user.manage_staff");
+  const staff = await loadStaff(actor, staffUserId);
+
+  if (staff.status === "SUSPENDED" || staff.status === "DEACTIVATED") {
+    throw new RuleViolationError(
+      `Cannot issue an activation link for ${staff.status} staff`,
+      "Reactivate the account first.",
+    );
+  }
+
+  if (!staff.mustSetPassword) {
+    throw new RuleViolationError(
+      `Staff ${staffUserId} has already chosen a password`,
+      "They have already set a password. Send them a reset link instead.",
+    );
+  }
+
+  const token = await prisma.$transaction(async (tx) => {
+    const minted = await mintToken(tx, {
+      userId: staff.id,
+      type: "ACTIVATION",
+      createdById: actor.userId,
+    });
+
+    await recordAudit(tx, {
+      libraryId: actor.libraryId,
+      action: AUDIT_ACTIONS.ACTIVATION_LINK_ISSUED,
+      entityType: "app_user",
+      entityId: staff.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      // No token, and no URL. Deliberately: an audit log is read by more people
+      // and kept for longer than the thing it describes.
+      metadata: { kind: "STAFF", delivery: "manual", expiresAt: minted.expiresAt.toISOString() },
+    });
+
+    return minted;
+  });
+
+  return {
+    url: `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/activate/${token.rawToken}`,
+    expiresAt: token.expiresAt,
+    displayName: staff.displayName,
+  };
+}
 
 /** Sends a staff member a fresh activation or reset link. Never reveals a password. */
 export async function reissueStaffActivation(staffUserId: string): Promise<boolean> {

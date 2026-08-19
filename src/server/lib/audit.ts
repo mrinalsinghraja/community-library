@@ -43,6 +43,12 @@ export const AUDIT_ACTIONS = {
   // Activation
   ACTIVATION_SENT: "activation.sent",
   ACTIVATION_REISSUED: "activation.reissued",
+  /**
+   * A Super Admin took an activation link out of the system by hand, because
+   * email could not deliver it. The row records that it happened and to whom —
+   * never the token, which exists only in the response to that one request.
+   */
+  ACTIVATION_LINK_ISSUED: "activation.link_issued",
   ACTIVATION_FAILED: "activation.failed",
 
   // Guardians
