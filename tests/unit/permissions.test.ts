@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ASSIGNABLE_ROLE_KEYS,
+  ASSIGNABLE_STAFF_ROLE_KEYS,
+  DESTRUCTIVE_PERMISSIONS,
   PERMISSIONS,
   PERMISSION_KEYS,
   PERMISSIONS_FORBIDDEN_FOR_CHILD_STAFF,
@@ -50,6 +53,47 @@ describe("role definitions", () => {
     }
   });
 
+  it("never lets a librarian decide a child's registration or close a membership", () => {
+    /*
+     * The two that moved to the Super Admin in Version 1, and the reason each
+     * one moved.
+     *
+     * `registration.review` decides whether a child becomes a member of this
+     * library. A librarian sees the queue and meets the family — they keep
+     * `registration.view` — but the owner of the library says yes or no.
+     *
+     * `member.deactivate` ends a membership when a family leaves the building.
+     * It is not a mistake a librarian should be able to make at a busy desk,
+     * and it belongs with whoever approved the child in the first place.
+     */
+    const librarian = permissionsForRole(ROLE_KEYS.LIBRARIAN);
+
+    expect(librarian).not.toContain("registration.review");
+    expect(librarian).not.toContain("member.deactivate");
+
+    // What they keep: seeing the queue, and everything reversible.
+    expect(librarian).toContain("registration.view");
+    expect(librarian).toContain("member.suspend");
+    expect(librarian).toContain("book.edit");
+    expect(librarian).toContain("book.archive");
+  });
+
+  it("keeps every destructive permission with the Super Admin alone", () => {
+    // Deletion, final approval and staff management are the Super Admin's. The
+    // list is in the model rather than implied by an absence, so a future edit
+    // that grants one of these to another role fails here.
+    for (const role of ROLE_DEFINITIONS) {
+      if (role.key === ROLE_KEYS.SUPER_ADMIN) continue;
+
+      for (const destructive of DESTRUCTIVE_PERMISSIONS) {
+        expect(
+          role.permissions,
+          `${role.key} must not hold ${destructive}`,
+        ).not.toContain(destructive);
+      }
+    }
+  });
+
   it("keeps the child volunteer role away from anything sensitive", () => {
     // This is the test that stops a future edit quietly widening the junior
     // role. Children helping at the desk must never reach parent contact
@@ -67,6 +111,37 @@ describe("role definitions", () => {
     expect(junior?.isAssignable).toBe(false);
   });
 
+  it("has exactly three assignable roles: Super Admin, Librarian, Reader", () => {
+    /*
+     * The whole of the Version 1 role model, asserted in one line.
+     *
+     * Five roles are seeded and two of them grant nothing to anybody:
+     * JUNIOR_LIBRARIAN is waiting for a version that has child volunteers, and
+     * GUARDIAN describes an adult the library writes to rather than an account
+     * that signs in. `getActor` skips a non-assignable role even if a stale
+     * user_role row still points at it, so a dormant role is closed rather than
+     * merely hidden.
+     */
+    expect([...ASSIGNABLE_ROLE_KEYS].sort()).toEqual(
+      [ROLE_KEYS.LIBRARIAN, ROLE_KEYS.MEMBER, ROLE_KEYS.SUPER_ADMIN].sort(),
+    );
+
+    expect(ASSIGNABLE_ROLE_KEYS).not.toContain(ROLE_KEYS.JUNIOR_LIBRARIAN);
+    expect(ASSIGNABLE_ROLE_KEYS).not.toContain(ROLE_KEYS.GUARDIAN);
+  });
+
+  it("lets the staff screen create Librarians and nothing else", () => {
+    // There is exactly one Super Admin, made by `npm run create-admin` when the
+    // library is set up. No screen mints a second.
+    expect(ASSIGNABLE_STAFF_ROLE_KEYS).toEqual([ROLE_KEYS.LIBRARIAN]);
+  });
+
+  it("keeps the guardian role dormant, granting nothing to nobody", () => {
+    const guardian = ROLE_DEFINITIONS.find((role) => role.key === ROLE_KEYS.GUARDIAN);
+    expect(guardian?.isAssignable).toBe(false);
+    expect(guardian?.permissions).toEqual([]);
+  });
+
   it("gives a member nothing beyond browsing and their own books", () => {
     /*
      * Two read permissions, and no mutation permission of any kind. A child
@@ -81,6 +156,10 @@ describe("role definitions", () => {
     expect(permissionsForRole(ROLE_KEYS.MEMBER)).toEqual([
       "book.view",
       "loan.view",
+      // Version 1. Asking for a book is not taking one off the shelf: it
+      // writes a row saying a child would like it, and moves no book, no copy
+      // status and no due date until a librarian answers.
+      "loan.request",
       // Phase 4. Asking is not deciding: it writes a row that says a child
       // would like to keep a book, and changes nothing about the book, the
       // date, or the loan until a librarian answers.

@@ -85,7 +85,6 @@ export default async function StaffPage() {
                     <StaffRowActions
                       staffId={person.id}
                       status={person.status}
-                      roleKey={primaryRole}
                       isSelf={person.id === actor.userId}
                     />
                   </td>
@@ -95,8 +94,9 @@ export default async function StaffPage() {
           </DataTable>
 
           <p className="mt-4 text-base text-ink-soft">
-            The library&rsquo;s last active Super Admin cannot be suspended, closed or demoted —
-            there must always be somebody who can let everyone else back in.
+            Everyone added here is a Librarian. The library has one Super Admin, and there is no
+            screen that makes a second — the last active Super Admin cannot be suspended or closed
+            either, because there must always be somebody who can let everyone else back in.
           </p>
         </div>
 

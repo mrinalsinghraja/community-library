@@ -72,6 +72,8 @@ export const AUDIT_ACTIONS = {
   BOOK_COPY_CREATED: "book.copy.created",
   BOOK_COPY_UPDATED: "book.copy.updated",
   BOOK_COPY_ARCHIVED: "book.copy.archived",
+  BOOK_COPY_DELETED: "book.copy.deleted",
+  BOOK_COPY_DELETE_REFUSED: "book.copy.delete_refused",
   BOOK_COPY_STATUS_CHANGED: "book.copy.status_changed",
   BOOK_COPY_CONDITION_CHANGED: "book.copy.condition_changed",
   BOOK_CATEGORY_CHANGED: "book.title.category_changed",
@@ -105,6 +107,12 @@ export const AUDIT_ACTIONS = {
   RENEWAL_REQUEST_DECLINED: "renewal_request.declined",
   RENEWAL_REQUEST_CANCELLED: "renewal_request.cancelled",
   RENEWAL_REQUEST_REFUSED: "renewal_request.refused",
+
+  BORROW_REQUESTED: "borrow_request.created",
+  BORROW_REQUEST_APPROVED: "borrow_request.approved",
+  BORROW_REQUEST_DECLINED: "borrow_request.declined",
+  BORROW_REQUEST_CANCELLED: "borrow_request.cancelled",
+  BORROW_REQUEST_REFUSED: "borrow_request.refused",
 
   // Configuration
   SETTINGS_UPDATED: "settings.updated",

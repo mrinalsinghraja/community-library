@@ -34,6 +34,7 @@ export function StaffShell({
   pendingRegistrations,
   overdueLoans,
   pendingRenewals,
+  pendingBorrowRequests,
   title,
   children,
 }: {
@@ -43,6 +44,7 @@ export function StaffShell({
   /** Counted by the page that wants the badge; omitted elsewhere. */
   overdueLoans?: number;
   pendingRenewals?: number;
+  pendingBorrowRequests?: number;
   title: string;
   children: ReactNode;
 }) {
@@ -52,6 +54,15 @@ export function StaffShell({
     // loan.return, not loan.view — every reader holds loan.view, and this link
     // must only appear for somebody who works the desk.
     { href: "/desk/loans", label: "Books out", permission: "loan.return", badge: overdueLoans },
+    // A child has asked for a book and is waiting for it. `loan.issue` is the
+    // authority to hand one over, and the same key guards the page — saying yes
+    // here runs the desk's own issue, so it is the same power either way.
+    {
+      href: "/desk/requests",
+      label: "Books asked for",
+      permission: "loan.issue",
+      badge: pendingBorrowRequests,
+    },
     // A child asked a question and is waiting. `loan.renew` is the authority to
     // answer it, and the same key guards the page.
     {

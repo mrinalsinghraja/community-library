@@ -1087,6 +1087,108 @@ export async function archiveBook(copyId: string, reason?: string): Promise<void
   });
 }
 
+/**
+ * Erases a book that should never have been here.
+ *
+ * **The only permanent deletion in this application, and it is the Super
+ * Admin's alone** — `book.delete` is held by no other role. Everything a
+ * librarian needs in order to fix a mistake is reversible: edit the details,
+ * archive the copy, restore it again.
+ *
+ * It exists for one situation, which is real and common: somebody typed the
+ * same book in twice, or catalogued a book that was never given. A duplicate is
+ * not history — it is a row that was never true — and archiving it would leave
+ * a permanent ARCHIVED entry recording a book the library never had.
+ *
+ * So the rule is drawn around history rather than around status: **a copy that
+ * anything has ever happened to cannot be deleted.** One loan, ever, and this
+ * refuses and says to archive it instead. A donation is history too — somebody
+ * gave that book, and the gift outlives the object. What is left deletable is
+ * exactly the set of rows that record nothing: catalogued, never lent, never
+ * given, never asked for.
+ *
+ * The deletion itself is audited, with the code and title in the row, so the
+ * library's account of what was removed survives the thing that was removed.
+ */
+export async function deleteBook(copyId: string, reason: string): Promise<{ copyCode: string }> {
+  const actor = await requirePermission("book.delete");
+
+  const trimmed = reason.trim();
+  if (trimmed.length < 3) {
+    throw new ValidationError(
+      { reason: "Please note why, for the library's records." },
+      "Book deletion attempted without a reason",
+    );
+  }
+
+  const copy = await prisma.bookCopy.findFirst({
+    where: { id: copyId, libraryId: actor.libraryId },
+    select: {
+      id: true,
+      copyCode: true,
+      status: true,
+      title: { select: { id: true, title: true } },
+      _count: { select: { loans: true, borrowRequests: true } },
+      donation: { select: { id: true } },
+    },
+  });
+
+  if (!copy) throw new NotFoundError(`Book copy ${copyId} not found in library ${actor.libraryId}`);
+
+  const history: string[] = [];
+  if (copy._count.loans > 0) history.push("it has been borrowed");
+  if (copy._count.borrowRequests > 0) history.push("a reader has asked for it");
+  if (copy.donation) history.push("it was given to the library");
+
+  if (history.length > 0) {
+    await recordAudit(prisma, {
+      libraryId: actor.libraryId,
+      action: AUDIT_ACTIONS.BOOK_COPY_DELETE_REFUSED,
+      entityType: "book_copy",
+      entityId: copy.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      metadata: { copyCode: copy.copyCode, because: history },
+    }).catch(() => undefined);
+
+    throw new RuleViolationError(
+      `Refusing to delete copy ${copy.copyCode}: ${history.join(", ")}`,
+      `This book has a history — ${history.join(", and ")}. Archive it instead, so the record stays.`,
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // Audited first, inside the transaction: the row that says what was removed
+    // must be written by the same commit that removes it.
+    await recordAudit(tx, {
+      libraryId: actor.libraryId,
+      action: AUDIT_ACTIONS.BOOK_COPY_DELETED,
+      entityType: "book_copy",
+      entityId: copy.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      metadata: {
+        copyCode: copy.copyCode,
+        title: copy.title.title,
+        previousStatus: copy.status,
+        reason: trimmed.slice(0, CATALOGUE_LIMITS.archiveReasonMax),
+      },
+    });
+
+    await tx.bookCopy.delete({ where: { id: copy.id } });
+
+    // A title with no copies left is a shelf label for a book the library does
+    // not have. Removed only when this was its last copy, and never when other
+    // copies survive.
+    const remaining = await tx.bookCopy.count({ where: { titleId: copy.title.id } });
+    if (remaining === 0) {
+      await tx.bookTitle.delete({ where: { id: copy.title.id } });
+    }
+  });
+
+  return { copyCode: copy.copyCode };
+}
+
 /** Puts an archived copy back on the shelf, as AVAILABLE. */
 export async function restoreBook(copyId: string): Promise<void> {
   const actor = await requirePermission("book.archive");

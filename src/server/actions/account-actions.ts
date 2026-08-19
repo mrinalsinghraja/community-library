@@ -23,10 +23,8 @@ import {
   deactivateStaff,
   reactivateStaff,
   reissueStaffActivation,
-  setStaffRole,
   suspendStaff,
 } from "@/server/services/staff-service";
-import { ROLE_KEYS, type RoleKey } from "@/lib/permissions";
 
 export interface ActionState {
   status: "idle" | "success" | "error";
@@ -243,13 +241,6 @@ export async function reissueActivationAction(
 // Staff lifecycle (Super Admin)
 // ---------------------------------------------------------------------------
 
-function parseRoleKey(value: FormDataEntryValue | null): RoleKey {
-  const raw = String(value ?? "");
-  // Only ever the two staff roles. MEMBER, GUARDIAN and the not-yet-assignable
-  // JUNIOR_LIBRARIAN can never arrive through this form.
-  return raw === ROLE_KEYS.SUPER_ADMIN ? ROLE_KEYS.SUPER_ADMIN : ROLE_KEYS.LIBRARIAN;
-}
-
 export async function createStaffAction(
   _previous: ActionState,
   formData: FormData,
@@ -258,7 +249,6 @@ export async function createStaffAction(
     const result = await createStaffAccount({
       displayName: String(formData.get("displayName") ?? ""),
       email: String(formData.get("email") ?? ""),
-      roleKey: parseRoleKey(formData.get("roleKey")),
     });
     revalidatePath("/admin/staff");
 
@@ -307,19 +297,6 @@ export async function deactivateStaffAction(
     await deactivateStaff(String(formData.get("staffId") ?? ""), String(formData.get("reason") ?? ""));
     revalidatePath("/admin/staff");
     return { status: "success", message: "Account closed." };
-  } catch (error) {
-    return toState(error);
-  }
-}
-
-export async function setStaffRoleAction(
-  _previous: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  try {
-    await setStaffRole(String(formData.get("staffId") ?? ""), parseRoleKey(formData.get("roleKey")));
-    revalidatePath("/admin/staff");
-    return { status: "success", message: "Role updated. It applies on their next request." };
   } catch (error) {
     return toState(error);
   }

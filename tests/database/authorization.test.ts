@@ -14,7 +14,6 @@ import {
   createStaffAccount,
   deactivateStaff,
   listStaff,
-  setStaffRole,
   suspendStaff,
 } from "@/server/services/staff-service";
 
@@ -97,11 +96,7 @@ describe("a member cannot reach staff functions", () => {
     await actingAs(child.id, "MEMBER");
 
     await expect(
-      createStaffAccount({
-        displayName: "Sneaky",
-        email: "sneaky@example.invalid",
-        roleKey: "SUPER_ADMIN",
-      }),
+      createStaffAccount({ displayName: "Sneaky", email: "sneaky@example.invalid" }),
     ).rejects.toMatchObject({ code: "NOT_AUTHORIZED" });
   });
 
@@ -124,35 +119,23 @@ describe("a librarian cannot reach Super Admin functions", () => {
     await expect(listStaff()).rejects.toMatchObject({ code: "NOT_AUTHORIZED" });
   });
 
-  it("cannot create a librarian, let alone a Super Admin", async () => {
+  it("cannot create another staff account", async () => {
     await actingAs(librarian.id);
 
     await expect(
-      createStaffAccount({
-        displayName: "New Colleague",
-        email: "colleague@example.invalid",
-        roleKey: "LIBRARIAN",
-      }),
-    ).rejects.toMatchObject({ code: "NOT_AUTHORIZED" });
-
-    await expect(
-      createStaffAccount({
-        displayName: "New Boss",
-        email: "boss@example.invalid",
-        roleKey: "SUPER_ADMIN",
-      }),
+      createStaffAccount({ displayName: "New Colleague", email: "colleague@example.invalid" }),
     ).rejects.toMatchObject({ code: "NOT_AUTHORIZED" });
   });
 
-  it("cannot change anybody's role, including their own", async () => {
-    await actingAs(librarian.id);
+  it("has no way to change anybody's role, including their own", async () => {
+    // Version 1 has no role editor at all: `setStaffRole` does not exist, and
+    // the only role the staff service can grant is Librarian, at creation. This
+    // test asserts the absence, because "there is no code that does this" is
+    // the strongest form of "a librarian cannot do this".
+    const staffService = await import("@/server/services/staff-service");
 
-    await expect(setStaffRole(librarian.id, "SUPER_ADMIN")).rejects.toMatchObject({
-      code: "NOT_AUTHORIZED",
-    });
-    await expect(setStaffRole(superAdmin.id, "LIBRARIAN")).rejects.toMatchObject({
-      code: "NOT_AUTHORIZED",
-    });
+    expect(Object.keys(staffService)).not.toContain("setStaffRole");
+    expect(Object.keys(staffService)).not.toContain("promoteStaff");
   });
 
   it("cannot suspend a colleague through the staff service", async () => {
@@ -195,7 +178,6 @@ describe("Super Admin can manage librarians", () => {
     const result = await createStaffAccount({
       displayName: "Fresh Librarian",
       email: "fresh@example.invalid",
-      roleKey: "LIBRARIAN",
     });
 
     const created = await db.appUser.findUniqueOrThrow({ where: { id: result.userId } });
@@ -222,25 +204,30 @@ describe("Super Admin can manage librarians", () => {
     expect(updated.statusReason).toBe("left the community");
   });
 
-  it("promotes a librarian, and the new permissions apply on the next request", async () => {
-    const target = await createStaff(fixture.libraryId, "LIBRARIAN");
-
+  it("creates a Librarian and nothing else — there is no second Super Admin to make", async () => {
     await actingAs(superAdmin.id);
-    await setStaffRole(target.id, "SUPER_ADMIN");
 
-    // Permissions are read from the database every request, so no session needs
-    // destroying for a role change to take effect.
-    await actingAs(target.id);
-    await expect(listStaff()).resolves.toBeInstanceOf(Array);
+    const result = await createStaffAccount({
+      displayName: "Only Ever A Librarian",
+      email: "only@example.invalid",
+    });
+
+    const roles = await db.userRole.findMany({
+      where: { userId: result.userId },
+      select: { role: { select: { key: true } } },
+    });
+
+    // One role, and it is Librarian. Not "no Super Admin was asked for" — there
+    // is no field to ask with, so the only role this path can produce is this
+    // one. A librarian's own inability to reach staff management is asserted
+    // above, against a librarian who can actually sign in.
+    expect(roles.map((entry) => entry.role.key)).toEqual(["LIBRARIAN"]);
   });
 
-  it("refuses to suspend or demote itself", async () => {
+  it("refuses to suspend or close itself", async () => {
     await actingAs(superAdmin.id);
 
     await expect(suspendStaff(superAdmin.id, "oops")).rejects.toMatchObject({
-      code: "RULE_VIOLATION",
-    });
-    await expect(setStaffRole(superAdmin.id, "LIBRARIAN")).rejects.toMatchObject({
       code: "RULE_VIOLATION",
     });
     await expect(deactivateStaff(superAdmin.id, "oops")).rejects.toMatchObject({
@@ -249,26 +236,44 @@ describe("Super Admin can manage librarians", () => {
   });
 
   it("refuses to remove the library's last Super Admin", async () => {
-    // Two admins exist here; suspend one, then the other becomes the last.
-    const second = await createStaff(fixture.libraryId, "SUPER_ADMIN");
+    /*
+     * Reaching this guard takes deliberate setup, and that is worth saying out
+     * loud: in Version 1 nobody may remove themselves, and there is no way to
+     * make a second Super Admin, so the *only* administrator can never be the
+     * target of somebody else's click. The guard is the backstop underneath
+     * that — the thing that still holds if a future version adds a second
+     * administrator, or hands `user.manage_staff` to somebody else.
+     *
+     * So the permission is granted by hand here, to a librarian, purely to get
+     * a second actor into the room. It is taken away again in `finally`.
+     */
+    const role = await db.role.findUniqueOrThrow({
+      where: { libraryId_key: { libraryId: fixture.libraryId, key: "LIBRARIAN" } },
+      select: { id: true },
+    });
 
-    await actingAs(second.id);
-    await suspendStaff(superAdmin.id, "temporarily away");
+    await db.rolePermission.create({
+      data: { roleId: role.id, permissionKey: "user.manage_staff" },
+    });
 
-    // `second` is now the only active Super Admin, and a third admin cannot
-    // remove them either.
-    const third = await createStaff(fixture.libraryId, "SUPER_ADMIN");
-    await actingAs(third.id);
-    await expect(setStaffRole(second.id, "LIBRARIAN")).resolves.toBeUndefined();
+    try {
+      await actingAs(librarian.id);
 
-    // Now `third` is the last one standing.
-    await actingAs(third.id);
-    const others = await createStaff(fixture.libraryId, "LIBRARIAN");
-    await actingAs(others.id);
+      // `superAdmin` is the library's only active Super Admin.
+      await expect(suspendStaff(superAdmin.id, "leaving nobody in charge")).rejects.toMatchObject({
+        code: "RULE_VIOLATION",
+      });
+      await expect(deactivateStaff(superAdmin.id, "leaving nobody in charge")).rejects.toMatchObject(
+        { code: "RULE_VIOLATION" },
+      );
 
-    // Restore the original for later tests.
-    await actingAs(third.id);
-    await db.appUser.update({ where: { id: superAdmin.id }, data: { status: "ACTIVE" } });
+      const unchanged = await db.appUser.findUniqueOrThrow({ where: { id: superAdmin.id } });
+      expect(unchanged.status).toBe("ACTIVE");
+    } finally {
+      await db.rolePermission.deleteMany({
+        where: { roleId: role.id, permissionKey: "user.manage_staff" },
+      });
+    }
   });
 });
 

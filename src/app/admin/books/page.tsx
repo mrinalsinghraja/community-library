@@ -272,6 +272,7 @@ export default async function AdminBooksPage({
                       copyCode={book.copyCode}
                       archived={book.status === "ARCHIVED"}
                       canArchive={actor.permissions.has("book.archive")}
+                      canDelete={actor.permissions.has("book.delete")}
                     />
                   </td>
                 </tr>

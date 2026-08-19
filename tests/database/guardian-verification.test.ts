@@ -38,6 +38,14 @@ import {
 
 let fixture: Fixture;
 let librarian: Awaited<ReturnType<typeof createStaff>>;
+/**
+ * The person who decides. In Version 1 `registration.review` belongs to the
+ * Super Admin alone — a librarian sees the queue and meets the family, and the
+ * owner of the library says yes or no. Tests that approve or reject therefore
+ * act as this one; everything else stays with the librarian, because everything
+ * else is still their job.
+ */
+let admin: Awaited<ReturnType<typeof createStaff>>;
 const mail = new FakeEmailProvider();
 
 async function actingAs(userId: string, kind: "STAFF" | "MEMBER" = "STAFF") {
@@ -88,6 +96,7 @@ beforeAll(async () => {
   await resetDatabase();
   fixture = await createLibraryFixture();
   librarian = await createStaff(fixture.libraryId, "LIBRARIAN");
+  admin = await createStaff(fixture.libraryId, "SUPER_ADMIN");
   __setEmailProviderForTests(mail);
 });
 
@@ -233,7 +242,7 @@ describe("the production activation gate", () => {
   it("approves when the configured requirement is met", async () => {
     const request = await submitFresh("Gate Open");
 
-    await actingAs(librarian.id);
+    await actingAs(admin.id);
     const result = await approveRegistration(request.id);
 
     expect(result.memberCode).toBeTruthy();
@@ -243,7 +252,7 @@ describe("the production activation gate", () => {
     await requireStrength("STAFF_VERIFIED");
     const request = await submitFresh("Gate Shut");
 
-    await actingAs(librarian.id);
+    await actingAs(admin.id);
     await expect(approveRegistration(request.id)).rejects.toMatchObject({
       code: "RULE_VIOLATION",
     });
@@ -258,7 +267,7 @@ describe("the production activation gate", () => {
     await requireStrength("STAFF_VERIFIED");
     const request = await submitFresh("Confirmed In Person");
 
-    await actingAs(librarian.id);
+    await actingAs(admin.id);
     await recordStaffVerification({
       registrationRequestId: request.id,
       method: "STAFF_VERIFIED",
@@ -276,7 +285,7 @@ describe("the production activation gate", () => {
   it("blocks activation when the requirement is raised after approval", async () => {
     const request = await submitFresh("Raised Bar");
 
-    await actingAs(librarian.id);
+    await actingAs(admin.id);
     await approveRegistration(request.id);
     const rawToken = mail.tokenFrom(TEMPLATE_IDS.ACTIVATION)!;
 
@@ -297,7 +306,7 @@ describe("the production activation gate", () => {
   it("moves the evidence onto the member when the account is created", async () => {
     const request = await submitFresh("Evidence Travels");
 
-    await actingAs(librarian.id);
+    await actingAs(admin.id);
     const { memberUserId } = await approveRegistration(request.id);
 
     const verification = await db.guardianVerification.findFirstOrThrow({
@@ -321,7 +330,7 @@ describe("email confirmation", () => {
     // The challenge goes to the guardian, and says nothing about a card number.
     expect(sent!.text).not.toMatch(/TST-/);
 
-    await actingAs(librarian.id);
+    await actingAs(admin.id);
     await expect(approveRegistration(request.id)).rejects.toMatchObject({
       code: "RULE_VIOLATION",
     });
@@ -343,7 +352,7 @@ describe("email confirmation", () => {
     expect(state.achieved).toBe("EMAIL_CONFIRMED");
     expect(state.satisfied).toBe(true);
 
-    await actingAs(librarian.id);
+    await actingAs(admin.id);
     await expect(approveRegistration(request.id)).resolves.toBeDefined();
   });
 

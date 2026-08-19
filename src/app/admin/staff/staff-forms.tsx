@@ -5,13 +5,11 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, TextInput } from "@/components/ui/field";
-import { ROLE_KEYS } from "@/lib/permissions";
 import {
   createStaffAction,
   deactivateStaffAction,
   reactivateStaffAction,
   reissueStaffActivationAction,
-  setStaffRoleAction,
   suspendStaffAction,
   type ActionState,
 } from "@/server/actions/account-actions";
@@ -37,18 +35,19 @@ function Notice({ state }: { state: ActionState }) {
 }
 
 /**
- * Add a staff account.
+ * Add a librarian.
  *
- * No password field, deliberately. The new librarian is emailed a single-use
- * link and chooses their own — the Super Admin creating the account never
- * learns it, and there is nowhere for them to type one.
+ * Two fields, and no role picker: everyone this form creates is a Librarian.
+ * No password field either — the new librarian is emailed a single-use link and
+ * chooses their own, so the Super Admin creating the account never learns it,
+ * and there is nowhere for them to type one.
  */
 export function CreateStaffForm() {
   const [state, formAction, pending] = useActionState(createStaffAction, INITIAL);
 
   return (
     <Card>
-      <h2 className="text-2xl">Add someone to the team</h2>
+      <h2 className="text-2xl">Add a librarian</h2>
       <p className="mt-2 text-ink-soft">
         They will be emailed a link to choose their own password. You will never see it.
       </p>
@@ -64,20 +63,8 @@ export function CreateStaffForm() {
           <TextInput id="email" name="email" type="email" autoCapitalize="none" required />
         </Field>
 
-        <Field id="roleKey" label="Role" error={state.fieldErrors?.roleKey} required>
-          <select
-            id="roleKey"
-            name="roleKey"
-            defaultValue={ROLE_KEYS.LIBRARIAN}
-            className="min-h-14 w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface px-4 text-lg"
-          >
-            <option value={ROLE_KEYS.LIBRARIAN}>Librarian</option>
-            <option value={ROLE_KEYS.SUPER_ADMIN}>Super Admin</option>
-          </select>
-        </Field>
-
         <Button type="submit" size="md" disabled={pending} icon={<Icon name="plus" />}>
-          {pending ? "Creating…" : "Create account"}
+          {pending ? "Creating…" : "Add librarian"}
         </Button>
       </form>
     </Card>
@@ -88,23 +75,20 @@ export function CreateStaffForm() {
 export function StaffRowActions({
   staffId,
   status,
-  roleKey,
   isSelf,
 }: {
   staffId: string;
   status: string;
-  roleKey: string;
   isSelf: boolean;
 }) {
   const [suspendState, suspend, suspending] = useActionState(suspendStaffAction, INITIAL);
   const [reactivateState, reactivate, reactivating] = useActionState(reactivateStaffAction, INITIAL);
   const [deactivateState, deactivate, deactivating] = useActionState(deactivateStaffAction, INITIAL);
-  const [roleState, changeRole, changingRole] = useActionState(setStaffRoleAction, INITIAL);
   const [reissueState, reissue, reissuing] = useActionState(reissueStaffActivationAction, INITIAL);
 
   const [prompt, setPrompt] = useState<"suspend" | "deactivate" | null>(null);
 
-  const state = [suspendState, reactivateState, deactivateState, roleState, reissueState].find(
+  const state = [suspendState, reactivateState, deactivateState, reissueState].find(
     (candidate) => candidate.status !== "idle",
   );
 
@@ -161,25 +145,6 @@ export function StaffRowActions({
               </Button>
             </form>
           ) : null}
-
-          <form action={changeRole} className="flex items-center gap-2">
-            <input type="hidden" name="staffId" value={staffId} />
-            <label htmlFor={`role-${staffId}`} className="sr-only">
-              Role
-            </label>
-            <select
-              id={`role-${staffId}`}
-              name="roleKey"
-              defaultValue={roleKey}
-              className="min-h-11 rounded-lg border-2 border-control-border bg-surface px-2 text-base"
-            >
-              <option value={ROLE_KEYS.LIBRARIAN}>Librarian</option>
-              <option value={ROLE_KEYS.SUPER_ADMIN}>Super Admin</option>
-            </select>
-            <Button type="submit" variant="quiet" size="sm" disabled={changingRole}>
-              Set role
-            </Button>
-          </form>
 
           {!isPaused ? (
             <Button variant="quiet" size="sm" onClick={() => setPrompt("deactivate")}>

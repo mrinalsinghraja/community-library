@@ -174,6 +174,12 @@ export const UNAVAILABLE_FEATURES: readonly UnavailableFeature[] = [
     backedBy: "permission loan.override_rules",
   },
   {
+    label: "Editing roles and permissions",
+    reason:
+      "Version 1 has three roles and one Super Admin. The staff screen adds librarians; nothing edits a role.",
+    backedBy: "permission role.manage",
+  },
+  {
     label: "Marking a book lost",
     reason: "A copy's condition is changed on the book's own page instead.",
     backedBy: "permission loan.mark_lost",

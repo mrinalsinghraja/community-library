@@ -3,14 +3,17 @@
 import { revalidatePath } from "next/cache";
 
 import { isCondition } from "@/lib/catalogue";
-import { RENEWAL_REQUEST_MESSAGES } from "@/lib/circulation";
+import { BORROW_REQUEST_MESSAGES, RENEWAL_REQUEST_MESSAGES } from "@/lib/circulation";
 import { toFriendlyMessage, ValidationError } from "@/server/lib/errors";
 import {
   cancelLoan,
+  cancelOwnBorrowRequest,
   cancelOwnRenewalRequest,
+  decideBorrowRequest,
   decideRenewalRequest,
   issueBook,
   renewLoan,
+  requestBorrow,
   requestRenewal,
   returnBook,
 } from "@/server/services/circulation-service";
@@ -62,6 +65,7 @@ function revalidateCirculation(): void {
   revalidatePath("/desk/circulation");
   revalidatePath("/desk/loans");
   revalidatePath("/desk/renewals");
+  revalidatePath("/desk/requests");
   revalidatePath("/admin/books");
   revalidatePath("/books");
   revalidatePath("/my-books");
@@ -203,6 +207,74 @@ export async function decideRenewalRequestAction(
       message:
         result.decision === "APPROVE"
           ? `${result.title} stays with ${result.readerName} for longer.`
+          : `${result.readerName} has been told about ${result.title}.`,
+    };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+/**
+ * A child asks for a book.
+ *
+ * The code arrives in a form field and nothing else does — no member id, no
+ * copy id, no library. Who is asking comes from the session inside the service,
+ * so there is no field here anybody could edit to ask on another child's
+ * behalf.
+ */
+export async function requestBorrowAction(
+  _previous: CirculationFormState,
+  formData: FormData,
+): Promise<CirculationFormState> {
+  try {
+    await requestBorrow({ code: String(formData.get("code") ?? "") });
+    revalidateCirculation();
+    return { status: "success", message: BORROW_REQUEST_MESSAGES.pending };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+export async function cancelBorrowRequestAction(
+  _previous: CirculationFormState,
+  formData: FormData,
+): Promise<CirculationFormState> {
+  try {
+    await cancelOwnBorrowRequest({ code: String(formData.get("code") ?? "") });
+    revalidateCirculation();
+    return { status: "success", message: BORROW_REQUEST_MESSAGES.cancelled };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+/**
+ * A librarian answers a request for a book.
+ *
+ * Same narrowing as the renewal decision, and for the same reason: anything
+ * that is not exactly "APPROVE" is a decline, so a malformed submit can never
+ * send a book home with a child by accident.
+ */
+export async function decideBorrowRequestAction(
+  _previous: CirculationFormState,
+  formData: FormData,
+): Promise<CirculationFormState> {
+  try {
+    const decision = String(formData.get("decision") ?? "") === "APPROVE" ? "APPROVE" : "DECLINE";
+
+    const result = await decideBorrowRequest({
+      requestId: String(formData.get("requestId") ?? ""),
+      decision,
+      reason: String(formData.get("reason") ?? ""),
+    });
+
+    revalidateCirculation();
+
+    return {
+      status: "success",
+      message:
+        result.decision === "APPROVE"
+          ? `${result.title} is ready for ${result.readerName} to collect.`
           : `${result.readerName} has been told about ${result.title}.`,
     };
   } catch (error) {

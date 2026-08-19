@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { BorrowRequest } from "@/app/books/[code]/borrow-request";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { Butterfly, LeafSprig } from "@/components/library/library-logo";
 import { PublicShell } from "@/components/layout/site-shell";
@@ -12,6 +13,7 @@ import { getActor } from "@/server/authz";
 import { isAppError } from "@/server/lib/errors";
 import { getBrandingSafe } from "@/server/lib/settings";
 import { getBookByCode } from "@/server/services/catalogue-service";
+import { getOwnBorrowStateForCode } from "@/server/services/circulation-service";
 import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +60,9 @@ export default async function BookDetailPage({
   }
 
   const status = statusDefinition(book.status);
+  // Only a reader gets an answer here; a signed-out visitor and a librarian
+  // both get "none", and the control renders nothing at all.
+  const borrow = await getOwnBorrowStateForCode(decodeURIComponent(code));
 
   return (
     <PublicShell branding={branding} signedIn={Boolean(actor)}>
@@ -122,10 +127,20 @@ export default async function BookDetailPage({
               />
               <p>
                 {status.onShelf
-                  ? "Available — come and find it on the shelf, and ask a librarian when you would like to take it home."
+                  ? "On the shelf in the library room. Ask the librarian and they will get it ready for you."
                   : "This one is not on the shelf right now. Have a look at what else is waiting."}
               </p>
             </div>
+
+            <BorrowRequest
+              code={book.code}
+              title={book.title}
+              state={borrow.state}
+              canAsk={borrow.canAsk}
+              alreadyBorrowed={borrow.alreadyBorrowed}
+              spokenFor={borrow.spokenFor}
+              onShelf={status.onShelf}
+            />
 
             {/*
               The thank-you, rendered by the service exactly as the donor chose

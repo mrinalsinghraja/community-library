@@ -7,21 +7,28 @@ import { TextInput } from "@/components/ui/field";
 import { CATALOGUE_LIMITS } from "@/lib/catalogue";
 import {
   archiveBookAction,
+  deleteBookAction,
   restoreBookAction,
   type BookFormState,
 } from "@/server/actions/catalogue-actions";
 import { Icon } from "@/components/ui/icon";
 
 /**
- * Taking a book off the shelf, and putting it back.
+ * Taking a book off the shelf, putting it back, and — for one person only —
+ * removing a row that should never have been written.
  *
- * There is no delete button anywhere in this application, and this is the
- * screen where somebody would most expect one. Archiving keeps the record, the
- * code and — the part that matters — the donation: somebody in this community
- * gave that book, and a mis-tap must not be able to erase that.
+ * **Archive is the normal answer, and it is the one a librarian gets.** It
+ * keeps the record, the code and, the part that matters, the donation: somebody
+ * in this community gave that book, and a mis-tap must not erase that.
  *
- * Archiving asks for a reason, like every other action that changes a shared
- * record. It goes to the audit log, not to the donor.
+ * Delete appears only for the Super Admin, and the service behind it refuses
+ * any copy with a history — borrowed once, asked for once, given by anybody. It
+ * is for the duplicate somebody typed in twice, which is not history at all but
+ * a row that was never true. Archiving that would leave a permanent record of a
+ * book the library never had.
+ *
+ * Both ask for a reason, like every other action that changes a shared record.
+ * It goes to the audit log, not to the donor.
  */
 
 const initialState: BookFormState = { status: "idle" };
@@ -31,17 +38,80 @@ export function ArchiveActions({
   copyCode,
   archived,
   canArchive,
+  canDelete = false,
 }: {
   copyId: string;
   copyCode: string;
   archived: boolean;
   canArchive: boolean;
+  /** Super Admin only. Hiding it is a courtesy; the service is what refuses. */
+  canDelete?: boolean;
 }) {
   // Hiding these is a courtesy for a role that cannot use them. The permission
   // is checked again inside the service, which is what actually refuses.
-  if (!canArchive) return null;
+  if (!canArchive && !canDelete) return null;
 
-  return archived ? <RestoreButton copyId={copyId} /> : <ArchiveButton copyId={copyId} copyCode={copyCode} />;
+  return (
+    <div className="flex flex-col gap-2">
+      {canArchive ? (
+        archived ? (
+          <RestoreButton copyId={copyId} />
+        ) : (
+          <ArchiveButton copyId={copyId} copyCode={copyCode} />
+        )
+      ) : null}
+      {canDelete ? <DeleteButton copyId={copyId} copyCode={copyCode} /> : null}
+    </div>
+  );
+}
+
+function DeleteButton({ copyId, copyCode }: { copyId: string; copyCode: string }) {
+  const [state, formAction] = useActionState(deleteBookAction, initialState);
+  const [confirming, setConfirming] = useState(false);
+
+  if (state.status === "success") {
+    return <p className="text-base text-success">{state.message}</p>;
+  }
+
+  if (!confirming) {
+    return (
+      <Button variant="quiet" size="sm" onClick={() => setConfirming(true)}>
+        Remove duplicate
+      </Button>
+    );
+  }
+
+  return (
+    <form action={formAction} className="flex min-w-56 flex-col gap-2">
+      <input type="hidden" name="copyId" value={copyId} />
+      <p className="text-base text-ink-soft">
+        Remove {copyCode} altogether? This cannot be undone. It only works for a book nobody has
+        borrowed, asked for or given — anything else must be archived instead.
+      </p>
+      <TextInput
+        name="reason"
+        placeholder="Why? (e.g. entered twice by mistake)"
+        maxLength={CATALOGUE_LIMITS.archiveReasonMax}
+        required
+        minLength={3}
+        className="min-h-11 text-base"
+        aria-label={`Reason for removing ${copyCode}`}
+      />
+      <div className="flex gap-2">
+        <Button type="submit" variant="danger" size="sm">
+          Remove for good
+        </Button>
+        <Button variant="quiet" size="sm" onClick={() => setConfirming(false)}>
+          Keep it
+        </Button>
+      </div>
+      {state.status === "error" ? (
+        <p role="alert" className="text-base font-bold text-danger">
+          {state.message}
+        </p>
+      ) : null}
+    </form>
+  );
 }
 
 function ArchiveButton({ copyId, copyCode }: { copyId: string; copyCode: string }) {

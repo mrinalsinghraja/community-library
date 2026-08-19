@@ -213,6 +213,17 @@ enum RenewalRequestStatus {
   CANCELLED
 }
 
+/// A child's request to borrow a book, before any book has moved.
+///
+/// The same four states as a renewal request, and for the same reason: asking
+/// is not getting, and every ask ends in an answer somebody can point at.
+enum BorrowRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELLED
+}
+
 /// What a reminder was about. Derived from the loan's due date at send time and
 /// stored so the same occurrence can never be claimed twice — it is not a state
 /// the loan carries, and nothing reads it to decide whether a book is late.
@@ -272,27 +283,27 @@ model Library {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  community Community       @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  community Community        @relation(fields: [communityId], references: [id], onDelete: Restrict)
   settings  LibrarySettings?
 
-  users                AppUser[]
-  roles                Role[]
-  guardians            Guardian[]
-  registrationRequests RegistrationRequest[]
-  consentRecords       ConsentRecord[]
+  users                 AppUser[]
+  roles                 Role[]
+  guardians             Guardian[]
+  registrationRequests  RegistrationRequest[]
+  consentRecords        ConsentRecord[]
   guardianVerifications GuardianVerification[]
-  categories           BookCategory[]
-  bookTitles           BookTitle[]
-  bookCopies           BookCopy[]
-  donations            Donation[]
-  loans                Loan[]
-  loanNotifications    LoanNotification[]
-  auditLogs            AuditLog[]
-  announcements        Announcement[]
-  emailEvents          EmailEvent[]
-  loginAttempts        LoginAttempt[]
-  mediaObjects         MediaObject[]
-  codeSequences        CodeSequence[]
+  categories            BookCategory[]
+  bookTitles            BookTitle[]
+  bookCopies            BookCopy[]
+  donations             Donation[]
+  loans                 Loan[]
+  loanNotifications     LoanNotification[]
+  auditLogs             AuditLog[]
+  announcements         Announcement[]
+  emailEvents           EmailEvent[]
+  loginAttempts         LoginAttempt[]
+  mediaObjects          MediaObject[]
+  codeSequences         CodeSequence[]
 
   @@index([communityId])
   @@map("library")
@@ -312,13 +323,13 @@ model LibrarySettings {
   // Every circulation rule the library has is one of these numbers. Nothing in
   // src/ writes `14`, `2` or `1` into a business decision; the service reads
   // this row and the tests set their own values on their own fixture library.
-  borrowingPeriodDays      Int     @default(14) @map("borrowing_period_days")
-  maxActiveLoans           Int     @default(2) @map("max_active_loans")
-  maxRenewals              Int     @default(1) @map("max_renewals")
+  borrowingPeriodDays        Int     @default(14) @map("borrowing_period_days")
+  maxActiveLoans             Int     @default(2) @map("max_active_loans")
+  maxRenewals                Int     @default(1) @map("max_renewals")
   /// Days added to the CURRENT due date when a loan is renewed — not to today.
   /// A child who renews early is not punished for it by losing the days they
   /// had left. See docs/CIRCULATION.md §"Renewal".
-  renewalPeriodDays        Int     @default(7) @map("renewal_period_days")
+  renewalPeriodDays          Int     @default(7) @map("renewal_period_days")
   /// NOT IMPLEMENTED, and cannot be: there are no reservations in Version 1, so
   /// there is no state for this to describe.
   renewalBlockedWhenReserved Boolean @default(true) @map("renewal_blocked_when_reserved")
@@ -341,7 +352,7 @@ model LibrarySettings {
   /// door for a nine-year-old, and whether this library wants that is the
   /// owner's decision, not a default the code should assume. Changing this
   /// value today does nothing at all. Nothing reads it; a test says so.
-  blockOnOverdueDays       Int     @default(7) @map("block_on_overdue_days")
+  blockOnOverdueDays     Int   @default(7) @map("block_on_overdue_days")
   /// When reminders are sent, as whole days from a loan's due date.
   ///
   /// Negative is before the date and positive is after it, so the default
@@ -352,13 +363,13 @@ model LibrarySettings {
   /// claimed once per loan per due date.
   ///
   /// Implemented in Phase 4. See docs/NOTIFICATIONS.md.
-  overdueReminderOffsets   Int[]   @default([-2, 0, 3, 7]) @map("overdue_reminder_offsets")
+  overdueReminderOffsets Int[] @default([-2, 0, 3, 7]) @map("overdue_reminder_offsets")
 
   // Identifiers
-  copyCodePrefix   String @default("LIB-B") @map("copy_code_prefix")
-  copyCodePadding  Int    @default(4) @map("copy_code_padding")
-  memberCodePrefix String @default("LIB-R") @map("member_code_prefix")
-  memberCodePadding Int   @default(4) @map("member_code_padding")
+  copyCodePrefix    String @default("LIB-B") @map("copy_code_prefix")
+  copyCodePadding   Int    @default(4) @map("copy_code_padding")
+  memberCodePrefix  String @default("LIB-R") @map("member_code_prefix")
+  memberCodePadding Int    @default(4) @map("member_code_padding")
 
   // Visibility and privacy
   catalogueVisibility CatalogueVisibility @default(MEMBER_ONLY) @map("catalogue_visibility")
@@ -372,9 +383,9 @@ model LibrarySettings {
   welcomeMessage String? @map("welcome_message")
 
   // Contact and policy copy
-  contactEmail          String? @map("contact_email")
-  contactPhone          String? @map("contact_phone")
-  rulesMarkdown         String? @map("rules_markdown")
+  contactEmail           String? @map("contact_email")
+  contactPhone           String? @map("contact_phone")
+  rulesMarkdown          String? @map("rules_markdown")
   donationPolicyMarkdown String? @map("donation_policy_markdown")
 
   // Consent
@@ -393,8 +404,8 @@ model LibrarySettings {
   guardianVerificationVersion  String                       @default("2026-08-v1") @map("guardian_verification_version")
 
   // System
-  timezone                 String  @default("Asia/Kolkata")
-  dateFormat               String  @default("d MMM yyyy") @map("date_format")
+  timezone                String  @default("Asia/Kolkata")
+  dateFormat              String  @default("d MMM yyyy") @map("date_format")
   /// NOT IMPLEMENTED. Sketched as a master switch over all outbound mail, and
   /// deliberately still unwired: it defaults to false, and a false that silently
   /// stopped activation links would lock families out of the library with no
@@ -402,11 +413,11 @@ model LibrarySettings {
   /// should do to a registration already in flight — is the owner's decision.
   /// Which provider is configured is what decides whether mail leaves the
   /// server today, and `console` cannot reach anybody.
-  emailEnabled             Boolean @default(false) @map("email_enabled")
+  emailEnabled            Boolean @default(false) @map("email_enabled")
   /// Whether the daily job sends due-soon and overdue reminders. Off by
   /// default: a library must turn its own reminders on, having decided that
   /// writing to guardians is what it wants. Implemented in Phase 4.
-  overdueRemindersEnabled  Boolean @default(false) @map("overdue_reminders_enabled")
+  overdueRemindersEnabled Boolean @default(false) @map("overdue_reminders_enabled")
 
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   updatedById String?  @map("updated_by_id")
@@ -424,14 +435,14 @@ model LibrarySettings {
 /// username — never an email address, because children in this age range
 /// mostly do not have one. Guardians are contactable but do not sign in in v1.
 model AppUser {
-  id          String     @id @default(uuid(7))
-  libraryId   String     @map("library_id")
-  kind        UserKind
-  displayName String     @map("display_name")
-  email       String?
-  username    String?
-  passwordHash String?   @map("password_hash")
-  status      UserStatus @default(INVITED)
+  id           String     @id @default(uuid(7))
+  libraryId    String     @map("library_id")
+  kind         UserKind
+  displayName  String     @map("display_name")
+  email        String?
+  username     String?
+  passwordHash String?    @map("password_hash")
+  status       UserStatus @default(INVITED)
 
   mustSetPassword  Boolean   @default(true) @map("must_set_password")
   lastLoginAt      DateTime? @map("last_login_at") @db.Timestamptz(6)
@@ -454,26 +465,28 @@ model AppUser {
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdById String?  @map("created_by_id")
 
-  library       Library        @relation(fields: [libraryId], references: [id], onDelete: Restrict)
+  library       Library          @relation(fields: [libraryId], references: [id], onDelete: Restrict)
   memberProfile MemberProfile?
   userRoles     UserRole[]
   sessions      Session[]
   authTokens    AuthToken[]
   guardianLinks GuardianMember[]
 
-  loans            Loan[]           @relation("LoanBorrower")
-  loansIssued      Loan[]           @relation("LoanIssuedBy")
-  loansReturned    Loan[]           @relation("LoanReturnedBy")
-  loansCancelled   Loan[]           @relation("LoanCancelledBy")
-  loanEvents       LoanEvent[]
-  renewalRequests  RenewalRequest[] @relation("RenewalRequester")
-  renewalDecisions RenewalRequest[] @relation("RenewalDecider")
-  auditLogs        AuditLog[]
-  donationsGiven   Donation[]       @relation("DonationDonor")
-  donationsRecorded Donation[]      @relation("DonationRecorder")
-  mediaUploaded    MediaObject[]
-  reviewedRequests RegistrationRequest[] @relation("RegistrationReviewer")
-  recordedConsents ConsentRecord[]  @relation("ConsentRecorder")
+  loans             Loan[]                @relation("LoanBorrower")
+  loansIssued       Loan[]                @relation("LoanIssuedBy")
+  loansReturned     Loan[]                @relation("LoanReturnedBy")
+  loansCancelled    Loan[]                @relation("LoanCancelledBy")
+  loanEvents        LoanEvent[]
+  renewalRequests   RenewalRequest[]      @relation("RenewalRequester")
+  renewalDecisions  RenewalRequest[]      @relation("RenewalDecider")
+  borrowRequests    BorrowRequest[]       @relation("BorrowRequester")
+  borrowDecisions   BorrowRequest[]       @relation("BorrowRequestDecider")
+  auditLogs         AuditLog[]
+  donationsGiven    Donation[]            @relation("DonationDonor")
+  donationsRecorded Donation[]            @relation("DonationRecorder")
+  mediaUploaded     MediaObject[]
+  reviewedRequests  RegistrationRequest[] @relation("RegistrationReviewer")
+  recordedConsents  ConsentRecord[]       @relation("ConsentRecorder")
 
   guardianVerifications  GuardianVerification[] @relation("GuardianVerificationSubject")
   verificationsPerformed GuardianVerification[] @relation("GuardianVerifier")
@@ -487,16 +500,16 @@ model AppUser {
 /// Roles are rows, not code branches. Adding JUNIOR_LIBRARIAN later is a seed
 /// change plus a permission mapping — no application code changes.
 model Role {
-  id          String  @id @default(uuid(7))
-  libraryId   String? @map("library_id")
-  key         String
-  name        String
-  description String?
+  id           String  @id @default(uuid(7))
+  libraryId    String? @map("library_id")
+  key          String
+  name         String
+  description  String?
   /// System roles cannot be renamed or deleted from the admin UI.
-  isSystem    Boolean @default(true) @map("is_system")
+  isSystem     Boolean @default(true) @map("is_system")
   /// Seeded but not assignable yet (used for JUNIOR_LIBRARIAN in v1).
   isAssignable Boolean @default(true) @map("is_assignable")
-  sortOrder   Int     @default(100) @map("sort_order")
+  sortOrder    Int     @default(100) @map("sort_order")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
@@ -549,14 +562,14 @@ model MemberProfile {
   userId    String @id @map("user_id")
   libraryId String @map("library_id")
 
-  memberCode  String    @map("member_code")
-  dateOfBirth DateTime  @map("date_of_birth") @db.Date
-  apartment   String
-  avatarKey   String?   @map("avatar_key")
+  memberCode   String   @map("member_code")
+  dateOfBirth  DateTime @map("date_of_birth") @db.Date
+  apartment    String
+  avatarKey    String?  @map("avatar_key")
   photoMediaId String?  @unique @map("photo_media_id")
-  joinedAt    DateTime  @default(now()) @map("joined_at") @db.Timestamptz(6)
+  joinedAt     DateTime @default(now()) @map("joined_at") @db.Timestamptz(6)
   /// Librarian-only notes. Never exposed to any member-facing surface.
-  staffNotes  String?   @map("staff_notes")
+  staffNotes   String?  @map("staff_notes")
 
   user       AppUser      @relation(fields: [userId], references: [id], onDelete: Cascade)
   photoMedia MediaObject? @relation(fields: [photoMediaId], references: [id], onDelete: SetNull)
@@ -569,9 +582,9 @@ model MemberProfile {
 /// A guardian is a contactable adult, not a borrower. Their contact details sit
 /// behind the member.view_contact permission and never render on a child screen.
 model Guardian {
-  id        String  @id @default(uuid(7))
-  libraryId String  @map("library_id")
-  fullName  String  @map("full_name")
+  id        String @id @default(uuid(7))
+  libraryId String @map("library_id")
+  fullName  String @map("full_name")
   email     String
   phone     String
   apartment String
@@ -579,7 +592,7 @@ model Guardian {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  library        Library          @relation(fields: [libraryId], references: [id], onDelete: Restrict)
+  library        Library                @relation(fields: [libraryId], references: [id], onDelete: Restrict)
   memberLinks    GuardianMember[]
   consentRecords ConsentRecord[]
   verifications  GuardianVerification[]
@@ -623,21 +636,21 @@ model RegistrationRequest {
   avatarKey     String?  @map("avatar_key")
   photoMediaId  String?  @map("photo_media_id")
 
-  submittedAt DateTime  @default(now()) @map("submitted_at") @db.Timestamptz(6)
-  reviewedAt  DateTime? @map("reviewed_at") @db.Timestamptz(6)
-  reviewedById String?  @map("reviewed_by_id")
+  submittedAt  DateTime  @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  reviewedAt   DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  reviewedById String?   @map("reviewed_by_id")
   /// Internal note. Never sent verbatim to the guardian.
-  reviewNote  String?   @map("review_note")
+  reviewNote   String?   @map("review_note")
 
   createdMemberUserId String? @unique @map("created_member_user_id")
 
   /// Truncated, salted hash only — never a raw IP. Retained for abuse handling.
   submittedIpHash String? @map("submitted_ip_hash")
 
-  library    Library         @relation(fields: [libraryId], references: [id], onDelete: Cascade)
-  reviewedBy AppUser?        @relation("RegistrationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
-  photoMedia MediaObject?    @relation(fields: [photoMediaId], references: [id], onDelete: SetNull)
-  consents   ConsentRecord[]
+  library       Library                @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  reviewedBy    AppUser?               @relation("RegistrationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  photoMedia    MediaObject?           @relation(fields: [photoMediaId], references: [id], onDelete: SetNull)
+  consents      ConsentRecord[]
   verifications GuardianVerification[]
 
   @@index([libraryId, status, submittedAt])
@@ -656,7 +669,7 @@ model ConsentRecord {
   method    ConsentMethod @default(WEB_FORM)
 
   /// Version of the consent wording that was actually shown when granted.
-  consentVersion String @map("consent_version")
+  consentVersion      String @map("consent_version")
   /// Verbatim snapshot of the text the guardian agreed to, so a later wording
   /// change can never rewrite history.
   consentTextSnapshot String @map("consent_text_snapshot")
@@ -665,10 +678,10 @@ model ConsentRecord {
   memberUserId          String? @map("member_user_id")
   registrationRequestId String? @map("registration_request_id")
 
-  grantedAt   DateTime  @default(now()) @map("granted_at") @db.Timestamptz(6)
-  withdrawnAt DateTime? @map("withdrawn_at") @db.Timestamptz(6)
+  grantedAt    DateTime  @default(now()) @map("granted_at") @db.Timestamptz(6)
+  withdrawnAt  DateTime? @map("withdrawn_at") @db.Timestamptz(6)
   /// Staff member who recorded an in-person consent; null for online forms.
-  recordedById String?  @map("recorded_by_id")
+  recordedById String?   @map("recorded_by_id")
 
   /// Salted hash only. Justified as evidence that a specific submission occurred.
   ipHash        String? @map("ip_hash")
@@ -806,10 +819,10 @@ model BookTitle {
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdById String?  @map("created_by_id")
 
-  library  Library      @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  library    Library      @relation(fields: [libraryId], references: [id], onDelete: Cascade)
   // Restrict, not SetNull: a category with books on its shelf cannot be deleted
   // out from under them, and every title always has one.
-  category BookCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  category   BookCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   // SetNull: losing a cover picture must never take the book off the shelf.
   coverMedia MediaObject? @relation(fields: [coverMediaId], references: [id], onDelete: SetNull)
   copies     BookCopy[]
@@ -829,12 +842,12 @@ model BookTitle {
 /// ARCHIVED is how a book leaves the shelf permanently — nothing is ever
 /// hard-deleted, so the donation and its history survive.
 model BookCopy {
-  id        String          @id @default(uuid(7))
-  libraryId String          @map("library_id")
-  titleId   String          @map("title_id")
-  copyCode  String          @map("copy_code")
-  status    CopyStatus      @default(AVAILABLE)
-  condition CopyCondition   @default(GOOD)
+  id              String          @id @default(uuid(7))
+  libraryId       String          @map("library_id")
+  titleId         String          @map("title_id")
+  copyCode        String          @map("copy_code")
+  status          CopyStatus      @default(AVAILABLE)
+  condition       CopyCondition   @default(GOOD)
   acquisitionType AcquisitionType @default(RESIDENT_DONATION) @map("acquisition_type")
 
   shelfLocation String?   @map("shelf_location")
@@ -845,10 +858,11 @@ model BookCopy {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  library  Library   @relation(fields: [libraryId], references: [id], onDelete: Cascade)
-  title    BookTitle @relation(fields: [titleId], references: [id], onDelete: Restrict)
-  donation Donation?
-  loans    Loan[]
+  library        Library         @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  title          BookTitle       @relation(fields: [titleId], references: [id], onDelete: Restrict)
+  donation       Donation?
+  loans          Loan[]
+  borrowRequests BorrowRequest[]
 
   @@unique([libraryId, copyCode], map: "book_copy_library_code_key")
   @@index([libraryId, status])
@@ -907,29 +921,30 @@ model Loan {
   memberUserId String     @map("member_user_id")
   status       LoanStatus @default(ACTIVE)
 
-  issuedAt     DateTime  @default(now()) @map("issued_at") @db.Timestamptz(6)
-  issuedById   String?   @map("issued_by_id")
+  issuedAt      DateTime  @default(now()) @map("issued_at") @db.Timestamptz(6)
+  issuedById    String?   @map("issued_by_id")
   /// The due date this loan actually has, computed once when it was issued (and
   /// again on each renewal) and then stored. NEVER re-derived from the current
   /// library settings: changing the borrowing period from 14 days to 21 must
   /// not silently move the date on a book already in a child's bag.
-  dueAt        DateTime  @map("due_at") @db.Timestamptz(6)
-  returnedAt   DateTime? @map("returned_at") @db.Timestamptz(6)
-  returnedById String?   @map("returned_by_id")
+  dueAt         DateTime  @map("due_at") @db.Timestamptz(6)
+  returnedAt    DateTime? @map("returned_at") @db.Timestamptz(6)
+  returnedById  String?   @map("returned_by_id")
   cancelledAt   DateTime? @map("cancelled_at") @db.Timestamptz(6)
   cancelledById String?   @map("cancelled_by_id")
-  renewalCount Int       @default(0) @map("renewal_count")
+  renewalCount  Int       @default(0) @map("renewal_count")
 
-  library    Library @relation(fields: [libraryId], references: [id], onDelete: Cascade)
-  copy       BookCopy @relation(fields: [copyId], references: [id], onDelete: Restrict)
-  member     AppUser  @relation("LoanBorrower", fields: [memberUserId], references: [id], onDelete: Restrict)
-  issuedBy   AppUser? @relation("LoanIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
-  returnedBy AppUser? @relation("LoanReturnedBy", fields: [returnedById], references: [id], onDelete: SetNull)
+  library     Library  @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  copy        BookCopy @relation(fields: [copyId], references: [id], onDelete: Restrict)
+  member      AppUser  @relation("LoanBorrower", fields: [memberUserId], references: [id], onDelete: Restrict)
+  issuedBy    AppUser? @relation("LoanIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
+  returnedBy  AppUser? @relation("LoanReturnedBy", fields: [returnedById], references: [id], onDelete: SetNull)
   cancelledBy AppUser? @relation("LoanCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
 
   events          LoanEvent[]
   renewalRequests RenewalRequest[]
   notifications   LoanNotification[]
+  borrowRequests  BorrowRequest[]
 
   @@index([libraryId, status, dueAt])
   @@index([memberUserId, status])
@@ -944,11 +959,11 @@ model LoanEvent {
   loanId String        @map("loan_id")
   type   LoanEventType
 
-  occurredAt   DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(6)
-  actorUserId  String?   @map("actor_user_id")
+  occurredAt    DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  actorUserId   String?   @map("actor_user_id")
   previousDueAt DateTime? @map("previous_due_at") @db.Timestamptz(6)
-  newDueAt     DateTime? @map("new_due_at") @db.Timestamptz(6)
-  note         String?
+  newDueAt      DateTime? @map("new_due_at") @db.Timestamptz(6)
+  note          String?
 
   loan  Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
   actor AppUser? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
@@ -971,18 +986,62 @@ model RenewalRequest {
   loanId String               @map("loan_id")
   status RenewalRequestStatus @default(PENDING)
 
-  requestedById String   @map("requested_by_id")
-  requestedAt   DateTime @default(now()) @map("requested_at") @db.Timestamptz(6)
-  decidedById   String?  @map("decided_by_id")
+  requestedById String    @map("requested_by_id")
+  requestedAt   DateTime  @default(now()) @map("requested_at") @db.Timestamptz(6)
+  decidedById   String?   @map("decided_by_id")
   decidedAt     DateTime? @map("decided_at") @db.Timestamptz(6)
-  decisionNote  String?  @map("decision_note")
+  decisionNote  String?   @map("decision_note")
 
-  loan        Loan    @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  requestedBy AppUser @relation("RenewalRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  loan        Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  requestedBy AppUser  @relation("RenewalRequester", fields: [requestedById], references: [id], onDelete: Cascade)
   decidedBy   AppUser? @relation("RenewalDecider", fields: [decidedById], references: [id], onDelete: SetNull)
 
   @@index([loanId, status])
   @@map("renewal_request")
+}
+
+/// A child asking for a book they have not got yet.
+///
+/// The whole point of this table is the gap it creates. Finding a book in the
+/// catalogue is not taking it off the shelf: the physical books live in the
+/// library room, and one leaves only when a librarian issues it. A request
+/// records the asking, and moves nothing — no copy changes status, no loan
+/// exists, no due date is set — until somebody at the desk answers.
+///
+/// **At most one PENDING request per copy**, enforced by the partial unique
+/// index `borrow_request_one_pending_per_copy`. That is the whole of the
+/// queueing model: one child at a time may be waiting for one physical book.
+/// There are no holds, no waitlists and no positions, because a library of a
+/// few hundred books in an apartment does not need a reservation engine — and
+/// a queue a child can see themselves sixth in is a disappointment machine.
+///
+/// The index is raw SQL, so `prisma migrate dev` will drop it if it ever
+/// regenerates this table. It is also kept in prisma/sql/, same as the others.
+///
+/// No library_id column: a request belongs to a copy, and a copy belongs to a
+/// library. Storing the tenant twice is a second thing that can disagree.
+model BorrowRequest {
+  id           String              @id @default(uuid(7))
+  copyId       String              @map("copy_id")
+  memberUserId String              @map("member_user_id")
+  status       BorrowRequestStatus @default(PENDING)
+
+  requestedAt  DateTime  @default(now()) @map("requested_at") @db.Timestamptz(6)
+  decidedById  String?   @map("decided_by_id")
+  decidedAt    DateTime? @map("decided_at") @db.Timestamptz(6)
+  decisionNote String?   @map("decision_note")
+  /// The loan an approval created, so "what happened to my request?" has an
+  /// answer that points at the book. Null for every other outcome.
+  loanId       String?   @map("loan_id")
+
+  copy      BookCopy @relation(fields: [copyId], references: [id], onDelete: Cascade)
+  member    AppUser  @relation("BorrowRequester", fields: [memberUserId], references: [id], onDelete: Cascade)
+  decidedBy AppUser? @relation("BorrowRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  loan      Loan?    @relation(fields: [loanId], references: [id], onDelete: SetNull)
+
+  @@index([copyId, status])
+  @@index([memberUserId, status])
+  @@map("borrow_request")
 }
 
 /// One reminder that was claimed for one loan.
@@ -1011,12 +1070,12 @@ model LoanNotification {
   libraryId String @map("library_id")
   loanId    String @map("loan_id")
 
-  kind LoanNotificationKind
+  kind       LoanNotificationKind
   /// The due date this reminder was about, as it stood when the job ran.
-  dueAt DateTime @map("due_at") @db.Timestamptz(6)
+  dueAt      DateTime             @map("due_at") @db.Timestamptz(6)
   /// Which occurrence: whole days from the due date, negative before it.
   /// -2 is "due in two days", 0 is "due today", 7 is "a week past".
-  offsetDays Int @map("offset_days")
+  offsetDays Int                  @map("offset_days")
 
   /// QUEUED means claimed but not yet confirmed sent — the state a crash
   /// leaves behind. A failed reminder is not retried; see docs/NOTIFICATIONS.md.
@@ -1093,8 +1152,8 @@ model AuthToken {
   userId String        @map("user_id")
   type   AuthTokenType
 
-  tokenHash String    @unique @map("token_hash")
-  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
   consumedAt DateTime? @map("consumed_at") @db.Timestamptz(6)
   /// Explicitly cancelled — by a staff member reissuing a link, or superseded
   /// by a newer token of the same type. Distinct from consumed and from expired
@@ -1161,11 +1220,11 @@ model AuditLog {
 }
 
 model Announcement {
-  id        String               @id @default(uuid(7))
-  libraryId String               @map("library_id")
-  title     String
-  bodyMarkdown String            @map("body_markdown")
-  audience  AnnouncementAudience @default(ALL)
+  id           String               @id @default(uuid(7))
+  libraryId    String               @map("library_id")
+  title        String
+  bodyMarkdown String               @map("body_markdown")
+  audience     AnnouncementAudience @default(ALL)
 
   publishedAt DateTime? @map("published_at") @db.Timestamptz(6)
   expiresAt   DateTime? @map("expires_at") @db.Timestamptz(6)
@@ -1211,15 +1270,15 @@ model MediaObject {
   visibility MediaVisibility @default(PRIVATE)
 
   /// Opaque storage key. Never derived from the uploaded filename.
-  storageKey  String  @unique @map("storage_key")
+  storageKey     String  @unique @map("storage_key")
   /// Only set for PUBLIC objects.
-  publicUrl   String? @map("public_url")
-  mimeType    String  @map("mime_type")
-  byteSize    Int     @map("byte_size")
-  width       Int?
-  height      Int?
-  checksumSha256 String @map("checksum_sha256")
-  purpose     String
+  publicUrl      String? @map("public_url")
+  mimeType       String  @map("mime_type")
+  byteSize       Int     @map("byte_size")
+  width          Int?
+  height         Int?
+  checksumSha256 String  @map("checksum_sha256")
+  purpose        String
 
   uploadedById String?  @map("uploaded_by_id")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -1248,9 +1307,9 @@ model MediaObject {
   library    Library  @relation(fields: [libraryId], references: [id], onDelete: Cascade)
   uploadedBy AppUser? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
 
-  memberProfile       MemberProfile?
+  memberProfile        MemberProfile?
   registrationRequests RegistrationRequest[]
-  bookTitles          BookTitle[]
+  bookTitles           BookTitle[]
 
   @@index([libraryId, purpose])
   @@index([pendingDeletionAt])

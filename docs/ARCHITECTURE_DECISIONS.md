@@ -1014,3 +1014,125 @@ carrying a public URL is unaffected and still correct.
 purpose is `PUBLIC` and that the driver throws when handed one. Adding a public
 purpose fails there, where the answer is a decision, rather than in production,
 where the answer would be a second store.
+
+---
+
+## ADR-037 — Three assignable roles, one Super Admin, and no role editor
+
+**Status.** Accepted, Version 1.
+
+**Decision.** The library hands out exactly three roles: **Super Admin,
+Librarian, Reader.** `JUNIOR_LIBRARIAN` and `GUARDIAN` remain seeded and are
+marked `is_assignable = false`. The staff screen creates Librarians only — no
+role dropdown, no promotion, and `setStaffRole` has been removed rather than
+guarded. The single Super Admin is created by `npm run create-admin` when the
+library is set up.
+
+Two permissions moved off Librarian in the same change:
+
+| Permission | Why it moved |
+|---|---|
+| `registration.review` | Whether a child becomes a member of this library is the owner's decision. A librarian keeps `registration.view`: they see the queue and meet the family, and can tell a parent where things stand. |
+| `member.deactivate` | Ending a membership when a family leaves the building is not a mistake to be able to make at a busy desk. Suspending — reversible — stays with the librarian. |
+
+**Why not a role editor.** Because the two accidents it enables are the two this
+library cannot recover from on its own: a second administrator nobody meant to
+make, and a sole administrator who has demoted themselves. Guarding a feature
+nobody needs is more code than not having it. There is no screen, action or
+service call in the application that grants `SUPER_ADMIN` to anybody.
+
+A dormant role is closed rather than hidden: `getActor` skips a non-assignable
+role when it computes permissions, so a stale `user_role` row pointing at
+`JUNIOR_LIBRARIAN` grants nothing.
+
+**Consequence.** `role.manage` now guards nothing and has joined
+`DORMANT_PERMISSIONS`, where the settings screen names it under "Not available
+yet". Handing the library over to a different administrator is a deliberate act
+run by somebody with database access, not a dropdown.
+
+**Held by test.** `tests/unit/permissions.test.ts` asserts exactly three
+assignable roles and that no role but Super Admin holds a destructive
+permission. `tests/database/authorization.test.ts` asserts a librarian cannot
+reach staff management, and that `setStaffRole` does not exist.
+`tests/database/registration.test.ts` asserts a librarian may list the queue and
+may not answer it.
+
+---
+
+## ADR-038 — A child may ask for a book, and approving the ask runs the desk's own issue
+
+**Status.** Accepted, Version 1.
+
+**Context.** The catalogue is browsable by children, and the books are physical
+objects on shelves in the Mana Jardin yoga room. Finding a book on a screen is
+not the same as taking it home, and a system that blurs the two teaches children
+that it is.
+
+**Decision.** A reader holds `loan.request` and can ask for any copy on the
+shelf. The request **moves nothing**: the copy stays AVAILABLE, no loan exists,
+no due date is set. A librarian answers it at `/desk/requests`, and **approving
+calls `issueLockedLoan` — the same function the desk's Issue button calls, in
+the same transaction.**
+
+That is the whole point of the design. The borrowing limit, the ACTIVE-member
+rule, the copy's condition and the one-active-loan-per-copy index are all
+enforced on this path without this path knowing any of them, because it has no
+rules of its own. A rule added to issuing cannot be missed here.
+
+**What was deliberately not built.** No reservations, no holds, no waitlists, no
+queue positions. The entire queueing model is one partial unique index:
+`borrow_request_one_pending_per_copy`. One child at a time may be waiting for
+one physical book; a second asker is told it is spoken for and can ask again in
+a few days, which is true, and is kinder than a number telling them they are
+sixth.
+
+A pending request counts against the borrowing limit alongside active loans.
+Without that, a child could ask for nine books and a librarian would have to be
+the one to say no eight times.
+
+**A refused approval leaves the request PENDING**, exactly as a refused renewal
+does (ADR-030). The librarian has learnt something the child could not, and the
+honest next step is theirs: decline with a reason, or fix the problem and
+approve. Marking it declined on their behalf would attribute a decision to
+somebody who never made one.
+
+**Held by test.** `tests/database/borrow-requests.test.ts` — 24 tests covering
+the ask, the limit, the one-per-copy rule, the two decisions, tenancy, and the
+fact that the borrowing limit refuses an approval without this path mentioning
+it.
+
+---
+
+## ADR-039 — Deletion belongs to the Super Admin, and it cannot erase history
+
+**Status.** Accepted, Version 1.
+
+**Context.** Until now there was no delete anywhere in the application, on the
+principle that somebody gave every book and erasing the record erases the gift.
+That principle is right and it left one real problem unsolved: a book entered
+into the catalogue twice. Archiving a duplicate leaves a permanent ARCHIVED row
+recording a book the library never had.
+
+**Decision.** `deleteBook` exists, `book.delete` is held by the Super Admin
+alone, and the rule is drawn around **history rather than status**:
+
+> A copy that anything has ever happened to cannot be deleted.
+
+One loan ever, one borrow request ever, or any donation, and the service refuses
+and says to archive it instead. What remains deletable is exactly the row that
+records nothing: catalogued, never lent, never asked for, never given. A title
+left with no copies goes with its last copy.
+
+The deletion is audited **inside the same transaction that performs it**, with
+the code, the title and the reason in the row — so the library's account of what
+was removed outlives the thing that was removed. A refusal is audited too: an
+attempt to delete a book with a history is exactly the kind of thing somebody
+asks about later.
+
+**Consequence.** A librarian's toolkit stays entirely reversible — edit,
+archive, restore, suspend. `book.delete` guarded nothing before this change and
+now guards the one irreversible action in the system.
+
+**Held by test.** `tests/database/deletion.test.ts` — a librarian and a reader
+are both refused server-side; the Super Admin may remove a copy with no history
+and may not remove one that has been borrowed, asked for or donated.

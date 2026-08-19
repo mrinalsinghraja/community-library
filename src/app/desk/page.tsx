@@ -9,6 +9,7 @@ import { getBrandingSafe } from "@/server/lib/settings";
 import { countPendingRegistrations } from "@/server/services/registration-service";
 import {
   countDeskLoans,
+  countPendingBorrowRequests,
   countPendingRenewalRequests,
 } from "@/server/services/circulation-service";
 import { Icon } from "@/components/ui/icon";
@@ -46,6 +47,12 @@ export default async function DeskPage() {
     ? await countPendingRenewalRequests()
     : 0;
 
+  // Children waiting for a book. Same rule: counted only for whoever can hand
+  // one over, because `loan.issue` is what answering these actually is.
+  const borrowAsks = actor.permissions.has("loan.issue")
+    ? await countPendingBorrowRequests()
+    : 0;
+
   return (
     <StaffShell
       branding={branding}
@@ -53,6 +60,7 @@ export default async function DeskPage() {
       pendingRegistrations={pending}
       overdueLoans={loans.overdue}
       pendingRenewals={renewalAsks}
+      pendingBorrowRequests={borrowAsks}
       title="Library desk"
     >
       <p className="text-lg text-ink-soft">
@@ -74,6 +82,24 @@ export default async function DeskPage() {
                     : loans.overdue === 1
                       ? "One is past its date."
                       : `${loans.overdue} are past their date.`}
+                </p>
+              </CardBody>
+            </Card>
+          </Link>
+        ) : null}
+
+        {actor.permissions.has("loan.issue") ? (
+          <Link href="/desk/requests" className="no-underline">
+            <Card tone={borrowAsks > 0 ? "shelf" : "plain"} className="h-full">
+              <CardTitle icon={<Icon name="shelf" />}>Books asked for</CardTitle>
+              <CardBody>
+                <p className="font-display text-5xl font-extrabold text-ink">{borrowAsks}</p>
+                <p className="mt-1">
+                  {borrowAsks === 0
+                    ? "No one is waiting."
+                    : borrowAsks === 1
+                      ? "A reader is waiting for a book."
+                      : `${borrowAsks} readers are waiting for a book.`}
                 </p>
               </CardBody>
             </Card>
@@ -129,7 +155,7 @@ export default async function DeskPage() {
           <Link href="/admin/staff" className="no-underline">
             <Card className="h-full">
               <CardTitle icon={<Icon name="staff" />}>Staff</CardTitle>
-              <CardBody>Add a librarian, change a role, or suspend an account.</CardBody>
+              <CardBody>Add a librarian, or pause an account.</CardBody>
             </Card>
           </Link>
         ) : null}

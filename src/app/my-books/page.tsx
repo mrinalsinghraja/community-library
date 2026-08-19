@@ -10,11 +10,15 @@ import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { readerDueSentence, readerLoanBadge } from "@/lib/circulation";
+import { BORROW_REQUEST_MESSAGES, readerDueSentence, readerLoanBadge } from "@/lib/circulation";
 import { formatInTimezone } from "@/lib/dates";
 import { getActor } from "@/server/authz";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
-import { listOwnLoans, type ReaderLoanCard } from "@/server/services/circulation-service";
+import {
+  listOwnBorrowRequests,
+  listOwnLoans,
+  type ReaderLoanCard,
+} from "@/server/services/circulation-service";
 import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +57,10 @@ export default async function MyBooksPage() {
 
   const { active, history, limit, renewalPeriodDays } = loans;
 
+  // Books this child has asked for and not got yet. Kept separate from the
+  // shelf on purpose: a book they have asked for is not a book they have.
+  const asked = await listOwnBorrowRequests();
+
   return (
     <PublicShell branding={branding} signedIn>
       <div className="relative mx-auto w-full max-w-5xl px-5 py-12 sm:px-8">
@@ -79,7 +87,8 @@ export default async function MyBooksPage() {
                 </ButtonLink>
               }
             >
-              Choose a book from the library and ask a librarian to lend it to you.
+              Find a book in the catalogue and ask for it — the librarian will get it ready for
+              you in the library room.
             </EmptyState>
           </div>
         ) : (
@@ -105,6 +114,65 @@ export default async function MyBooksPage() {
             </ul>
           </section>
         )}
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Books asked for, not yet in a bag                                 */}
+        {/*                                                                   */}
+        {/* Deliberately its own section, below the shelf. A book a child has  */}
+        {/* asked for is not a book they have, and putting the two in one list */}
+        {/* would let a child believe the library had promised them something  */}
+        {/* it has not. Approved requests never appear here — an approved      */}
+        {/* request became a loan, and shows up on the shelf above.            */}
+        {/* ---------------------------------------------------------------- */}
+        {asked.length > 0 ? (
+          <section aria-labelledby="asked" className="mt-14">
+            <h2 id="asked" className="garden-rule inline-block text-2xl">
+              Books you have asked for
+            </h2>
+            <p className="mt-8 text-ink-soft">{BORROW_REQUEST_MESSAGES.collectionNote}</p>
+
+            <ul className="mt-6 grid gap-4 sm:grid-cols-2">
+              {asked.map((request) => (
+                <li
+                  key={request.copyCode}
+                  className="flex items-start gap-4 rounded-[var(--radius-card)] bg-surface-sunk px-5 py-4"
+                >
+                  <span className="w-12 shrink-0">
+                    <CoverThumbnail
+                      coverMediaId={request.coverMediaId}
+                      title={request.title}
+                      variant="thumb"
+                      sizes="48px"
+                    />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-bold text-ink">
+                      <Link href={`/books/${encodeURIComponent(request.copyCode)}`}>
+                        {request.title}
+                      </Link>
+                    </p>
+                    <p className="mt-1 text-base text-ink-soft">
+                      {request.state === "pending"
+                        ? BORROW_REQUEST_MESSAGES.pending
+                        : BORROW_REQUEST_MESSAGES.declined}
+                    </p>
+                    {/*
+                      The librarian's own words, when they said no. A child who
+                      is told "not this one" and nothing else has been refused
+                      by a machine; a child who is told why has been answered by
+                      a person.
+                    */}
+                    {request.decisionNote ? (
+                      <p className="mt-1 text-base text-ink">
+                        &ldquo;{request.decisionNote}&rdquo;
+                      </p>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         {/* ---------------------------------------------------------------- */}
         {/* Books already brought back                                        */}

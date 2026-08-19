@@ -193,6 +193,9 @@ describe("child isolation", () => {
     // Nothing else — and nothing that decides anything.
     expect([...actor.permissions].sort()).toEqual([
       "book.view",
+      // Version 1: asking for a book. Like the renewal ask, it decides nothing
+      // — no copy moves and no loan exists until a librarian answers.
+      "loan.request",
       "loan.request_renewal",
       "loan.view",
     ]);

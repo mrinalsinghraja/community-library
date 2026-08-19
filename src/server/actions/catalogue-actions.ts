@@ -7,6 +7,7 @@ import { requirePermission } from "@/server/authz";
 import { purgeScheduledMedia, storeBookCover } from "@/server/services/media-service";
 import {
   archiveBook,
+  deleteBook,
   createBook,
   removeBookCover,
   restoreBook,
@@ -156,6 +157,34 @@ export async function removeBookCoverAction(
     revalidatePath("/admin/books");
     revalidatePath("/books");
     return { status: "success", message: "Cover picture removed." };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+/**
+ * Erasing a duplicate, and only a duplicate.
+ *
+ * The service refuses anything with a history. This action carries no
+ * cleverness of its own: it passes the id and the reason, and reports what came
+ * back — including the refusal, which is the answer a librarian most needs to
+ * read.
+ */
+export async function deleteBookAction(
+  _previous: BookFormState,
+  formData: FormData,
+): Promise<BookFormState> {
+  try {
+    const { copyCode } = await deleteBook(
+      String(formData.get("copyId") ?? ""),
+      String(formData.get("reason") ?? ""),
+    );
+    revalidatePath("/admin/books");
+    revalidatePath("/books");
+    return {
+      status: "success",
+      message: `${copyCode} has been removed. The audit log keeps a note of what it was.`,
+    };
   } catch (error) {
     return toErrorState(error);
   }

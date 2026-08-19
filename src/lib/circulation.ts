@@ -359,6 +359,48 @@ export function renewalInvitation(renewalPeriodDays: number): string {
 }
 
 // ---------------------------------------------------------------------------
+// Asking for a book
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a child cannot ask for this one, in words written for the child.
+ *
+ * Same discipline as the renewal messages: what to do next, never which rule,
+ * and never an account state. The one idea every sentence here has to carry is
+ * that finding a book is not the same as having it — the book is on a shelf in
+ * the library room until a librarian hands it over.
+ */
+export const BORROW_REQUEST_MESSAGES = {
+  invitation: "Ask the librarian for this book",
+  pending: "You've asked for this one. The librarian will bring it to you.",
+  approved: "It's yours! Collect it from the library room.",
+  declined: "The librarian could not lend this one just now.",
+
+  alreadyAsked: "You have already asked for this book. The librarian will see it.",
+  spokenFor: "Someone has already asked for this one. Try again in a few days.",
+  notAvailable: "This book is not on the shelf right now.",
+  alreadyHaveIt: "This one is already on your shelf.",
+  limitReached: (limit: number): string =>
+    limit === 1
+      ? "You have a book out already. Bring it back and you can ask for another."
+      : `You can have ${limit} books at a time. Bring one back and you can ask for another.`,
+  accountUnavailable: "Please ask the librarian about your library card.",
+  noneToCancel: "There is nothing to cancel for this book.",
+  cancelled: "That is fine — we have taken your question away.",
+
+  /**
+   * The sentence that has to appear wherever a child can ask, because it is the
+   * rule the software cannot enforce: the shelves are in a room, and a book
+   * leaves it when a librarian says so.
+   */
+  collectionNote:
+    "Books stay in the library room until the librarian hands one over. Please do not take a book home before then.",
+} as const;
+
+/** What a child is told about their own request for a book, if they have one. */
+export type ReaderBorrowState = "none" | "pending" | "approved" | "declined";
+
+// ---------------------------------------------------------------------------
 // Paging
 // ---------------------------------------------------------------------------
 

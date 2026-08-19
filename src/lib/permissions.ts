@@ -85,6 +85,16 @@ export const PERMISSIONS = {
   // nothing. The service behind it takes no member id — ownership comes from
   // the session — so this grant cannot be stretched into touching another
   // child's loan.
+  //
+  // `loan.request` is the same shape for a book the child has not got yet:
+  // finding a book in the catalogue is not taking it off the shelf. The book
+  // leaves the room when a librarian issues it, and `loan.issue` is still the
+  // only authority that can do that — approving a request runs the same
+  // transaction as the desk button. See ADR-038.
+  "loan.request": {
+    category: "circulation",
+    description: "Ask a librarian to borrow a book you have found in the catalogue",
+  },
   "loan.request_renewal": {
     category: "circulation",
     description: "Ask a librarian to keep a book you have borrowed for longer",
@@ -119,7 +129,10 @@ export const PERMISSIONS = {
   "settings.edit": { category: "administration", description: "Change library rules and settings" },
   "branding.edit": { category: "administration", description: "Change logo, colours and names" },
   "user.manage_staff": { category: "administration", description: "Create and manage staff accounts" },
-  "role.manage": { category: "administration", description: "Change roles and permissions" },
+  "role.manage": {
+    category: "administration",
+    description: "Not yet implemented — nothing in the application reads this",
+  },
   "audit.view": { category: "administration", description: "Read the audit log" },
   "email.configure": { category: "administration", description: "Configure email delivery" },
 } as const satisfies Record<string, { category: string; description: string }>;
@@ -155,6 +168,12 @@ export const DORMANT_PERMISSIONS = [
   // a promise the software will not keep.
   "report.view",
   "announcement.manage",
+  // Joined the list in Version 1, when the role editor was removed. There are
+  // exactly three assignable roles and one Super Admin; the only role the staff
+  // screen grants is Librarian, at creation. Nothing reads this key, and the
+  // honest place for a permission that guards nothing is here — not quietly
+  // sitting on the Super Admin's list looking like a capability.
+  "role.manage",
 ] as const satisfies readonly PermissionKey[];
 
 export function isDormantPermission(key: PermissionKey): boolean {
@@ -182,14 +201,21 @@ export interface RoleDefinition {
 }
 
 const LIBRARIAN_PERMISSIONS = [
+  // A librarian sees the queue and the family's details, because they are the
+  // ones who will meet the child. They do not decide it: `registration.review`
+  // is Super Admin only, so no child account comes into existence — and no
+  // child's registration is refused — without the owner of the library saying
+  // so. See ADR-037.
   "registration.view",
-  "registration.review",
   "member.view",
   "member.view_contact",
   "member.create",
   "member.edit",
   "member.suspend",
-  "member.deactivate",
+  // `member.deactivate` is deliberately absent. Suspending is a pause a
+  // librarian can undo; closing the account of a family who has left the
+  // apartment is the end of someone's membership, and belongs with the person
+  // who approved it in the first place.
   "member.reset_password",
   "guardian.edit",
   "member.manage_photo",
@@ -241,6 +267,9 @@ const JUNIOR_LIBRARIAN_PERMISSIONS = [
 const MEMBER_PERMISSIONS = [
   "book.view",
   "loan.view",
+  // Asking for a book is not taking one. A request moves no book, changes no
+  // copy status and creates no loan until a librarian approves it.
+  "loan.request",
   // Asking is not mutating a loan. A request changes nothing about the book,
   // the date or the record until a librarian decides — which is the whole
   // reason it is a request and not a renewal.
@@ -287,10 +316,53 @@ export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
     key: ROLE_KEYS.GUARDIAN,
     name: "Parent or Guardian",
     description: "A contactable adult responsible for a reader. Cannot sign in in Version 1.",
-    isAssignable: true,
+    // Not assignable, and never was granted: a guardian is a person the library
+    // can write to, recorded on the child's registration, not an account that
+    // signs in. Nothing in the application grants this role, so marking it
+    // dormant takes nothing away from anyone.
+    isAssignable: false,
     sortOrder: 50,
     permissions: [],
   },
+] as const;
+
+/**
+ * The three roles Version 1 will actually hand out: Super Admin, Librarian,
+ * Reader.
+ *
+ * Derived, not typed out again, so that making a role dormant is one edit in
+ * one place. JUNIOR_LIBRARIAN and GUARDIAN are seeded and grant nothing —
+ * `getActor` skips a non-assignable role even if a stale user_role row still
+ * points at it, so a dormant role cannot become a way in.
+ */
+export const ASSIGNABLE_ROLE_KEYS: readonly RoleKey[] = ROLE_DEFINITIONS.filter(
+  (role) => role.isAssignable,
+).map((role) => role.key);
+
+/**
+ * The only staff role the staff screen can create. Version 1 has exactly one
+ * Super Admin, made by `npm run create-admin` when the library is set up; there
+ * is no screen anywhere that mints a second one.
+ */
+export const ASSIGNABLE_STAFF_ROLE_KEYS: readonly RoleKey[] = [ROLE_KEYS.LIBRARIAN];
+
+/**
+ * Deletion is the Super Admin's alone.
+ *
+ * Listed here so the rule is visible in the model rather than implied by the
+ * absence of a key from a grant list. A test asserts that no role other than
+ * SUPER_ADMIN holds one of these, which is what stops a future edit from
+ * quietly handing a librarian the power to erase a record.
+ *
+ * Everything a librarian needs in order to fix a mistake — editing a book,
+ * archiving a copy, suspending a member — is reversible and stays with them.
+ */
+export const DESTRUCTIVE_PERMISSIONS: readonly PermissionKey[] = [
+  "book.delete",
+  "member.deactivate",
+  "registration.review",
+  "role.manage",
+  "user.manage_staff",
 ] as const;
 
 /**
@@ -304,6 +376,9 @@ export const PERMISSIONS_FORBIDDEN_FOR_CHILD_STAFF: readonly PermissionKey[] = [
   "member.suspend",
   "member.deactivate",
   "guardian.edit",
+  // Deciding whether a child may join the library is not a job for another
+  // child, however helpful they are at the desk.
+  "registration.review",
   // A child volunteer at the desk must never be able to handle another child's
   // photograph or to assert that an adult has been verified.
   "member.manage_photo",

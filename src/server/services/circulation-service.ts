@@ -9,17 +9,19 @@ import {
   type Page,
 } from "@/lib/catalogue";
 import {
+  BORROW_REQUEST_MESSAGES,
   CIRCULATION_MESSAGES,
   LOAN_PAGE_SIZES,
   RENEWAL_REQUEST_MESSAGES,
   loanCondition,
   memberMayBorrow,
   type LoanFilter,
+  type ReaderBorrowState,
   type ReaderRenewalState,
 } from "@/lib/circulation";
 import { calculateDueDate, calculateRenewedDueDate } from "@/lib/dates";
 import { prisma } from "@/server/db";
-import { requireActor, requireAnyPermission, requirePermission, type Actor } from "@/server/authz";
+import { getActor, requireActor, requireAnyPermission, requirePermission, type Actor } from "@/server/authz";
 import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
 import { ConflictError, NotFoundError, RuleViolationError, ValidationError } from "@/server/lib/errors";
 import { getCurrentLibrary } from "@/server/lib/settings";
@@ -457,142 +459,7 @@ export async function issueBook(input: {
   const { settings } = await getCurrentLibrary();
 
   try {
-    return await prisma.$transaction(async (tx) => {
-      // 1. Lock the reader.
-      const [member] = await tx.$queryRaw<
-        { id: string; display_name: string; status: UserStatus; kind: string }[]
-      >`
-        SELECT id, display_name, status, kind::text AS kind
-          FROM app_user
-         WHERE id = ${input.memberUserId}
-           AND library_id = ${actor.libraryId}
-         FOR UPDATE
-      `;
-
-      // Tenancy from the session, never from the request: a member id from
-      // another community resolves to nothing at all.
-      if (!member || member.kind !== "MEMBER") {
-        throw new NotFoundError(
-          `Member ${input.memberUserId} not found in library ${actor.libraryId}`,
-        );
-      }
-
-      if (!memberMayBorrow(member.status)) {
-        // The generic sentence. Why an account is paused is the library's
-        // business and a conversation with the family — never a tooltip.
-        throw new RuleViolationError(
-          `Member ${member.id} is ${member.status} and may not borrow`,
-          CIRCULATION_MESSAGES.readerUnavailable,
-        );
-      }
-
-      // 2. Lock the copy.
-      const [copy] = await tx.$queryRaw<
-        { id: string; copy_code: string; status: CopyStatus; condition: CopyCondition }[]
-      >`
-        SELECT id, copy_code, status, condition
-          FROM book_copy
-         WHERE id = ${input.copyId}
-           AND library_id = ${actor.libraryId}
-         FOR UPDATE
-      `;
-      if (!copy) {
-        throw new NotFoundError(`Copy ${input.copyId} not found in library ${actor.libraryId}`);
-      }
-
-      const [title] = await tx.$queryRaw<{ title: string }[]>`
-        SELECT t.title FROM book_title t
-          JOIN book_copy c ON c.title_id = t.id
-         WHERE c.id = ${copy.id}
-      `;
-
-      // 3. Revalidate the book, holding the lock.
-      const blocked = copyBlockedReason(copy.status, copy.condition);
-      if (blocked) {
-        throw new RuleViolationError(
-          `Copy ${copy.copy_code} is ${copy.status}/${copy.condition} and cannot be issued`,
-          blocked,
-        );
-      }
-
-      // 4. Revalidate the limit, holding the lock. This count is current
-      //    because any competing transaction has already committed or is still
-      //    waiting on the member row above.
-      const activeLoans = await tx.loan.count({
-        where: { memberUserId: member.id, status: "ACTIVE" },
-      });
-      if (activeLoans >= settings.maxActiveLoans) {
-        throw new RuleViolationError(
-          `Member ${member.id} has ${activeLoans} active loans (limit ${settings.maxActiveLoans})`,
-          CIRCULATION_MESSAGES.loanLimitReached(member.display_name, settings.maxActiveLoans),
-        );
-      }
-
-      // 5. And that nobody else already has this copy. The partial unique index
-      //    would refuse anyway; this is the version with a sentence.
-      const existing = await tx.loan.count({ where: { copyId: copy.id, status: "ACTIVE" } });
-      if (existing > 0) {
-        throw new ConflictError(
-          `Copy ${copy.copy_code} already has an active loan`,
-          CIRCULATION_MESSAGES.bookAlreadyOut,
-        );
-      }
-
-      const issuedAt = new Date();
-      const dueAt = calculateDueDate(issuedAt, settings.borrowingPeriodDays, settings.timezone);
-
-      const loan = await tx.loan.create({
-        data: {
-          libraryId: actor.libraryId,
-          copyId: copy.id,
-          memberUserId: member.id,
-          status: "ACTIVE",
-          issuedAt,
-          issuedById: actor.userId,
-          dueAt,
-        },
-        select: { id: true },
-      });
-
-      await tx.loanEvent.create({
-        data: {
-          loanId: loan.id,
-          type: "ISSUE",
-          occurredAt: issuedAt,
-          actorUserId: actor.userId,
-          newDueAt: dueAt,
-        },
-      });
-
-      await tx.bookCopy.update({
-        where: { id: copy.id },
-        data: { status: "BORROWED" },
-      });
-
-      await recordAudit(tx, {
-        libraryId: actor.libraryId,
-        action: AUDIT_ACTIONS.LOAN_ISSUED,
-        entityType: "loan",
-        entityId: loan.id,
-        actorUserId: actor.userId,
-        actorLabel: actor.displayName,
-        metadata: {
-          copyCode: copy.copy_code,
-          memberUserId: member.id,
-          readerName: member.display_name,
-          dueAt: dueAt.toISOString(),
-          loanPeriodDays: settings.borrowingPeriodDays,
-        },
-      });
-
-      return {
-        loanId: loan.id,
-        copyCode: copy.copy_code,
-        title: title?.title ?? "",
-        readerName: member.display_name,
-        dueAt,
-      };
-    });
+    return await prisma.$transaction((tx) => issueLockedLoan(tx, actor, settings, input));
   } catch (error) {
     // A refusal is the interesting event when a family later asks why a child
     // came home empty handed — and it is the only trace an attempted bypass of
@@ -612,6 +479,157 @@ export async function issueBook(input: {
     }
     throw error;
   }
+}
+
+/**
+ * The issue itself, inside somebody else's transaction.
+ *
+ * Extracted so that approving a child's borrow request runs **this** code and
+ * not a copy of it. There is exactly one way a book leaves the library room in
+ * this application, and a rule added here cannot be missed by the other path,
+ * because there is no other path. Same reasoning as `renewLockedLoan`, and the
+ * same shape.
+ */
+async function issueLockedLoan(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  settings: { maxActiveLoans: number; borrowingPeriodDays: number; timezone: string },
+  input: { memberUserId: string; copyId: string },
+): Promise<IssuedLoan> {
+  // 1. Lock the reader.
+  const [member] = await tx.$queryRaw<
+    { id: string; display_name: string; status: UserStatus; kind: string }[]
+  >`
+    SELECT id, display_name, status, kind::text AS kind
+      FROM app_user
+     WHERE id = ${input.memberUserId}
+       AND library_id = ${actor.libraryId}
+     FOR UPDATE
+  `;
+
+  // Tenancy from the session, never from the request: a member id from
+  // another community resolves to nothing at all.
+  if (!member || member.kind !== "MEMBER") {
+    throw new NotFoundError(
+      `Member ${input.memberUserId} not found in library ${actor.libraryId}`,
+    );
+  }
+
+  if (!memberMayBorrow(member.status)) {
+    // The generic sentence. Why an account is paused is the library's
+    // business and a conversation with the family — never a tooltip.
+    throw new RuleViolationError(
+      `Member ${member.id} is ${member.status} and may not borrow`,
+      CIRCULATION_MESSAGES.readerUnavailable,
+    );
+  }
+
+  // 2. Lock the copy.
+  const [copy] = await tx.$queryRaw<
+    { id: string; copy_code: string; status: CopyStatus; condition: CopyCondition }[]
+  >`
+    SELECT id, copy_code, status, condition
+      FROM book_copy
+     WHERE id = ${input.copyId}
+       AND library_id = ${actor.libraryId}
+     FOR UPDATE
+  `;
+  if (!copy) {
+    throw new NotFoundError(`Copy ${input.copyId} not found in library ${actor.libraryId}`);
+  }
+
+  const [title] = await tx.$queryRaw<{ title: string }[]>`
+    SELECT t.title FROM book_title t
+      JOIN book_copy c ON c.title_id = t.id
+     WHERE c.id = ${copy.id}
+  `;
+
+  // 3. Revalidate the book, holding the lock.
+  const blocked = copyBlockedReason(copy.status, copy.condition);
+  if (blocked) {
+    throw new RuleViolationError(
+      `Copy ${copy.copy_code} is ${copy.status}/${copy.condition} and cannot be issued`,
+      blocked,
+    );
+  }
+
+  // 4. Revalidate the limit, holding the lock. This count is current
+  //    because any competing transaction has already committed or is still
+  //    waiting on the member row above.
+  const activeLoans = await tx.loan.count({
+    where: { memberUserId: member.id, status: "ACTIVE" },
+  });
+  if (activeLoans >= settings.maxActiveLoans) {
+    throw new RuleViolationError(
+      `Member ${member.id} has ${activeLoans} active loans (limit ${settings.maxActiveLoans})`,
+      CIRCULATION_MESSAGES.loanLimitReached(member.display_name, settings.maxActiveLoans),
+    );
+  }
+
+  // 5. And that nobody else already has this copy. The partial unique index
+  //    would refuse anyway; this is the version with a sentence.
+  const existing = await tx.loan.count({ where: { copyId: copy.id, status: "ACTIVE" } });
+  if (existing > 0) {
+    throw new ConflictError(
+      `Copy ${copy.copy_code} already has an active loan`,
+      CIRCULATION_MESSAGES.bookAlreadyOut,
+    );
+  }
+
+  const issuedAt = new Date();
+  const dueAt = calculateDueDate(issuedAt, settings.borrowingPeriodDays, settings.timezone);
+
+  const loan = await tx.loan.create({
+    data: {
+      libraryId: actor.libraryId,
+      copyId: copy.id,
+      memberUserId: member.id,
+      status: "ACTIVE",
+      issuedAt,
+      issuedById: actor.userId,
+      dueAt,
+    },
+    select: { id: true },
+  });
+
+  await tx.loanEvent.create({
+    data: {
+      loanId: loan.id,
+      type: "ISSUE",
+      occurredAt: issuedAt,
+      actorUserId: actor.userId,
+      newDueAt: dueAt,
+    },
+  });
+
+  await tx.bookCopy.update({
+    where: { id: copy.id },
+    data: { status: "BORROWED" },
+  });
+
+  await recordAudit(tx, {
+    libraryId: actor.libraryId,
+    action: AUDIT_ACTIONS.LOAN_ISSUED,
+    entityType: "loan",
+    entityId: loan.id,
+    actorUserId: actor.userId,
+    actorLabel: actor.displayName,
+    metadata: {
+      copyCode: copy.copy_code,
+      memberUserId: member.id,
+      readerName: member.display_name,
+      dueAt: dueAt.toISOString(),
+      loanPeriodDays: settings.borrowingPeriodDays,
+    },
+  });
+
+  return {
+    loanId: loan.id,
+    copyCode: copy.copy_code,
+    title: title?.title ?? "",
+    readerName: member.display_name,
+    dueAt,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1814,4 +1832,621 @@ export async function listOwnLoans(): Promise<{
 export async function copyIsOnLoan(copyId: string): Promise<boolean> {
   const count = await prisma.loan.count({ where: { copyId, status: "ACTIVE" } });
   return count > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Asking for a book
+// ---------------------------------------------------------------------------
+
+/**
+ * A child asks for a book they have found in the catalogue.
+ *
+ * The important thing about this function is everything it does not do. No copy
+ * changes status. No loan is created. No due date is calculated. Nothing about
+ * the library's account of where its books are moves at all — because the book
+ * has not moved. It is on a shelf in the library room, and it stays there until
+ * a librarian hands it over.
+ *
+ * That gap is the whole feature. A child browsing on a tablet at home can find
+ * a book and say "this one please"; a child standing in the library room can
+ * see the book on the shelf and still needs a librarian to issue it. Both are
+ * the same request, and neither takes a book home on its own.
+ *
+ * The checks here are the friendly first pass. They are re-run for real, under
+ * row locks, when a librarian approves — because a request made on Tuesday
+ * cannot know what is true on Thursday.
+ */
+export async function requestBorrow(input: { code: string }): Promise<{ title: string }> {
+  const actor = await requirePermission("loan.request");
+  const { settings } = await getCurrentLibrary();
+
+  // A librarian has no library card. Shaped as not-found rather than
+  // not-authorized: there is nothing here for them.
+  if (actor.kind !== "MEMBER") {
+    throw new NotFoundError(`User ${actor.userId} is not a member and cannot ask for books`);
+  }
+
+  if (!memberMayBorrow(await readerStatus(actor))) {
+    throw new RuleViolationError(
+      `Member ${actor.userId} may not borrow`,
+      BORROW_REQUEST_MESSAGES.accountUnavailable,
+    );
+  }
+
+  const code = input.code.trim();
+  if (!code) {
+    throw new RuleViolationError("Borrow requested without a book code", BORROW_REQUEST_MESSAGES.notAvailable);
+  }
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const [copy] = await tx.$queryRaw<
+        { id: string; copy_code: string; status: CopyStatus; condition: CopyCondition; title: string }[]
+      >`
+        SELECT c.id, c.copy_code, c.status, c.condition, t.title
+          FROM book_copy c
+          JOIN book_title t ON t.id = c.title_id
+         WHERE c.library_id = ${actor.libraryId}
+           AND upper(btrim(c.copy_code)) = upper(btrim(${code}))
+         FOR UPDATE OF c
+      `;
+
+      if (!copy) {
+        // One sentence for every miss, so a child typing codes learns nothing
+        // about which books exist in a library they cannot see.
+        throw new NotFoundError(`Copy ${code} not found in library ${actor.libraryId}`);
+      }
+
+      const blocked = copyBlockedReason(copy.status, copy.condition);
+      if (blocked) {
+        throw new RuleViolationError(
+          `Copy ${copy.copy_code} is ${copy.status}/${copy.condition}`,
+          BORROW_REQUEST_MESSAGES.notAvailable,
+        );
+      }
+
+      const alreadyHave = await tx.loan.count({
+        where: { copyId: copy.id, memberUserId: actor.userId, status: "ACTIVE" },
+      });
+      if (alreadyHave > 0) {
+        throw new RuleViolationError(
+          `Member ${actor.userId} already has copy ${copy.copy_code}`,
+          BORROW_REQUEST_MESSAGES.alreadyHaveIt,
+        );
+      }
+
+      // A pending request is a book the child is expecting, so it counts
+      // against the limit exactly as a borrowed one does. Without this, a child
+      // could ask for nine books and a librarian would have to be the one to
+      // say no eight times.
+      const [loans, asks] = await Promise.all([
+        tx.loan.count({ where: { memberUserId: actor.userId, status: "ACTIVE" } }),
+        tx.borrowRequest.count({ where: { memberUserId: actor.userId, status: "PENDING" } }),
+      ]);
+      if (loans + asks >= settings.maxActiveLoans) {
+        throw new RuleViolationError(
+          `Member ${actor.userId} has ${loans} loans and ${asks} pending requests (limit ${settings.maxActiveLoans})`,
+          BORROW_REQUEST_MESSAGES.limitReached(settings.maxActiveLoans),
+        );
+      }
+
+      // Told apart before the index refuses, because "you already asked" and
+      // "somebody else did" are different things to read.
+      const waiting = await tx.borrowRequest.findFirst({
+        where: { copyId: copy.id, status: "PENDING" },
+        select: { memberUserId: true },
+      });
+      if (waiting) {
+        throw new ConflictError(
+          `Copy ${copy.copy_code} already has a pending request`,
+          waiting.memberUserId === actor.userId
+            ? BORROW_REQUEST_MESSAGES.alreadyAsked
+            : BORROW_REQUEST_MESSAGES.spokenFor,
+        );
+      }
+
+      const request = await tx.borrowRequest.create({
+        data: { copyId: copy.id, memberUserId: actor.userId, status: "PENDING" },
+        select: { id: true },
+      });
+
+      await recordAudit(tx, {
+        libraryId: actor.libraryId,
+        action: AUDIT_ACTIONS.BORROW_REQUESTED,
+        entityType: "borrow_request",
+        entityId: request.id,
+        actorUserId: actor.userId,
+        actorLabel: actor.displayName,
+        metadata: { copyCode: copy.copy_code },
+      });
+
+      return { title: copy.title };
+    });
+  } catch (error) {
+    // The index refused a second open request on the same copy. Two children
+    // pressed at the same instant; the loser is told the book is spoken for,
+    // which is true.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new ConflictError(
+        `Copy ${code} already has a pending borrow request`,
+        BORROW_REQUEST_MESSAGES.spokenFor,
+      );
+    }
+    throw error;
+  }
+}
+
+/** The reader's own account status, read fresh rather than trusted from the session. */
+async function readerStatus(actor: Actor): Promise<UserStatus> {
+  const [row] = await prisma.$queryRaw<{ status: UserStatus }[]>`
+    SELECT status FROM app_user
+     WHERE id = ${actor.userId} AND library_id = ${actor.libraryId}
+  `;
+  if (!row) throw new NotFoundError(`User ${actor.userId} not found in library ${actor.libraryId}`);
+  return row.status;
+}
+
+/**
+ * A child changes their mind.
+ *
+ * Only their own, only while pending, and it deletes nothing: the request
+ * becomes CANCELLED and stays, so a librarian who saw it this morning can find
+ * out what happened to it.
+ */
+export async function cancelOwnBorrowRequest(input: { code: string }): Promise<void> {
+  const actor = await requirePermission("loan.request");
+  if (actor.kind !== "MEMBER") {
+    throw new NotFoundError(`User ${actor.userId} is not a member and has no requests of their own`);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const [request] = await tx.$queryRaw<{ id: string; copy_code: string }[]>`
+      SELECT r.id, c.copy_code
+        FROM borrow_request r
+        JOIN book_copy c ON c.id = r.copy_id
+       WHERE r.status = 'PENDING'
+         AND r.member_user_id = ${actor.userId}
+         AND c.library_id = ${actor.libraryId}
+         AND upper(btrim(c.copy_code)) = upper(btrim(${input.code}))
+       FOR UPDATE OF r
+    `;
+
+    if (!request) {
+      throw new RuleViolationError(
+        `No pending borrow request on ${input.code} for member ${actor.userId}`,
+        BORROW_REQUEST_MESSAGES.noneToCancel,
+      );
+    }
+
+    await tx.borrowRequest.update({
+      where: { id: request.id },
+      data: { status: "CANCELLED", decidedById: actor.userId, decidedAt: new Date() },
+    });
+
+    await recordAudit(tx, {
+      libraryId: actor.libraryId,
+      action: AUDIT_ACTIONS.BORROW_REQUEST_CANCELLED,
+      entityType: "borrow_request",
+      entityId: request.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      metadata: { copyCode: request.copy_code, cancelledByReader: true },
+    });
+  });
+}
+
+export interface BorrowRequestRow {
+  requestId: string;
+  requestedAt: Date;
+  readerName: string;
+  memberCode: string;
+  title: string;
+  /** Presentation only. The same cover id the catalogue already renders. */
+  coverMediaId: string | null;
+  copyCode: string;
+  /** Null when it can be approved; otherwise why it cannot, in staff wording. */
+  blockedReason: string | null;
+}
+
+/**
+ * What is waiting for an answer.
+ *
+ * Guarded by `loan.issue` — the authority to give a book to a child — and not
+ * by `loan.view`, which every reader holds. Scoped to the actor's own library
+ * through the copy, since a request row has no library of its own.
+ */
+export async function listPendingBorrowRequests(): Promise<BorrowRequestRow[]> {
+  const actor = await requirePermission("loan.issue");
+  const { settings } = await getCurrentLibrary();
+
+  const rows = await prisma.$queryRaw<
+    {
+      request_id: string;
+      requested_at: Date;
+      reader_name: string;
+      reader_status: UserStatus;
+      member_code: string;
+      title: string;
+      cover_media_id: string | null;
+      copy_code: string;
+      copy_status: CopyStatus;
+      copy_condition: CopyCondition;
+      active_loans: bigint;
+    }[]
+  >`
+    SELECT r.id AS request_id, r.requested_at,
+           u.display_name AS reader_name, u.status AS reader_status,
+           coalesce(m.member_code, '') AS member_code,
+           t.title, t.cover_media_id, c.copy_code,
+           c.status AS copy_status, c.condition AS copy_condition,
+           (SELECT count(*) FROM loan l
+             WHERE l.member_user_id = u.id AND l.status = 'ACTIVE') AS active_loans
+      FROM borrow_request r
+      JOIN book_copy c ON c.id = r.copy_id
+      JOIN book_title t ON t.id = c.title_id
+      JOIN app_user u ON u.id = r.member_user_id
+      LEFT JOIN member_profile m ON m.user_id = u.id
+     WHERE r.status = 'PENDING'
+       AND c.library_id = ${actor.libraryId}
+     ORDER BY r.requested_at ASC
+     LIMIT ${LOAN_PAGE_SIZES.desk}
+  `;
+
+  return rows.map((row) => ({
+    requestId: row.request_id,
+    requestedAt: row.requested_at,
+    readerName: row.reader_name,
+    memberCode: row.member_code,
+    title: row.title,
+    coverMediaId: row.cover_media_id,
+    copyCode: row.copy_code,
+    blockedReason: borrowRequestBlockedReason(row, settings),
+  }));
+}
+
+/**
+ * Why approving this one would be refused, worked out for the list.
+ *
+ * Advisory only. The decision re-checks all of it under locks, because this
+ * answer was true when the page rendered and the desk is a busy place.
+ */
+function borrowRequestBlockedReason(
+  row: {
+    reader_name: string;
+    reader_status: UserStatus;
+    copy_status: CopyStatus;
+    copy_condition: CopyCondition;
+    active_loans: bigint;
+  },
+  settings: { maxActiveLoans: number },
+): string | null {
+  if (!memberMayBorrow(row.reader_status)) return CIRCULATION_MESSAGES.readerUnavailable;
+  const copy = copyBlockedReason(row.copy_status, row.copy_condition);
+  if (copy) return copy;
+  if (Number(row.active_loans) >= settings.maxActiveLoans) {
+    return CIRCULATION_MESSAGES.loanLimitReached(row.reader_name, settings.maxActiveLoans);
+  }
+  return null;
+}
+
+/** For the desk's badge. Same scoping as the list, no rows carried. */
+export async function countPendingBorrowRequests(): Promise<number> {
+  const actor = await requirePermission("loan.issue");
+
+  const [row] = await prisma.$queryRaw<{ count: bigint }[]>`
+    SELECT count(*) AS count
+      FROM borrow_request r
+      JOIN book_copy c ON c.id = r.copy_id
+     WHERE r.status = 'PENDING'
+       AND c.library_id = ${actor.libraryId}
+  `;
+  return Number(row?.count ?? 0);
+}
+
+/**
+ * A librarian answers.
+ *
+ * Approving performs **the issue**, through `issueLockedLoan` — the same code
+ * the desk's own Issue button runs, in one transaction with the decision. There
+ * is no second way to lend a book in this application, which is the point: the
+ * borrowing limit, the ACTIVE-member rule, the copy's condition and the one
+ * active loan per copy are all enforced here without this path knowing any of
+ * them, because this path has no rules of its own.
+ *
+ * Order inside the transaction: lock the request, confirm it is still pending,
+ * then issue — which locks the member and then the copy, always in that order.
+ * Two librarians pressing Approve on the same request queue on the first lock;
+ * the second reads a request that is no longer PENDING and is refused.
+ *
+ * A refused approval leaves the request PENDING, deliberately, exactly as a
+ * refused renewal does. The librarian has learnt something the child could not
+ * — the book came back damaged, the child already has two out — and the honest
+ * next step is theirs to take: decline it with a reason, or fix the problem and
+ * approve. Marking it declined on their behalf would attribute a decision to
+ * somebody who never made one.
+ */
+export async function decideBorrowRequest(input: {
+  requestId: string;
+  decision: "APPROVE" | "DECLINE";
+  reason?: string;
+}): Promise<{ decision: "APPROVE" | "DECLINE"; readerName: string; title: string; dueAt: Date | null }> {
+  const actor = await requirePermission("loan.issue");
+  const { settings } = await getCurrentLibrary();
+
+  const reason = (input.reason ?? "").trim();
+  if (input.decision === "DECLINE" && reason.length < 3) {
+    // A child gets told something, so somebody has to have written something.
+    throw new ValidationError(
+      { reason: "Please write a short note for the reader." },
+      "Borrow request declined without a reason",
+    );
+  }
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const [request] = await tx.$queryRaw<
+        {
+          id: string;
+          status: string;
+          copy_id: string;
+          member_user_id: string;
+          copy_code: string;
+          title: string;
+          reader_name: string;
+        }[]
+      >`
+        SELECT r.id, r.status::text AS status, r.copy_id, r.member_user_id,
+               c.copy_code, t.title, u.display_name AS reader_name
+          FROM borrow_request r
+          JOIN book_copy c ON c.id = r.copy_id
+          JOIN book_title t ON t.id = c.title_id
+          JOIN app_user u ON u.id = r.member_user_id
+         WHERE r.id = ${input.requestId}
+           AND c.library_id = ${actor.libraryId}
+         FOR UPDATE OF r
+      `;
+
+      if (!request) {
+        throw new NotFoundError(
+          `Borrow request ${input.requestId} not found in library ${actor.libraryId}`,
+        );
+      }
+      if (request.status !== "PENDING") {
+        throw new RuleViolationError(
+          `Borrow request ${request.id} is ${request.status}, not PENDING`,
+          "Someone has already answered this one.",
+        );
+      }
+
+      const decidedAt = new Date();
+
+      if (input.decision === "DECLINE") {
+        await tx.borrowRequest.update({
+          where: { id: request.id },
+          data: {
+            status: "DECLINED",
+            decidedById: actor.userId,
+            decidedAt,
+            decisionNote: reason.slice(0, 500),
+          },
+        });
+
+        await recordAudit(tx, {
+          libraryId: actor.libraryId,
+          action: AUDIT_ACTIONS.BORROW_REQUEST_DECLINED,
+          entityType: "borrow_request",
+          entityId: request.id,
+          actorUserId: actor.userId,
+          actorLabel: actor.displayName,
+          metadata: {
+            copyCode: request.copy_code,
+            memberUserId: request.member_user_id,
+            reason: reason.slice(0, 500),
+          },
+        });
+
+        return {
+          decision: "DECLINE" as const,
+          readerName: request.reader_name,
+          title: request.title,
+          dueAt: null,
+        };
+      }
+
+      const loan = await issueLockedLoan(tx, actor, settings, {
+        memberUserId: request.member_user_id,
+        copyId: request.copy_id,
+      });
+
+      await tx.borrowRequest.update({
+        where: { id: request.id },
+        data: {
+          status: "APPROVED",
+          decidedById: actor.userId,
+          decidedAt,
+          decisionNote: reason ? reason.slice(0, 500) : null,
+          loanId: loan.loanId,
+        },
+      });
+
+      await recordAudit(tx, {
+        libraryId: actor.libraryId,
+        action: AUDIT_ACTIONS.BORROW_REQUEST_APPROVED,
+        entityType: "borrow_request",
+        entityId: request.id,
+        actorUserId: actor.userId,
+        actorLabel: actor.displayName,
+        metadata: {
+          copyCode: request.copy_code,
+          memberUserId: request.member_user_id,
+          loanId: loan.loanId,
+          dueAt: loan.dueAt.toISOString(),
+        },
+      });
+
+      return {
+        decision: "APPROVE" as const,
+        readerName: loan.readerName,
+        title: loan.title,
+        dueAt: loan.dueAt,
+      };
+    });
+  } catch (error) {
+    /*
+     * An approval the rules turned down is worth a row of its own, written
+     * outside the transaction that rolled back — same reasoning as a refused
+     * issue. It is the trace of a librarian trying to do something for a child
+     * and the library saying no, which is exactly what somebody asks about
+     * later.
+     */
+    if (error instanceof RuleViolationError || error instanceof ConflictError) {
+      await recordAudit(prisma, {
+        libraryId: actor.libraryId,
+        action: AUDIT_ACTIONS.BORROW_REQUEST_REFUSED,
+        entityType: "borrow_request",
+        entityId: input.requestId,
+        actorUserId: actor.userId,
+        actorLabel: actor.displayName,
+        metadata: { decision: input.decision, reason: error.message },
+      }).catch(() => undefined);
+    }
+    throw error;
+  }
+}
+
+/** One book a child has asked for, from the child's own side. */
+export interface OwnBorrowRequest {
+  copyCode: string;
+  title: string;
+  coverMediaId: string | null;
+  state: ReaderBorrowState;
+  requestedAt: Date;
+  /** The librarian's note, shown only when they declined. */
+  decisionNote: string | null;
+}
+
+/**
+ * The child's own asks.
+ *
+ * Takes no member id — ownership comes from the session, exactly as
+ * `listOwnLoans` does — so there is no argument anybody could pass to see
+ * somebody else's. Approved requests are left out: an approved request became a
+ * loan, and the child already sees it under their own books.
+ */
+export async function listOwnBorrowRequests(): Promise<OwnBorrowRequest[]> {
+  const actor = await requireActor();
+  if (actor.kind !== "MEMBER") return [];
+
+  const rows = await prisma.$queryRaw<
+    {
+      copy_code: string;
+      title: string;
+      cover_media_id: string | null;
+      status: string;
+      requested_at: Date;
+      decision_note: string | null;
+    }[]
+  >`
+    SELECT c.copy_code, t.title, t.cover_media_id, r.status::text AS status,
+           r.requested_at, r.decision_note
+      FROM borrow_request r
+      JOIN book_copy c ON c.id = r.copy_id
+      JOIN book_title t ON t.id = c.title_id
+     WHERE r.member_user_id = ${actor.userId}
+       AND c.library_id = ${actor.libraryId}
+       AND r.status IN ('PENDING', 'DECLINED')
+     ORDER BY r.requested_at DESC
+     LIMIT 20
+  `;
+
+  return rows.map((row) => ({
+    copyCode: row.copy_code,
+    title: row.title,
+    coverMediaId: row.cover_media_id,
+    state: row.status === "PENDING" ? ("pending" as const) : ("declined" as const),
+    requestedAt: row.requested_at,
+    decisionNote: row.status === "DECLINED" ? row.decision_note : null,
+  }));
+}
+
+/**
+ * What this child may do about this one book, right now.
+ *
+ * Answers the book page's only question: show the ask button, show "you have
+ * asked", show what the librarian said, or show nothing at all. A signed-out
+ * visitor and a librarian both get `canAsk: false` and no state — neither has a
+ * shelf of their own.
+ */
+export async function getOwnBorrowStateForCode(code: string): Promise<{
+  canAsk: boolean;
+  state: ReaderBorrowState;
+  decisionNote: string | null;
+  alreadyBorrowed: boolean;
+  spokenFor: boolean;
+}> {
+  const none = {
+    canAsk: false,
+    state: "none" as const,
+    decisionNote: null,
+    alreadyBorrowed: false,
+    spokenFor: false,
+  };
+
+  const actor = await getActor();
+  if (!actor || actor.kind !== "MEMBER" || !actor.permissions.has("loan.request")) return none;
+
+  const [row] = await prisma.$queryRaw<
+    {
+      copy_id: string;
+      own_status: string | null;
+      own_note: string | null;
+      pending_by_other: boolean;
+      borrowed_by_me: boolean;
+    }[]
+  >`
+    SELECT c.id AS copy_id,
+           own.status::text AS own_status,
+           own.decision_note AS own_note,
+           EXISTS (
+             SELECT 1 FROM borrow_request o
+              WHERE o.copy_id = c.id AND o.status = 'PENDING'
+                AND o.member_user_id <> ${actor.userId}
+           ) AS pending_by_other,
+           EXISTS (
+             SELECT 1 FROM loan l
+              WHERE l.copy_id = c.id AND l.status = 'ACTIVE'
+                AND l.member_user_id = ${actor.userId}
+           ) AS borrowed_by_me
+      FROM book_copy c
+      LEFT JOIN LATERAL (
+        SELECT r.status, r.decision_note
+          FROM borrow_request r
+         WHERE r.copy_id = c.id AND r.member_user_id = ${actor.userId}
+         ORDER BY r.requested_at DESC
+         LIMIT 1
+      ) own ON true
+     WHERE c.library_id = ${actor.libraryId}
+       AND upper(btrim(c.copy_code)) = upper(btrim(${code}))
+  `;
+
+  if (!row) return none;
+
+  const state: ReaderBorrowState =
+    row.own_status === "PENDING"
+      ? "pending"
+      : row.own_status === "DECLINED"
+        ? "declined"
+        : row.own_status === "APPROVED"
+          ? "approved"
+          : "none";
+
+  return {
+    // Asking again is allowed after a decline or a cancellation — a child whose
+    // book was out last week should be able to ask again this week.
+    canAsk: state !== "pending" && !row.borrowed_by_me && !row.pending_by_other,
+    state,
+    decisionNote: state === "declined" ? row.own_note : null,
+    alreadyBorrowed: row.borrowed_by_me,
+    spokenFor: row.pending_by_other,
+  };
 }

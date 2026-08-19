@@ -47,8 +47,12 @@ export default async function DonorsPage() {
       <div className="mx-auto w-full max-w-4xl px-5 py-12 sm:px-8 sm:py-16">
         <h1 className="garden-rule inline-block text-4xl sm:text-5xl">Thank You, Book Friends ❤️</h1>
         <p className="mt-8 max-w-2xl text-xl text-ink-soft">
-          Every book on our shelves is a gift to our young readers. Thank you to the families who
-          have shared books with our community.
+          Every book shared with our library gives another child the chance to discover a new story,
+          or to learn something new. Thank you to the families who have shared books with us.
+        </p>
+        <p className="mt-4 max-w-2xl text-lg text-ink-soft">
+          Giving a book is completely voluntary. Joining the library is free, and it never depends
+          on giving one.
         </p>
 
         <div className="mt-12">
@@ -78,9 +82,14 @@ export default async function DonorsPage() {
           )}
         </div>
 
+        {/*
+          No count, no total, no "most generous". The list above is every donor
+          exactly once, alphabetically. This closing line says what the page is
+          for, rather than repeating the promise made at the top of it.
+        */}
         <p className="mt-14 max-w-2xl text-lg text-ink-soft">
-          Sharing a book is always a choice. Joining the library is free, and it never depends on
-          giving one.
+          If you would like to share a book, the librarian will be glad to take it — and you can
+          choose whether your name appears here at all.
         </p>
       </div>
     </PublicShell>

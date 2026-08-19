@@ -7,15 +7,17 @@ import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
 import { EmailService } from "@/server/lib/email";
 import { ConflictError, NotFoundError, RuleViolationError, ValidationError } from "@/server/lib/errors";
 import { mintToken, revokeTokens, TOKEN_LIFETIME } from "@/server/lib/tokens";
-import { ROLE_KEYS, type RoleKey } from "@/lib/permissions";
+import { ROLE_KEYS } from "@/lib/permissions";
 
 /**
  * Staff management. This is the privilege-escalation surface, so the rules are
  * explicit and each one has a test:
  *
  *   • Only `user.manage_staff` (Super Admin) reaches any of it.
- *   • A librarian cannot be created as, or promoted to, Super Admin by anyone
- *     without that permission — and nobody can grant themselves anything.
+ *   • The only role this service can grant is Librarian. Version 1 has exactly
+ *     one Super Admin, created by `npm run create-admin` when the library is
+ *     set up, and there is no screen, action or service call anywhere that
+ *     mints a second one or promotes anybody into the role.
  *   • Nobody can suspend, deactivate or demote themselves. Locking the only
  *     administrator out of their own library is a real, easy accident.
  *   • The last active Super Admin cannot be removed. There must always be
@@ -25,8 +27,14 @@ import { ROLE_KEYS, type RoleKey } from "@/lib/permissions";
  * single-use activation link a child's guardian does.
  */
 
-/** Roles that may be granted to a staff account through this service. */
-const ASSIGNABLE_STAFF_ROLES: readonly RoleKey[] = [ROLE_KEYS.LIBRARIAN, ROLE_KEYS.SUPER_ADMIN];
+/**
+ * The only role this service grants.
+ *
+ * Not a parameter, and not a dropdown: a staff account created here is a
+ * Librarian. Making that a choice would mean writing the code that can create
+ * a second Super Admin, and then guarding it — so the code does not exist.
+ */
+const STAFF_ROLE = ROLE_KEYS.LIBRARIAN;
 
 export interface StaffSummary {
   id: string;
@@ -74,7 +82,6 @@ export async function listStaff(): Promise<StaffSummary[]> {
 export interface CreateStaffInput {
   displayName: string;
   email: string;
-  roleKey: RoleKey;
 }
 
 /**
@@ -95,13 +102,6 @@ export async function createStaffAccount(input: CreateStaffInput): Promise<{ use
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     throw new ValidationError({ email: "That does not look like an email address." });
   }
-  if (!ASSIGNABLE_STAFF_ROLES.includes(input.roleKey)) {
-    throw new ValidationError(
-      { roleKey: "Choose a valid role." },
-      `Attempt to assign non-staff role ${input.roleKey}`,
-    );
-  }
-
   const existing = await prisma.appUser.findFirst({
     where: { libraryId: actor.libraryId, email },
     select: { id: true },
@@ -114,13 +114,13 @@ export async function createStaffAccount(input: CreateStaffInput): Promise<{ use
   }
 
   const role = await prisma.role.findUnique({
-    where: { libraryId_key: { libraryId: actor.libraryId, key: input.roleKey } },
+    where: { libraryId_key: { libraryId: actor.libraryId, key: STAFF_ROLE } },
     select: { id: true, isAssignable: true },
   });
-  if (!role) throw new NotFoundError(`Role ${input.roleKey} not found`);
+  if (!role) throw new NotFoundError(`Role ${STAFF_ROLE} not found`);
   if (!role.isAssignable) {
     throw new RuleViolationError(
-      `Role ${input.roleKey} is not assignable`,
+      `Role ${STAFF_ROLE} is not assignable`,
       "That role is not available yet.",
     );
   }
@@ -155,7 +155,7 @@ export async function createStaffAccount(input: CreateStaffInput): Promise<{ use
       entityId: user.id,
       actorUserId: actor.userId,
       actorLabel: actor.displayName,
-      metadata: { kind: "STAFF", role: input.roleKey },
+      metadata: { kind: "STAFF", role: STAFF_ROLE },
     });
 
     await recordAudit(tx, {
@@ -165,7 +165,7 @@ export async function createStaffAccount(input: CreateStaffInput): Promise<{ use
       entityId: user.id,
       actorUserId: actor.userId,
       actorLabel: actor.displayName,
-      metadata: { role: input.roleKey },
+      metadata: { role: STAFF_ROLE },
     });
 
     return { user, token };
@@ -174,7 +174,7 @@ export async function createStaffAccount(input: CreateStaffInput): Promise<{ use
   const emailSent = await EmailService.sendStaffInvitation({
     to: email,
     name: displayName,
-    roleName: input.roleKey === ROLE_KEYS.SUPER_ADMIN ? "a Super Admin" : "a Librarian",
+    roleName: "a Librarian",
     activationToken: result.token.rawToken,
     expiresInDays: Math.round(TOKEN_LIFETIME.ACTIVATION.hours / 24),
     userId: result.user.id,
@@ -364,61 +364,16 @@ export async function deactivateStaff(staffUserId: string, internalReason: strin
   await revokeAllSessionsForUser(staff.id);
 }
 
-/**
- * Changes a staff member's role.
+/*
+ * There is no `setStaffRole` here, and that is the design.
  *
- * The self-check is the important line: without it, a librarian who somehow
- * reached this service could promote themselves, and a Super Admin could demote
- * themselves out of the ability to undo it.
+ * Version 1 has three roles and one Super Admin. The only staff role that can
+ * be granted is Librarian, at creation, so there is nothing left for a role
+ * editor to do except create the two accidents this service exists to prevent:
+ * a second administrator nobody meant to make, and a library whose only
+ * administrator has demoted themselves. Handing the library over is
+ * `npm run create-admin`, run deliberately, by someone with the database.
  */
-export async function setStaffRole(staffUserId: string, roleKey: RoleKey): Promise<void> {
-  const actor = await requirePermission("role.manage");
-
-  if (staffUserId === actor.userId) {
-    throw new RuleViolationError(
-      "Self role change attempt",
-      "You cannot change your own role. Ask another administrator.",
-    );
-  }
-
-  if (!ASSIGNABLE_STAFF_ROLES.includes(roleKey)) {
-    throw new ValidationError({ roleKey: "Choose a valid role." });
-  }
-
-  const staff = await loadStaff(actor, staffUserId);
-
-  // Demoting the last Super Admin is the same accident as suspending them.
-  if (isSuperAdmin(staff) && roleKey !== ROLE_KEYS.SUPER_ADMIN) {
-    await assertNotLastSuperAdmin(actor.libraryId, staff.id);
-  }
-
-  const role = await prisma.role.findUniqueOrThrow({
-    where: { libraryId_key: { libraryId: actor.libraryId, key: roleKey } },
-    select: { id: true },
-  });
-
-  const previousRoles = staff.userRoles.map((entry) => entry.role.key);
-
-  await prisma.$transaction(async (tx) => {
-    await tx.userRole.deleteMany({ where: { userId: staff.id } });
-    await tx.userRole.create({
-      data: { userId: staff.id, roleId: role.id, grantedById: actor.userId },
-    });
-
-    await recordAudit(tx, {
-      libraryId: actor.libraryId,
-      action: AUDIT_ACTIONS.ROLE_GRANTED,
-      entityType: "app_user",
-      entityId: staff.id,
-      actorUserId: actor.userId,
-      actorLabel: actor.displayName,
-      metadata: { from: previousRoles, to: roleKey },
-    });
-  });
-
-  // Permissions are read from the database on every request, so the change is
-  // live immediately — no session needs to be destroyed for it to take effect.
-}
 
 /** Sends a staff member a fresh activation or reset link. Never reveals a password. */
 export async function reissueStaffActivation(staffUserId: string): Promise<boolean> {

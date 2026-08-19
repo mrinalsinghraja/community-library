@@ -30,6 +30,14 @@ import {
 
 let fixture: Fixture;
 let librarian: Awaited<ReturnType<typeof createStaff>>;
+/**
+ * The person who decides. In Version 1 `registration.review` belongs to the
+ * Super Admin alone — a librarian sees the queue and meets the family, and the
+ * owner of the library says yes or no. Tests that approve or reject therefore
+ * act as this one; everything else stays with the librarian, because everything
+ * else is still their job.
+ */
+let admin: Awaited<ReturnType<typeof createStaff>>;
 const mail = new FakeEmailProvider();
 
 /** Signs the service layer in as a given user. */
@@ -50,7 +58,7 @@ async function approveFresh(childName: string, apartment: string) {
 
   const request = await db.registrationRequest.findFirstOrThrow({ where: { childName } });
 
-  await actingAs(librarian.id);
+  await actingAs(admin.id);
   const result = await approveRegistration(request.id);
 
   return { ...result, rawToken: mail.tokenFrom(TEMPLATE_IDS.ACTIVATION) };
@@ -77,6 +85,7 @@ beforeAll(async () => {
   await resetDatabase();
   fixture = await createLibraryFixture();
   librarian = await createStaff(fixture.libraryId, "LIBRARIAN");
+  admin = await createStaff(fixture.libraryId, "SUPER_ADMIN");
   __setEmailProviderForTests(mail);
 });
 
@@ -229,7 +238,7 @@ describe("approving a registration", () => {
       where: { childName: "Approve Me" },
     });
 
-    await actingAs(librarian.id);
+    await actingAs(admin.id);
     const result = await approveRegistration(request.id);
 
     expect(result.memberCode).toMatch(/^TST-R\d{4}$/);
@@ -285,7 +294,7 @@ describe("approving a registration", () => {
       where: { childName: "Approve Me" },
     });
 
-    await actingAs(librarian.id);
+    await actingAs(admin.id);
     await expect(approveRegistration(request.id)).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
@@ -308,7 +317,7 @@ describe("approving a registration", () => {
       where: { childName: "Aged Out" },
     });
 
-    await actingAs(librarian.id);
+    await actingAs(admin.id);
     await expect(approveRegistration(request.id)).rejects.toMatchObject({ code: "RULE_VIOLATION" });
 
     await db.librarySettings.update({
@@ -332,7 +341,7 @@ describe("rejecting a registration", () => {
       where: { childName: "Reject Me" },
     });
 
-    await actingAs(librarian.id);
+    await actingAs(admin.id);
     await expect(rejectRegistration(request.id, "")).rejects.toMatchObject({ code: "VALIDATION" });
   });
 
@@ -341,7 +350,7 @@ describe("rejecting a registration", () => {
       where: { childName: "Reject Me" },
     });
 
-    await actingAs(librarian.id);
+    await actingAs(admin.id);
     await rejectRegistration(request.id, "duplicate of an existing card");
 
     const updated = await db.registrationRequest.findUniqueOrThrow({ where: { id: request.id } });
@@ -371,5 +380,67 @@ describe("authorization on the queue", () => {
   it("refuses an unauthenticated caller", async () => {
     __setSessionHandle(null);
     await expect(listRegistrations()).rejects.toMatchObject({ code: "NOT_AUTHENTICATED" });
+  });
+});
+
+describe("who may decide a registration", () => {
+  /*
+   * The Version 1 rule, asserted from both sides.
+   *
+   * A librarian meets the family, sees the queue, and can tell a parent where
+   * things stand. What they cannot do is create — or refuse — a child's
+   * membership. That decision belongs to the owner of the library, and a form
+   * submitted by a parent never becomes an account on its own.
+   */
+  async function pendingRequest(childName: string) {
+    await submitRegistration({
+      ...BASE_INPUT,
+      childName,
+      childDateOfBirth: dateOfBirthForAge(9),
+    });
+    return db.registrationRequest.findFirstOrThrow({ where: { childName } });
+  }
+
+  it("lets a librarian see the queue but not answer it", async () => {
+    const request = await pendingRequest("Queue Watcher");
+
+    await actingAs(librarian.id);
+    await expect(listRegistrations()).resolves.toBeDefined();
+
+    await expect(approveRegistration(request.id)).rejects.toMatchObject({
+      code: "NOT_AUTHORIZED",
+    });
+    await expect(rejectRegistration(request.id, "not this one")).rejects.toMatchObject({
+      code: "NOT_AUTHORIZED",
+    });
+
+    // Nothing happened: no member, and the request is exactly as it was.
+    const untouched = await db.registrationRequest.findUniqueOrThrow({
+      where: { id: request.id },
+    });
+    expect(untouched.status).toBe("PENDING");
+    expect(untouched.createdMemberUserId).toBeNull();
+  });
+
+  it("does not turn a parent's form into an account on its own", async () => {
+    const request = await pendingRequest("Not An Account");
+
+    // Submitting is the family asking. Until somebody answers, there is a row
+    // in a queue and nothing else — no account, no card, no way in.
+    expect(request.status).toBe("PENDING");
+    expect(request.createdMemberUserId).toBeNull();
+    expect(
+      await db.appUser.count({ where: { displayName: "Not An Account" } }),
+    ).toBe(0);
+  });
+
+  it("is not something a reader can do", async () => {
+    const request = await pendingRequest("Reader Cannot");
+    const child = await createMember(fixture.libraryId);
+
+    await actingAs(child.id, "MEMBER");
+    await expect(approveRegistration(request.id)).rejects.toMatchObject({
+      code: "NOT_AUTHORIZED",
+    });
   });
 });
