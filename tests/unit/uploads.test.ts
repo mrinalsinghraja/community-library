@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { ValidationError } from "@/server/lib/errors";
-import { UPLOAD_PURPOSES, UPLOAD_RULES, validateUpload } from "@/server/lib/uploads";
+import {
+  MEDIA_MAY_REVALIDATE,
+  UPLOAD_PURPOSES,
+  UPLOAD_RULES,
+  validateUpload,
+} from "@/server/lib/uploads";
 
 /**
  * Errors carry two messages: a technical one for the log and a friendly one for
@@ -256,5 +261,33 @@ describe("stripping embedded metadata", () => {
     const result = validateUpload({ bytes: clean, purpose: UPLOAD_PURPOSES.BOOK_COVER });
 
     expect(Buffer.from(result.bytes).equals(Buffer.from(clean))).toBe(true);
+  });
+});
+
+describe("what a browser may keep", () => {
+  /*
+   * This is a caching list, and the only thing that makes it safe is what is
+   * NOT on it. `/api/media/[id]` runs its full authorization check on every
+   * request either way — `no-cache` forces the browser to ask before reusing
+   * anything it holds — so a purpose on this list only ever saves re-sending
+   * bytes whose answer has not changed.
+   *
+   * A child's photograph must never appear here. It keeps `no-store`, which is
+   * what stops it being written to a shared family device's disk at all.
+   */
+  it("never lets a child's photograph be kept by a browser", () => {
+    expect(MEDIA_MAY_REVALIDATE.has(UPLOAD_PURPOSES.CHILD_PHOTO)).toBe(false);
+  });
+
+  it("lets a book jacket and a library logo be revalidated", () => {
+    expect(MEDIA_MAY_REVALIDATE.has(UPLOAD_PURPOSES.BOOK_COVER)).toBe(true);
+    expect(MEDIA_MAY_REVALIDATE.has(UPLOAD_PURPOSES.BRANDING)).toBe(true);
+  });
+
+  it("holds nothing but purposes this application defines", () => {
+    const known = new Set<string>(Object.values(UPLOAD_PURPOSES));
+    for (const purpose of MEDIA_MAY_REVALIDATE) {
+      expect(known.has(purpose)).toBe(true);
+    }
   });
 });

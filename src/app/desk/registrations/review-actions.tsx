@@ -10,6 +10,7 @@ import {
   rejectRegistrationAction,
   type DeskActionState,
 } from "@/server/actions/registration-actions";
+import { Icon } from "@/components/ui/icon";
 
 const INITIAL: DeskActionState = { status: "idle" };
 
@@ -125,12 +126,12 @@ export function ReviewActions({
           {verificationSatisfied ? (
             <form action={approve}>
               <input type="hidden" name="registrationId" value={registrationId} />
-              <Button type="submit" size="sm" disabled={approving} icon="✅">
+              <Button type="submit" size="sm" disabled={approving} icon={<Icon name="check" />}>
                 {approving ? "Approving…" : "Approve"}
               </Button>
             </form>
           ) : canVerify ? (
-            <Button size="sm" onClick={() => setShowVerify(true)} icon="🤝">
+            <Button size="sm" onClick={() => setShowVerify(true)} icon={<Icon name="handshake" />}>
               Confirm the guardian
             </Button>
           ) : (

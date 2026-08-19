@@ -1,15 +1,20 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { LibraryLogo } from "@/components/library/library-logo";
+import { Butterfly, LibraryLogo } from "@/components/library/library-logo";
 import type { Branding } from "@/server/lib/settings";
 
 /**
  * The public shell: masthead, main landmark, footer.
  *
- * Reader, desk and admin shells arrive in later phases and will share this
- * header. Everything visible here comes from configuration.
+ * The masthead is anchored by the library's mark and closed by the green rule
+ * lifted from it, so the brand is part of the structure rather than a picture
+ * parked in a corner. Everything visible here comes from configuration.
  */
+
+const NAV_LINK =
+  "rounded-full px-2.5 py-2.5 text-base font-bold font-display text-ink-soft no-underline " +
+  "transition-colors hover:bg-accent-wash hover:text-accent-ink sm:px-4 sm:text-lg";
 
 export function SiteHeader({
   branding,
@@ -19,7 +24,7 @@ export function SiteHeader({
   signedIn?: boolean;
 }) {
   return (
-    <header className="border-b-2 border-hairline bg-surface">
+    <header className="relative bg-surface">
       {/*
         Wraps to two rows on a narrow screen: brand above, navigation below.
         A library name can be long, and squeezing it onto one row with the
@@ -29,17 +34,17 @@ export function SiteHeader({
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 sm:px-8">
         <Link
           href="/"
-          className="flex items-center gap-3 no-underline sm:gap-3.5"
+          className="flex items-center gap-3 no-underline sm:gap-4"
           aria-label={`${branding.libraryName} — home`}
         >
           <LibraryLogo
             logoUrl={branding.logoUrl}
             libraryName={branding.libraryName}
-            size={44}
-            className="shrink-0 sm:size-13"
+            size={52}
+            className="w-11 shrink-0 sm:w-14"
           />
           <span className="flex flex-col leading-tight">
-            <span className="font-display text-lg font-extrabold text-ink sm:text-2xl">
+            <span className="font-display text-lg font-bold text-ink sm:text-2xl">
               {branding.libraryName}
             </span>
             <span className="text-sm text-ink-soft sm:text-base">{branding.communityName}</span>
@@ -51,9 +56,11 @@ export function SiteHeader({
 
           There is no hamburger menu here on purpose — every door stays visible
           — so the navigation has to be able to take a second row rather than
-          push the page sideways. Adding "My books" in Phase 3 made a fourth
-          item, which is what took it past 375px and produced a horizontally
-          scrolling page on the smallest phone in the building.
+          push the page sideways. Four doors is the ceiling: adding "My books"
+          in Phase 3 made a fourth item, which is what took it past 375px and
+          produced a horizontally scrolling page on the smallest phone in the
+          building. The donors page is reached from the home page and the foot
+          of every page instead of becoming a fifth.
         */}
         <nav
           aria-label="Main"
@@ -67,10 +74,7 @@ export function SiteHeader({
           */}
           {signedIn ? (
             <>
-              <Link
-                href="/books"
-                className="rounded-full px-2 py-2.5 text-base font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink sm:px-4 sm:text-lg"
-              >
+              <Link href="/books" className={NAV_LINK}>
                 Books
               </Link>
               {/*
@@ -79,30 +83,31 @@ export function SiteHeader({
                 the desk rather than showing them an empty shelf. The page
                 itself decides; the masthead only offers the door.
               */}
-              <Link
-                href="/my-books"
-                className="rounded-full px-2 py-2.5 text-base font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink sm:px-4 sm:text-lg"
-              >
+              <Link href="/my-books" className={NAV_LINK}>
                 My books
               </Link>
             </>
           ) : null}
-          <Link
-            href="/rules"
-            /* Kept visible at every width: there is no hamburger menu, so
-               hiding this would make the page unreachable from the masthead. */
-            className="rounded-full px-2 py-2.5 text-base font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink sm:px-4 sm:text-lg"
-          >
+          <Link href="/rules" className={NAV_LINK}>
             How it works
           </Link>
           <Link
             href={signedIn ? "/account" : "/login"}
-            className="rounded-full bg-primary px-5 py-2.5 text-base font-bold text-white no-underline hover:bg-primary-deep sm:text-lg"
+            className="rounded-full bg-primary px-5 py-2.5 font-display text-base font-bold text-white no-underline transition-colors hover:bg-primary-deep sm:text-lg"
           >
             {signedIn ? "My library" : "Sign in"}
           </Link>
         </nav>
       </div>
+
+      {/*
+        The signature, doing structural work: the rule from the mark becomes the
+        edge of the masthead. Decorative, so it is hidden from screen readers.
+      */}
+      <div
+        aria-hidden="true"
+        className="h-1 w-full bg-[linear-gradient(to_right,var(--color-leaf),var(--color-primary)_35%,var(--color-accent))]"
+      />
     </header>
   );
 }
@@ -110,20 +115,34 @@ export function SiteHeader({
 export function SiteFooter({ branding }: { branding: Branding }) {
   return (
     <footer className="mt-20 border-t-2 border-hairline bg-surface">
-      <div className="mx-auto flex max-w-5xl flex-col gap-3 px-5 py-10 text-base text-ink-soft sm:px-8">
-        <p className="font-display text-lg font-bold text-ink">{branding.libraryName}</p>
-        <p>
+      <div className="mx-auto flex max-w-5xl flex-col gap-4 px-5 py-10 text-base text-ink-soft sm:px-8">
+        <div className="flex items-center gap-3">
+          <LibraryLogo
+            logoUrl={branding.logoUrl}
+            libraryName={branding.libraryName}
+            size={40}
+            priority={false}
+            className="w-9 shrink-0"
+          />
+          <p className="font-display text-lg font-bold text-ink">{branding.libraryName}</p>
+        </div>
+        <p className="max-w-2xl">
           A free library run by and for the {branding.communityName} community. Books are shared,
           never sold. Joining costs nothing, and donating a book is never a condition of membership.
         </p>
-        {branding.contactEmail ? (
-          <p>
-            Questions?{" "}
+        <p className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <Link href="/rules" className="font-bold text-primary-deep">
+            How our library works
+          </Link>
+          <Link href="/donors" className="font-bold text-primary-deep">
+            Book friends
+          </Link>
+          {branding.contactEmail ? (
             <a href={`mailto:${branding.contactEmail}`} className="font-bold text-primary-deep">
               {branding.contactEmail}
             </a>
-          </p>
-        ) : null}
+          ) : null}
+        </p>
       </div>
     </footer>
   );
@@ -145,6 +164,30 @@ export function PublicShell({
         {children}
       </main>
       <SiteFooter branding={branding} />
+    </div>
+  );
+}
+
+/**
+ * A page heading with the garden rule under it, and one butterfly to the side.
+ * Used at the top of every child-facing page so they are visibly one family.
+ */
+export function PageHeading({
+  title,
+  children,
+  butterfly = true,
+}: {
+  title: string;
+  children?: ReactNode;
+  butterfly?: boolean;
+}) {
+  return (
+    <div className="relative">
+      <h1 className="garden-rule inline-block text-3xl sm:text-4xl">{title}</h1>
+      {butterfly ? (
+        <Butterfly className="drift absolute -top-2 right-0 w-9 opacity-80 sm:w-12" />
+      ) : null}
+      {children ? <p className="mt-8 max-w-2xl text-lg text-ink-soft">{children}</p> : null}
     </div>
   );
 }

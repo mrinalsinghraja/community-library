@@ -8,6 +8,7 @@ import {
   decideRenewalRequestAction,
   type CirculationFormState,
 } from "@/server/actions/circulation-actions";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * Yes or no, on one child's question.
@@ -89,7 +90,7 @@ export function DecisionActions({
           name="decision"
           value="APPROVE"
           size="sm"
-          icon="✓"
+          icon={<Icon name="check" />}
           disabled={pending || !canApprove}
         >
           {pending ? "Saving…" : "Yes, keep it"}

@@ -11,6 +11,7 @@ import {
   uploadLogoAction,
   type ActionState,
 } from "@/server/actions/settings-actions";
+import { Icon } from "@/components/ui/icon";
 
 const INITIAL: ActionState = { status: "idle" };
 
@@ -137,7 +138,7 @@ export function BrandingForm({ values }: { values: BrandingFormValues }) {
         </div>
 
         <div>
-          <Button type="submit" size="md" disabled={pending} icon="💾">
+          <Button type="submit" size="md" disabled={pending} icon={<Icon name="save" />}>
             {pending ? "Saving…" : "Save"}
           </Button>
         </div>
@@ -174,7 +175,7 @@ export function LogoForm({ hasLogo }: { hasLogo: boolean }) {
         </Field>
 
         <div>
-          <Button type="submit" size="md" disabled={uploading} icon="⬆️">
+          <Button type="submit" size="md" disabled={uploading} icon={<Icon name="upload" />}>
             {uploading ? "Uploading…" : "Use this logo"}
           </Button>
         </div>

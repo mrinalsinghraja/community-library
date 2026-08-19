@@ -184,15 +184,15 @@ So the connection strings come from the **Neon dashboard**, once, into a local
 file that is deleted afterwards:
 
 ```bash
-cat > .env.production.local <<'ENV'
+cat > .env.vercel-production <<'ENV'
 DATABASE_URL="<Neon pooled connection string>"
 DIRECT_URL="<Neon direct / unpooled connection string>"
 ENV
 
-npx dotenv -e .env.production.local -- npx prisma migrate deploy
-npx dotenv -e .env.production.local -- npx prisma migrate status
-npx dotenv -e .env.production.local -- npm run db:seed
-rm .env.production.local
+npx dotenv -e .env.vercel-production -- npx prisma migrate deploy
+npx dotenv -e .env.vercel-production -- npx prisma migrate status
+npx dotenv -e .env.vercel-production -- npm run db:seed
+rm .env.vercel-production
 ```
 
 **`DIRECT_URL` belongs on the machine that runs migrations, not in Vercel.**
@@ -348,7 +348,7 @@ issue tracker.
 - [ ] `AUTH_SECRET` and `CRON_SECRET` generated fresh for production
 - [ ] `AUTH_URL` and `NEXT_PUBLIC_APP_URL` both `https://library.msrx.co.in`
 - [ ] First Super Admin created with `npm run create-admin`
-- [ ] `.env.production.local` deleted
+- [ ] `.env.vercel-production` deleted
 - [ ] Domain resolves; HTTPS valid; HTTP redirects
 - [ ] `/api/health` → `{"status":"ok"}`
 - [ ] `/api/cron/daily` → 404 without the secret; cron job listed in Vercel

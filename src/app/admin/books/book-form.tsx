@@ -1,18 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useId, useState } from "react";
+import { useActionState, useId, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Field, Select, TextInput } from "@/components/ui/field";
 import { Callout } from "@/components/ui/states";
+import { downscaleImage, formatBytes } from "@/lib/image-downscale";
 import { AGE_GROUPS, CATALOGUE_LIMITS, CONDITIONS, SELECTABLE_STATUSES, statusDefinition } from "@/lib/catalogue";
 import {
   createBookAction,
   updateBookAction,
   type BookFormState,
 } from "@/server/actions/catalogue-actions";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * Add Book / Edit Book.
@@ -273,7 +275,7 @@ export function BookForm({
         <div className="flex flex-col gap-2">
           <p className="font-display text-lg font-bold text-ink">Where is it now?</p>
           <p className="rounded-[var(--radius-field)] bg-surface-sunk px-4 py-3.5 text-ink-soft">
-            📕 Out with a reader.{" "}
+            <Icon name="book" /> Out with a reader.{" "}
             <Link href="/desk/loans" className="font-bold text-primary-deep">
               Take it back at the desk
             </Link>{" "}
@@ -325,18 +327,31 @@ function SaveButton({ mode }: { mode: "create" | "edit" }) {
   const { pending } = useFormStatus();
 
   return (
-    <Button type="submit" size="lg" icon="💾" disabled={pending}>
+    <Button type="submit" size="lg" icon={<Icon name="save" />} disabled={pending}>
       {pending ? "Saving…" : mode === "create" ? "Save this book" : "Save changes"}
     </Button>
   );
 }
-
 /**
  * The cover picture: optional, and secondary to everything above it.
  *
- * A file input reveals the chosen filename only after the browser accepts it,
- * so the name is echoed back — otherwise a librarian who tapped the wrong photo
- * has no way to know before saving.
+ * Two things happen the moment a file is chosen, and both exist because the
+ * librarian is often twelve and often on a phone.
+ *
+ * The picture is shown back, because a file input reveals only a filename and
+ * somebody who tapped the wrong photo in a camera roll has no other way to
+ * know before saving.
+ *
+ * And it is shrunk, in the browser, before it is ever submitted — a phone
+ * photograph of a book jacket is routinely 4 MB and 4000 pixels wide, which is
+ * four megabytes every child then downloads to render a two-centimetre
+ * thumbnail. See `src/lib/image-downscale.ts`: it is a courtesy to the network,
+ * never a security control, and every server-side rule still runs on whatever
+ * actually arrives.
+ *
+ * If the browser cannot do it, the original file is submitted unchanged and
+ * everything still works. Nothing here is allowed to stop a book being
+ * catalogued.
  */
 function CoverField({
   fieldId,
@@ -347,7 +362,49 @@ function CoverField({
   error?: string;
   hasCover: boolean;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [chosen, setChosen] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    setPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+
+    if (!file) {
+      setChosen(null);
+      setNote(null);
+      return;
+    }
+
+    setChosen(file.name);
+    setNote("Getting the picture ready…");
+
+    const { file: prepared, changed } = await downscaleImage(file);
+
+    /*
+     * Put the smaller file back into the input, so the ordinary form submission
+     * carries it. A DataTransfer is the only way to assign to `input.files`,
+     * and assigning does not fire another change event — which is what keeps
+     * this from looping.
+     */
+    if (changed && inputRef.current && typeof DataTransfer === "function") {
+      const transfer = new DataTransfer();
+      transfer.items.add(prepared);
+      inputRef.current.files = transfer.files;
+    }
+
+    setPreviewUrl(URL.createObjectURL(prepared));
+    setNote(
+      changed
+        ? `Ready — resized to ${formatBytes(prepared.size)} so it loads quickly.`
+        : "Ready.",
+    );
+  }
 
   return (
     <Field
@@ -358,14 +415,38 @@ function CoverField({
     >
       <input
         id={fieldId}
+        ref={inputRef}
         name="cover"
         type="file"
         accept="image/jpeg,image/png,image/webp"
-        onChange={(event) => setChosen(event.target.files?.[0]?.name ?? null)}
+        onChange={handleFile}
         className="min-h-14 w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface px-4 py-3 text-base file:me-4 file:rounded-full file:border-0 file:bg-primary file:px-4 file:py-2 file:text-base file:font-bold file:text-white"
       />
 
-      {chosen ? <p className="text-base text-ink-soft">Chosen: {chosen}</p> : null}
+      {chosen ? (
+        <div className="flex items-center gap-4">
+          {previewUrl ? (
+            <span className="w-16 shrink-0 overflow-hidden rounded-[var(--radius-field)] shadow-lift">
+              {/* A local object URL for a file this browser already holds. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewUrl}
+                alt=""
+                className="aspect-[2/3] w-full object-cover"
+              />
+            </span>
+          ) : null}
+          <span className="text-base text-ink-soft">
+            Chosen: {chosen}
+            {note ? (
+              <>
+                <br />
+                {note}
+              </>
+            ) : null}
+          </span>
+        </div>
+      ) : null}
 
       {hasCover ? (
         <p className="text-base text-ink-soft">

@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { PasswordField } from "@/components/ui/password-field";
 import { activateAccountAction, type ActionState } from "@/server/actions/account-actions";
+import { Icon } from "@/components/ui/icon";
 
 const INITIAL: ActionState = { status: "idle" };
 
@@ -42,7 +43,7 @@ export function ActivateForm({ token, minLength }: { token: string; minLength: n
         minLength={minLength}
       />
 
-      <Button type="submit" size="lg" fullWidth disabled={pending} icon="🔑">
+      <Button type="submit" size="lg" fullWidth disabled={pending} icon={<Icon name="key" />}>
         {pending ? "Setting it up…" : "That's my secret word"}
       </Button>
     </form>

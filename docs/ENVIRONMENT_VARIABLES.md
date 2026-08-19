@@ -81,5 +81,33 @@ breaks onboarding silently, the worst kind of failure.
 | Vercel Production | Vercel → Settings → Environment Variables → Production |
 | CI | Fake values in `.github/workflows/ci.yml` against a throwaway service container. No real secret is needed for CI to pass |
 
-Pull production values locally with `vercel env pull` when you need to run
-`npm run create-admin` against production.
+### Which file a command reads
+
+`next build` and `next start` set `NODE_ENV=production`, and Next.js then reads
+`.env.production.local` **before** `.env`. That is documented behaviour, and it
+is also how a laptop ends up talking to the production database: pull the
+production environment once, forget to delete the file, and every later local
+build silently uses it.
+
+So production values are never kept under a name Next.js looks for:
+
+| Command | Reads |
+|---|---|
+| `npm run dev` | `.env.development.local`, `.env.local`, `.env.development`, `.env` |
+| `npm test`, `npm run test:all` | nothing from disk — `tests/setup-env.ts` supplies obvious fakes. `npm run test:db` additionally reads `.env` for `TEST_DATABASE_URL` |
+| `npm run build`, `npm start` | `.env.production.local`, `.env.local`, `.env.production`, `.env` — **and `prebuild` refuses to start if either production-only file exists locally** |
+| Vercel | the platform's own variables. No `.env` file is ever deployed |
+
+Pull production values under the safe name when you genuinely need them:
+
+```bash
+vercel env pull .env.vercel-production        # never .env.production.local
+npx dotenv -e .env.vercel-production -- npm run create-admin
+rm .env.vercel-production                     # when you are done
+```
+
+Next.js never loads `.env.vercel-production`, so leaving it behind cannot poison
+a later build. `scripts/check-env.ts` enforces the rule at `prebuild` and
+`prestart` time; `src/lib/env-files.ts` holds the logic, and
+`tests/unit/env-files.test.ts` proves the development and test workflows cannot
+select a production file.

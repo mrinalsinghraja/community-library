@@ -15,6 +15,7 @@ import {
 import { requirePermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { listRegistrations } from "@/server/services/registration-service";
+import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "New members" };
@@ -56,7 +57,7 @@ export default async function RegistrationsPage() {
       ) : null}
 
       {requests.length === 0 ? (
-        <EmptyState illustration="🎈" title="All new readers are up to date">
+        <EmptyState illustration={<Icon name="reader" />} title="All new readers are up to date">
           When a family fills in the join form, their registration appears here.
         </EmptyState>
       ) : (

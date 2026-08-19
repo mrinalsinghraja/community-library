@@ -9,6 +9,7 @@ import {
   requestRenewalAction,
   type CirculationFormState,
 } from "@/server/actions/circulation-actions";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * "Can I keep it a bit longer?" — the one thing a child can ask the software.
@@ -51,8 +52,9 @@ export function RenewalRequest({
   if (ask.status === "success" || (state === "pending" && undo.status !== "success")) {
     return (
       <div className="mt-3 rounded-[var(--radius-field)] bg-surface-sunk p-3">
-        <p role="status" className="font-bold text-ink">
-          ⏳ {RENEWAL_REQUEST_MESSAGES.pending}
+        <p role="status" className="flex items-start gap-2 font-bold text-ink">
+          <Icon name="renew" className="mt-1 text-accent-ink" />
+          {RENEWAL_REQUEST_MESSAGES.pending}
         </p>
         {!confirming ? (
           <Button variant="quiet" size="sm" className="mt-2" onClick={() => setConfirming(true)}>
@@ -96,7 +98,10 @@ export function RenewalRequest({
 
   if (state === "declined") {
     return (
-      <p className="mt-3 text-base text-ink-soft">📚 {RENEWAL_REQUEST_MESSAGES.declined}</p>
+      <p className="mt-3 flex items-start gap-2 text-base text-ink-soft">
+        <Icon name="returnBook" className="mt-1" />
+        {RENEWAL_REQUEST_MESSAGES.declined}
+      </p>
     );
   }
 
@@ -112,8 +117,15 @@ export function RenewalRequest({
     <form action={askAction} className="mt-3">
       <input type="hidden" name="code" value={code} />
       <p className="text-base text-ink-soft">{renewalInvitation(renewalPeriodDays)}</p>
-      <Button type="submit" variant="secondary" size="sm" icon="⏳" className="mt-2" disabled={asking}>
-        {asking ? "Asking…" : "Ask to keep it"}
+      <Button
+        type="submit"
+        variant="secondary"
+        size="sm"
+        icon={<Icon name="renew" />}
+        className="mt-2"
+        disabled={asking}
+      >
+        {asking ? "Asking…" : "Ask to Keep Longer"}
       </Button>
       <span className="sr-only">Asking about {title}</span>
       {ask.status === "error" ? (

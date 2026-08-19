@@ -6,6 +6,7 @@ import { MemberAvatar } from "@/components/library/avatar";
 import { Button } from "@/components/ui/button";
 import { AVATARS } from "@/lib/avatars";
 import { cn } from "@/lib/cn";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * The library card picture.
@@ -149,7 +150,7 @@ export function PhotoPicker({
               type="button"
               variant="secondary"
               onClick={() => inputRef.current?.click()}
-              icon="📷"
+              icon={<Icon name="camera" />}
             >
               Choose a photo
             </Button>

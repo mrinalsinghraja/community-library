@@ -37,8 +37,15 @@ export default async function StaffPage() {
 
   return (
     <StaffShell branding={branding} actor={actor} title="Staff">
-      <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
-        <div>
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        {/*
+          `minmax(0, 1fr)`, not `1fr`. A grid track sized `1fr` still refuses to
+          go below its content's automatic minimum, and this one contains a
+          table with a 46rem floor — which pushed the whole second column off
+          the right of the page. The table is meant to scroll inside its own
+          container; the page is never meant to.
+        */}
+        <div className="min-w-0">
           <DataTable headers={["Name", "Role", "Status", "Added", "Last signed in", "Actions"]}>
             {staff.map((person) => {
               const primaryRole = person.roleKeys.includes(ROLE_KEYS.SUPER_ADMIN)

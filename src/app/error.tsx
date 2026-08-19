@@ -4,6 +4,7 @@ import { useEffect } from "react";
 
 import { Button, ButtonLink } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/states";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * What a reader sees when something breaks.
@@ -31,7 +32,7 @@ export default function ErrorBoundary({
         <ErrorState
           action={
             <div className="flex flex-wrap justify-center gap-3">
-              <Button onClick={reset} size="lg" icon="🔄">
+              <Button onClick={reset} size="lg" icon={<Icon name="refresh" />}>
                 Try again
               </Button>
               <ButtonLink href="/" variant="quiet" size="lg">

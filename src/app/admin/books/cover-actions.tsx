@@ -4,6 +4,7 @@ import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { removeBookCoverAction, type BookFormState } from "@/server/actions/catalogue-actions";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * Remove cover.
@@ -30,7 +31,7 @@ export function RemoveCoverButton({ copyId }: { copyId: string }) {
   return (
     <form action={formAction} className="mt-3">
       <input type="hidden" name="copyId" value={copyId} />
-      <Button type="submit" variant="quiet" size="sm" icon="🗑" fullWidth>
+      <Button type="submit" variant="quiet" size="sm" icon={<Icon name="trash" />} fullWidth>
         Remove cover
       </Button>
       {state.status === "error" ? (

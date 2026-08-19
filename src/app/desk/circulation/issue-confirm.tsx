@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/states";
 import { issueBookAction, type CirculationFormState } from "@/server/actions/circulation-actions";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * The last step: one button, and the three facts it commits.
@@ -45,7 +46,7 @@ export function IssueConfirm({
     return (
       <div className="flex flex-col gap-4">
         <p role="status" className="text-lg font-bold text-success">
-          ✅ {state.message}
+          <Icon name="check" /> {state.message}
         </p>
         <div className="flex flex-wrap gap-3">
           {/*
@@ -86,7 +87,7 @@ export function IssueConfirm({
         </Callout>
       ) : null}
 
-      <Button type="submit" size="lg" icon="📚" disabled={blockers.length > 0 || pending}>
+      <Button type="submit" size="lg" icon={<Icon name="shelf" />} disabled={blockers.length > 0 || pending}>
         {pending ? "Issuing…" : `Issue to ${readerName}`}
       </Button>
 

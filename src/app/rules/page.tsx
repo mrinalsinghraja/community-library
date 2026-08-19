@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 
-import { PublicShell } from "@/components/layout/site-shell";
+import { PageHeading, PublicShell } from "@/components/layout/site-shell";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Callout } from "@/components/ui/states";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
+import { Icon } from "@/components/ui/icon";
 
 export const metadata: Metadata = { title: "How it works" };
 
@@ -36,17 +37,19 @@ export default async function RulesPage() {
 
   return (
     <PublicShell branding={branding}>
-      <div className="mx-auto w-full max-w-3xl px-5 py-14 sm:px-8">
-        <h1 className="text-4xl">How our library works</h1>
+      <div className="mx-auto w-full max-w-4xl px-5 py-14 sm:px-8">
+        <PageHeading title="How our library works">
+          Four things to know, and none of them are complicated.
+        </PageHeading>
 
         {!settings ? (
           <Callout tone="warn" title="Not configured yet" className="mt-8">
             The library settings have not been created, so the rules cannot be shown.
           </Callout>
         ) : (
-          <div className="mt-10 flex flex-col gap-6">
-            <Card tone="shelf">
-              <CardTitle icon="👧">Who can join</CardTitle>
+          <div className="mt-10 grid gap-6 md:grid-cols-2">
+            <Card tone="shelf" className="lift">
+              <CardTitle icon={<Icon name="reader" />}>Who can join</CardTitle>
               <CardBody>
                 Readers aged {settings.ageMin} to {settings.ageMax} who live in{" "}
                 {branding.communityName}. Joining is free, and no family ever has to donate a book
@@ -54,8 +57,8 @@ export default async function RulesPage() {
               </CardBody>
             </Card>
 
-            <Card tone="shelf">
-              <CardTitle icon="📖">Borrowing</CardTitle>
+            <Card tone="shelf" className="lift">
+              <CardTitle icon={<Icon name="book" />}>Borrowing</CardTitle>
               <CardBody>
                 You can have{" "}
                 {settings.maxActiveLoans === 1
@@ -70,8 +73,8 @@ export default async function RulesPage() {
               </CardBody>
             </Card>
 
-            <Card tone="shelf">
-              <CardTitle icon="🏠">Bringing books back</CardTitle>
+            <Card tone="shelf" className="lift">
+              <CardTitle icon={<Icon name="home" />}>Bringing books back</CardTitle>
               <CardBody>
                 There are no fines here, ever. If a book is late we will send a friendly reminder to
                 your family — and if something happens to a book, just tell the librarian. Accidents
@@ -79,8 +82,8 @@ export default async function RulesPage() {
               </CardBody>
             </Card>
 
-            <Card tone="shelf">
-              <CardTitle icon="🎁">Sharing books</CardTitle>
+            <Card tone="shelf" className="lift">
+              <CardTitle icon={<Icon name="gift" />}>Sharing books</CardTitle>
               <CardBody>
                 Our shelves grow because families pass on books they have loved. If you would like to
                 share one, the librarian will be glad to take it — and you can choose whether your
@@ -89,8 +92,8 @@ export default async function RulesPage() {
             </Card>
 
             {settings.rulesMarkdown ? (
-              <Card>
-                <CardTitle icon="📋">House rules</CardTitle>
+              <Card className="md:col-span-2">
+                <CardTitle icon={<Icon name="audit" />}>House rules</CardTitle>
                 <CardBody>
                   <p className="whitespace-pre-line">{settings.rulesMarkdown}</p>
                 </CardBody>

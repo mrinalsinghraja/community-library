@@ -264,6 +264,20 @@ export interface AuthorizedMedia {
   bytes: Uint8Array;
   mimeType: string;
   byteSize: number;
+  /**
+   * What the object is for. The route uses it to decide how the response may
+   * be cached — a book jacket and a photograph of a child are not the same
+   * question, and the answer belongs next to the authorization decision rather
+   * than being re-derived from the id.
+   */
+  purpose: string;
+  /**
+   * The stored bytes' digest, computed at upload. Serves as the ETag, so a
+   * second view of the same cover is answered with a 304 rather than the whole
+   * picture again — while the authorization check above still runs on every
+   * single request.
+   */
+  checksumSha256: string;
 }
 
 /**
@@ -314,6 +328,7 @@ export async function getAuthorizedMedia(mediaId: string): Promise<AuthorizedMed
       storageKey: true,
       mimeType: true,
       byteSize: true,
+      checksumSha256: true,
       purpose: true,
       pendingDeletionAt: true,
       memberProfile: { select: { userId: true } },
@@ -375,6 +390,8 @@ async function readBytes(media: {
   storageKey: string;
   mimeType: string;
   byteSize: number;
+  purpose: string;
+  checksumSha256: string;
 }): Promise<AuthorizedMedia> {
   const bytes = await storage().get(media.storageKey);
   if (!bytes) {
@@ -383,7 +400,13 @@ async function readBytes(media: {
     console.error(`Media row present but object missing for key ${media.storageKey}`);
     throw new NotFoundError(`Object missing for storage key ${media.storageKey}`);
   }
-  return { bytes, mimeType: media.mimeType, byteSize: media.byteSize };
+  return {
+    bytes,
+    mimeType: media.mimeType,
+    byteSize: media.byteSize,
+    purpose: media.purpose,
+    checksumSha256: media.checksumSha256,
+  };
 }
 
 // ---------------------------------------------------------------------------

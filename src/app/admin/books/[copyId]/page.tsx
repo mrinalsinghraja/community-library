@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { BookForm } from "@/app/admin/books/book-form";
 import { RemoveCoverButton } from "@/app/admin/books/cover-actions";
-import { BookCover } from "@/components/library/book-cover";
+import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { StaffShell } from "@/components/layout/staff-shell";
 import { Card } from "@/components/ui/card";
 import { Callout } from "@/components/ui/states";
@@ -62,7 +62,7 @@ export default async function EditBookPage({
 
       <div className="mt-6 flex flex-col gap-8 lg:flex-row lg:items-start">
         <div className="w-40 shrink-0">
-          <BookCover coverMediaId={book.coverMediaId} title={book.title} sizes="160px" />
+          <CoverThumbnail coverMediaId={book.coverMediaId} title={book.title} sizes="160px" />
           {book.coverMediaId ? <RemoveCoverButton copyId={book.copyId} /> : null}
         </div>
 

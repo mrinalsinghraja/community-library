@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/states";
 import { PASSWORD_POLICY } from "@/server/lib/password";
 import { inspectResetToken } from "@/server/services/password-service";
 import { getBrandingSafe } from "@/server/lib/settings";
+import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ export default async function ResetPage({ params }: { params: Promise<{ token: s
           </>
         ) : (
           <EmptyState
-            illustration="🔗"
+            illustration={<Icon name="key" />}
             title="This link has expired"
             action={
               <ButtonLink href="/forgot" size="lg">

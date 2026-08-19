@@ -82,13 +82,14 @@ export function StaffShell({
 
   return (
     <div className="flex min-h-screen flex-col bg-surface">
-      <header className="border-b-2 border-hairline bg-surface">
+      <header className="bg-surface">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-3 px-5 py-3 sm:px-8">
           <Link href="/desk" className="flex items-center gap-3 no-underline">
             <LibraryLogo
               logoUrl={branding.logoUrl}
               libraryName={branding.libraryName}
-              size={36}
+              size={44}
+              className="w-9"
             />
             <span className="font-display text-lg font-extrabold text-ink">Library desk</span>
           </Link>
@@ -122,11 +123,21 @@ export function StaffShell({
             </form>
           </div>
         </div>
+
+        {/*
+          The same rule that closes the reader masthead. Thinner here — the desk
+          is a working screen and the brand should not shout at somebody who is
+          serving a queue — but unmistakably the same product.
+        */}
+        <div
+          aria-hidden="true"
+          className="h-0.5 w-full bg-[linear-gradient(to_right,var(--color-leaf),var(--color-primary)_35%,var(--color-accent))]"
+        />
       </header>
 
       <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-5 py-8 sm:px-8">
-        <h1 className="text-3xl">{title}</h1>
-        <div className="mt-6">{children}</div>
+        <h1 className="garden-rule inline-block text-3xl">{title}</h1>
+        <div className="mt-10">{children}</div>
       </main>
     </div>
   );

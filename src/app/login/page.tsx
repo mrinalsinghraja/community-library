@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { getActor } from "@/server/authz";
 import { formatCode } from "@/server/lib/codes";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
+import { Butterfly } from "@/components/library/library-logo";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Sign in" };
@@ -42,7 +43,9 @@ export default async function LoginPage({
 
   return (
     <PublicShell branding={branding}>
-      <div className="mx-auto w-full max-w-xl px-5 py-14 sm:px-8">
+      <div className="relative mx-auto w-full max-w-xl px-5 py-14 sm:px-8">
+        <Butterfly className="drift pointer-events-none absolute right-4 top-8 w-9 opacity-60 sm:w-12" />
+
         {activated ? (
           <p
             role="status"
@@ -70,8 +73,8 @@ export default async function LoginPage({
           </p>
         ) : null}
 
-        <h1 className="text-4xl">Welcome back! 📚</h1>
-        <p className="mt-3 text-lg text-ink-soft">
+        <h1 className="garden-rule inline-block text-4xl">Welcome back!</h1>
+        <p className="mt-8 text-lg text-ink-soft">
           Sign in to see your books and find your next story.
         </p>
 

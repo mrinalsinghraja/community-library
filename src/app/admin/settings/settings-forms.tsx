@@ -18,6 +18,7 @@ import {
   updateVerificationAction,
   type ActionState,
 } from "@/server/actions/settings-actions";
+import { Icon } from "@/components/ui/icon";
 
 const INITIAL: ActionState = { status: "idle" };
 
@@ -257,7 +258,7 @@ export function LibrarySettingsForm({
       </Card>
 
       <div>
-        <Button type="submit" size="md" disabled={pending} icon="💾">
+        <Button type="submit" size="md" disabled={pending} icon={<Icon name="save" />}>
           {pending ? "Saving…" : "Save"}
         </Button>
       </div>

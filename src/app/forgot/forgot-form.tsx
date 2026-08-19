@@ -5,6 +5,8 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, TextInput } from "@/components/ui/field";
 import { requestPasswordResetAction, type ActionState } from "@/server/actions/account-actions";
+import { Icon } from "@/components/ui/icon";
+import { IconMedallion } from "@/components/ui/states";
 
 const INITIAL: ActionState = { status: "idle" };
 
@@ -21,9 +23,7 @@ export function ForgotForm({ cardExample }: { cardExample?: string }) {
   if (state.status === "success") {
     return (
       <div role="status" className="text-center">
-        <p className="text-5xl" aria-hidden="true">
-          📬
-        </p>
+        <IconMedallion name="mail" />
         <h2 className="mt-4 text-2xl">Check with a grown-up</h2>
         <p className="mt-3 text-ink-soft">{state.message}</p>
       </div>
@@ -49,7 +49,7 @@ export function ForgotForm({ cardExample }: { cardExample?: string }) {
         />
       </Field>
 
-      <Button type="submit" size="lg" fullWidth disabled={pending} icon="📬">
+      <Button type="submit" size="lg" fullWidth disabled={pending} icon={<Icon name="mail" />}>
         {pending ? "Sending…" : "Send the link"}
       </Button>
     </form>

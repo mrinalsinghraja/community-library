@@ -10,6 +10,7 @@ import {
   restoreBookAction,
   type BookFormState,
 } from "@/server/actions/catalogue-actions";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * Taking a book off the shelf, and putting it back.
@@ -53,7 +54,7 @@ function ArchiveButton({ copyId, copyCode }: { copyId: string; copyCode: string 
 
   if (!confirming) {
     return (
-      <Button variant="quiet" size="sm" icon="📦" onClick={() => setConfirming(true)}>
+      <Button variant="quiet" size="sm" icon={<Icon name="archive" />} onClick={() => setConfirming(true)}>
         Archive
       </Button>
     );
@@ -73,7 +74,7 @@ function ArchiveButton({ copyId, copyCode }: { copyId: string; copyCode: string 
         aria-label={`Reason for archiving ${copyCode}`}
       />
       <div className="flex gap-2">
-        <Button type="submit" variant="danger" size="sm" icon="📦">
+        <Button type="submit" variant="danger" size="sm" icon={<Icon name="archive" />}>
           Archive
         </Button>
         <Button variant="quiet" size="sm" onClick={() => setConfirming(false)}>
@@ -99,7 +100,7 @@ function RestoreButton({ copyId }: { copyId: string }) {
   return (
     <form action={formAction}>
       <input type="hidden" name="copyId" value={copyId} />
-      <Button type="submit" variant="quiet" size="sm" icon="↩">
+      <Button type="submit" variant="quiet" size="sm" icon={<Icon name="returnBook" />}>
         Back on the shelf
       </Button>
       {state.status === "error" ? (

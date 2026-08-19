@@ -4,6 +4,7 @@ import Link from "next/link";
 import { IssueConfirm } from "@/app/desk/circulation/issue-confirm";
 import { MemberAvatar } from "@/components/library/avatar";
 import { BookCover } from "@/components/library/book-cover";
+import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { StaffShell } from "@/components/layout/staff-shell";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Callout, EmptyState } from "@/components/ui/states";
@@ -19,6 +20,7 @@ import {
   type CopyPick,
   type ReaderPick,
 } from "@/server/services/circulation-service";
+import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Issue a book" };
@@ -139,7 +141,7 @@ export default async function CirculationDeskPage({
               </form>
 
               {readerQuery && readerResults.length === 0 ? (
-                <EmptyState illustration="🔍" title="No reader matches that">
+                <EmptyState illustration={<Icon name="search" />} title="No reader matches that">
                   Try part of a name, or the number on their card.
                 </EmptyState>
               ) : (
@@ -237,7 +239,7 @@ export default async function CirculationDeskPage({
               </form>
 
               {bookQuery && bookResults.length === 0 ? (
-                <EmptyState illustration="🔍" title="No book matches that">
+                <EmptyState illustration={<Icon name="search" />} title="No book matches that">
                   Try part of the title, the author, or the ID on the label.
                 </EmptyState>
               ) : (
@@ -247,9 +249,16 @@ export default async function CirculationDeskPage({
                     const row = (
                       <>
                         <span className="w-11 shrink-0">
+                          {/*
+                            A plain picture, not the tap-to-enlarge control:
+                            this whole row is already a link that picks the
+                            book, and a button inside a link is invalid HTML
+                            that no browser agrees on.
+                          */}
                           <BookCover
                             coverMediaId={book.coverMediaId}
                             title={book.title}
+                            variant="thumb"
                             sizes="44px"
                           />
                         </span>
@@ -305,7 +314,7 @@ export default async function CirculationDeskPage({
       {/* ------------------------------------------------------------------ */}
       {preview ? (
         <Card tone="shelf" className="mt-8">
-          <CardTitle icon="✅" as="h2">
+          <CardTitle icon={<Icon name="check" />} as="h2">
             3. Check, then hand it over
           </CardTitle>
           <CardBody>
@@ -392,7 +401,7 @@ function ChosenBook({ book, changeHref }: { book: CopyPick; changeHref: string }
   return (
     <div className="flex items-center gap-3 rounded-[var(--radius-field)] border-2 border-primary bg-surface p-3">
       <span className="w-12 shrink-0">
-        <BookCover coverMediaId={book.coverMediaId} title={book.title} sizes="48px" />
+        <CoverThumbnail coverMediaId={book.coverMediaId} title={book.title} variant="thumb" sizes="48px" />
       </span>
       <div className="flex-1">
         <p className="font-display text-lg font-bold text-ink">{book.title}</p>

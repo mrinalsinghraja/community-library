@@ -1,19 +1,25 @@
 @import "tailwindcss";
 
 /*
- * "The Reading Corner" — the design system for a community children's library.
+ * "Story Garden" — the design system for a community children's library.
  *
  * The brief: it must work for a six-year-old who is still decoding words and a
  * fourteen-year-old who would be embarrassed by anything babyish. So: warm paper
  * ground, generous type, real depth, illustrated moments — but no cartoon
  * mascots, no bouncing, no primary-colour plastic.
  *
+ * Where the colour comes from. The library's mark is three brush-drawn
+ * butterflies in a single berry pink over a leaf-green rule. Both were sampled
+ * out of the artwork rather than guessed, so the interface and the logo are
+ * literally the same colours — the mark never looks pasted onto a page that was
+ * designed without it.
+ *
  * CONTRAST IS MEASURED, NOT EYEBALLED. Every pair below was computed against its
- * real surface (see docs/DESIGN_SYSTEM.md for the table). The one that matters
- * most: --color-accent (#E4572E) is 3.48:1 on cream and 3.68:1 under white text.
- * It is a *shape* colour — fills, illustrations, large numerals — and must never
- * sit behind small text in either direction. Where accent-coloured text is
- * wanted, use --color-accent-ink (#B23A16, 5.66:1).
+ * real surface (see docs/DESIGN_SYSTEM.md for the table). The berry is the
+ * happy accident that shapes this system: at 6.13:1 on the ground and 6.48:1
+ * under white text it passes AA in *both* directions, so unlike the orange it
+ * replaces it can carry text, fill a button and draw a shape. The brand colour
+ * is structural here, not decorative.
  */
 
 @theme {
@@ -32,9 +38,32 @@
   --color-primary-deep: #14574a; /* 7.97:1 — hover, focus ring, headings */
   --color-primary-wash: #e8f2ee; /* tinted panel */
 
-  --color-accent: #e4572e; /* SHAPES ONLY — never behind small text */
-  --color-accent-ink: #b23a16; /* 5.66:1 — the text-safe accent */
-  --color-accent-wash: #fdeee7;
+  /*
+   * The butterfly berry, sampled from the mark (#A82878).
+   *
+   * It is called `accent` because that is what every screen already asks for,
+   * so re-pointing this one family repaints the whole application in the
+   * library's own colour without touching a single page.
+   *
+   * 6.13:1 on ground · 6.48:1 under white · 5.67:1 on sunk. Text-safe.
+   */
+  --color-accent: #a82878;
+  --color-accent-ink: #8c1e63; /* 8.01:1 — headings, links, small text */
+  --color-accent-wash: #fbeaf3; /* ink on it 13.62:1 */
+
+  /*
+   * The leaf green from the rule beneath the wordmark. 2.47:1 — this one really
+   * is SHAPES ONLY: stems, leaves, the garden rule, illustration fills. Where
+   * green text is wanted, use --color-leaf-ink.
+   */
+  --color-leaf: #78b030;
+  --color-leaf-ink: #3f6416; /* 6.52:1 — text-safe green */
+
+  /* Sunshine and sky. Washes for category tiles; the -ink pairs carry text. */
+  --color-sun: #f2c57c; /* 1.52:1 — fills only */
+  --color-sun-ink: #8a5a00; /* 5.61:1 */
+  --color-sky-wash: #e7f0f7;
+  --color-lavender-wash: #efeaf7;
 
   /* --- Lines ------------------------------------------------------------- */
   --color-hairline: #e3d9c9; /* decorative separators (1.32:1 — never a boundary that matters) */
@@ -49,7 +78,13 @@
   --color-danger-wash: #fceceb;
 
   /* --- Type -------------------------------------------------------------- */
-  --font-display: var(--font-baloo), ui-rounded, "Trebuchet MS", system-ui, sans-serif;
+  /*
+   * Quicksand for display, because the wordmark on the library's own mark is a
+   * wide geometric sans with open apertures — the headings and the logo now
+   * rhyme instead of arguing. Nunito Sans stays for reading: it was chosen for
+   * its tall x-height and unambiguous a/g, which is what a six-year-old needs.
+   */
+  --font-display: var(--font-quicksand), ui-rounded, "Trebuchet MS", system-ui, sans-serif;
   --font-body: var(--font-nunito), system-ui, -apple-system, "Segoe UI", sans-serif;
 
   /* Body text starts at 18px, not 16px: these readers are still learning. */
@@ -110,8 +145,9 @@
   h4 {
     font-family: var(--font-display);
     color: var(--color-ink);
+    font-weight: 700;
     line-height: 1.15;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
   }
 
   /*
@@ -130,7 +166,7 @@
   }
 
   ::selection {
-    background-color: var(--color-primary-wash);
+    background-color: var(--color-accent-wash);
     color: var(--color-ink);
   }
 
@@ -169,27 +205,104 @@
   }
 
   /*
-   * The signature motif: a shelf edge. Used under section headings so the page
-   * reads as a room with shelves rather than a stack of boxes.
+   * THE SIGNATURE.
+   *
+   * The library's mark sets its wordmark on a green rule that fades from leaf
+   * to deep garden. That rule is lifted here and made structural: it sits under
+   * every section heading, anchors the masthead, and caps the hero. One device,
+   * borrowed from the brand itself, repeated — which is why the interface reads
+   * as belonging to this library and no other.
    */
-  .shelf-edge {
+  .garden-rule {
     position: relative;
   }
 
-  .shelf-edge::after {
+  .garden-rule::after {
     content: "";
     position: absolute;
     left: 0;
-    right: 0;
-    bottom: -0.75rem;
-    height: 6px;
+    bottom: -0.7rem;
+    height: 5px;
+    width: 4.5rem;
     border-radius: 999px;
-    background: linear-gradient(
-      to right,
-      var(--color-accent) 0%,
-      var(--color-accent) 12%,
-      var(--color-hairline) 12%,
-      var(--color-hairline) 100%
-    );
+    background: linear-gradient(to right, var(--color-leaf), var(--color-primary));
+  }
+
+  /* Full-width variant, for the foot of a hero or between major sections. */
+  .garden-rule-wide::after {
+    width: 100%;
+    max-width: 22rem;
+  }
+
+  /*
+   * A card that lifts a little when pointed at. Transform only — no layout
+   * property is animated, so this stays cheap on a low-end tablet.
+   */
+  .lift {
+    transition:
+      transform 180ms ease,
+      box-shadow 180ms ease;
+  }
+
+  .lift:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-raise);
+  }
+
+  /*
+   * A butterfly that drifts. Six seconds, three pixels, and it never loops
+   * frantically — the point is that the page feels alive, not that anything is
+   * demanding attention. Switched off entirely under prefers-reduced-motion by
+   * the base rule above.
+   */
+  .drift {
+    animation: drift 7s ease-in-out infinite;
+  }
+
+  .drift-slow {
+    animation: drift 11s ease-in-out infinite;
+  }
+
+  @keyframes drift {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) rotate(0deg);
+    }
+    50% {
+      transform: translate3d(2px, -6px, 0) rotate(-3deg);
+    }
+  }
+
+  /*
+   * The full-cover viewer.
+   *
+   * A native <dialog>, so Escape, the focus trap, the focus return and the
+   * inert page behind it are the browser's job rather than a pile of key
+   * handlers. Only its appearance is set here.
+   *
+   * `display: grid` overrides the user agent's own rule, which is why the
+   * `:not([open])` line immediately below it is not optional: without it a
+   * closed dialog would be permanently visible.
+   */
+  .cover-dialog {
+    margin: auto;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    border: 0;
+    padding: 1.25rem;
+    background: transparent;
+    display: grid;
+    place-items: center;
+    overflow: auto;
+  }
+
+  .cover-dialog:not([open]) {
+    display: none;
+  }
+
+  .cover-dialog::backdrop {
+    background: rgb(43 33 24 / 0.72);
   }
 }

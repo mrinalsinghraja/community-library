@@ -75,10 +75,17 @@ fall back, are in [`PRODUCTION.md`](PRODUCTION.md).
 Migrations are **not** run automatically by the build — applying schema changes
 during a build is how a half-deployed migration happens. Run them deliberately:
 
+The filename matters. Next.js loads `.env.production.local` automatically
+whenever `NODE_ENV=production` — which `next build` sets — so a forgotten pull
+file makes every later local build talk to production. `.env.vercel-production`
+is a name Next.js never looks for, and `npm run build` refuses to start if a
+production-only name reappears. See
+[Environment variables](ENVIRONMENT_VARIABLES.md#which-file-a-command-reads).
+
 ```bash
-vercel env pull .env.production.local     # never commit this file
-npx dotenv -e .env.production.local -- npx prisma migrate deploy
-npx dotenv -e .env.production.local -- npm run db:seed
+vercel env pull .env.vercel-production     # never commit this file
+npx dotenv -e .env.vercel-production -- npx prisma migrate deploy
+npx dotenv -e .env.vercel-production -- npm run db:seed
 ```
 
 `db:seed` (without `:demo`) creates permissions, roles, the community, the
@@ -90,7 +97,7 @@ fake child.
 ## 6. Create the first Super Admin
 
 ```bash
-npx dotenv -e .env.production.local -- npm run create-admin
+npx dotenv -e .env.vercel-production -- npm run create-admin
 ```
 
 Prompts for name, email and password. The password is never echoed, never
@@ -98,7 +105,9 @@ logged, never written to disk, and never sent anywhere — only an argon2id hash
 reaches the database. There is no default administrator password anywhere in
 this repository.
 
-Delete `.env.production.local` afterwards.
+Delete `.env.vercel-production` afterwards. Leaving it behind is no longer
+dangerous, but a production connection string on a laptop is still a thing to
+keep for as short a time as possible.
 
 ## 7. Custom domain
 

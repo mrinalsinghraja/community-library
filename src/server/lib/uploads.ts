@@ -78,6 +78,26 @@ export const UPLOAD_RULES: Record<UploadPurpose, UploadRules> = {
 };
 
 /**
+ * Purposes whose bytes a browser may keep, subject to revalidating every time.
+ *
+ * `/api/media/[id]` reads this to decide whether to offer an ETag. It is a
+ * caching decision, not an authorization one — the route runs the full
+ * authorization check on every request either way, and `no-cache` means the
+ * browser must ask before reusing anything it holds. All that changes for a
+ * purpose on this list is that an unchanged answer costs an empty 304 instead
+ * of the whole picture again.
+ *
+ * **A child's photograph is not on this list and must never be added to it.**
+ * It keeps `no-store`, so it is not written to a shared family device's disk at
+ * all. A book jacket and a library's logo are not personal data; a picture of a
+ * child is the most sensitive thing this system holds.
+ */
+export const MEDIA_MAY_REVALIDATE: ReadonlySet<string> = new Set<UploadPurpose>([
+  UPLOAD_PURPOSES.BOOK_COVER,
+  UPLOAD_PURPOSES.BRANDING,
+]);
+
+/**
  * Magic-byte signatures. A file is what its bytes say it is, not what its
  * extension or its Content-Type header claims.
  */

@@ -15,6 +15,7 @@ import {
   suspendStaffAction,
   type ActionState,
 } from "@/server/actions/account-actions";
+import { Icon } from "@/components/ui/icon";
 
 const INITIAL: ActionState = { status: "idle" };
 
@@ -75,7 +76,7 @@ export function CreateStaffForm() {
           </select>
         </Field>
 
-        <Button type="submit" size="md" disabled={pending} icon="➕">
+        <Button type="submit" size="md" disabled={pending} icon={<Icon name="plus" />}>
           {pending ? "Creating…" : "Create account"}
         </Button>
       </form>

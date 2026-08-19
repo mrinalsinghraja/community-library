@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { ArchiveActions } from "@/app/admin/books/archive-actions";
+import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
@@ -25,6 +26,7 @@ import {
   listCategories,
   type CatalogueSort,
 } from "@/server/services/catalogue-service";
+import { Icon } from "@/components/ui/icon";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Books" };
 
@@ -106,7 +108,7 @@ export default async function AdminBooksPage({
           {includeArchived ? " (including archived)" : ""}
         </p>
         {actor.permissions.has("book.create") ? (
-          <ButtonLink href="/admin/books/new" icon="➕">
+          <ButtonLink href="/admin/books/new" icon={<Icon name="plus" />}>
             Add a book
           </ButtonLink>
         ) : null}
@@ -195,16 +197,16 @@ export default async function AdminBooksPage({
       <div className="mt-6">
         {result.items.length === 0 ? (
           filtering ? (
-            <EmptyState illustration="🔍" title="Oops! We couldn't find that book.">
+            <EmptyState illustration={<Icon name="search" />} title="Oops! We couldn't find that book.">
               Nothing matches those filters. Try a different shelf, or clear them and start again.
             </EmptyState>
           ) : (
             <EmptyState
-              illustration="📚"
+              illustration={<Icon name="book" />}
               title="Our shelves are waiting for more adventures!"
               action={
                 actor.permissions.has("book.create") ? (
-                  <ButtonLink href="/admin/books/new" icon="➕">
+                  <ButtonLink href="/admin/books/new" icon={<Icon name="plus" />}>
                     Add the first book
                   </ButtonLink>
                 ) : null
@@ -221,14 +223,26 @@ export default async function AdminBooksPage({
                 <tr key={book.copyId} className="border-t-2 border-hairline align-top">
                   <td className="px-4 py-3 font-mono">{book.copyCode}</td>
                   <td className="px-4 py-3">
-                    <Link
-                      href={`/admin/books/${book.copyId}`}
-                      className="font-bold text-primary-deep"
-                    >
-                      {book.title}
-                    </Link>
-                    <br />
-                    <span className="text-ink-soft">{book.authors.join(", ")}</span>
+                    <span className="flex items-start gap-3">
+                      <span className="w-11 shrink-0">
+                        <CoverThumbnail
+                          coverMediaId={book.coverMediaId}
+                          title={book.title}
+                          variant="thumb"
+                          sizes="44px"
+                        />
+                      </span>
+                      <span className="min-w-0">
+                        <Link
+                          href={`/admin/books/${book.copyId}`}
+                          className="font-bold text-primary-deep"
+                        >
+                          {book.title}
+                        </Link>
+                        <br />
+                        <span className="text-ink-soft">{book.authors.join(", ")}</span>
+                      </span>
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-ink-soft">{book.categoryName}</td>
                   <td className="px-4 py-3 text-ink-soft">{ageGroupLabel(book.ageGroup)}</td>

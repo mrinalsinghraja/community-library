@@ -138,6 +138,12 @@ export interface StaffLoanRow {
   copyCode: string;
   title: string;
   authors: string[];
+  /**
+   * Presentation only. A librarian scanning a list of thirty loans finds a book
+   * by its jacket faster than by its title, and the id is already public to
+   * anyone who may see this row — it is the same id the catalogue renders.
+   */
+  coverMediaId: string | null;
   issuedAt: Date;
   dueAt: Date;
   returnedAt: Date | null;
@@ -960,6 +966,8 @@ export interface RenewalRequestRow {
   readerName: string;
   memberCode: string;
   title: string;
+  /** Presentation only. The same cover id the catalogue already renders. */
+  coverMediaId: string | null;
   copyCode: string;
   dueAt: Date;
   renewalCount: number;
@@ -975,6 +983,7 @@ interface RenewalRequestListRow {
   reader_status: UserStatus;
   member_code: string;
   title: string;
+  cover_media_id: string | null;
   copy_code: string;
   due_at: Date;
   renewal_count: number;
@@ -1194,7 +1203,7 @@ export async function listPendingRenewalRequests(): Promise<RenewalRequestRow[]>
     SELECT r.id AS request_id, r.requested_at,
            u.display_name AS reader_name, u.status AS reader_status,
            coalesce(m.member_code, '') AS member_code,
-           t.title, c.copy_code, l.due_at, l.renewal_count
+           t.title, t.cover_media_id, c.copy_code, l.due_at, l.renewal_count
       FROM renewal_request r
       JOIN loan l ON l.id = r.loan_id
       JOIN book_copy c ON c.id = l.copy_id
@@ -1214,6 +1223,7 @@ export async function listPendingRenewalRequests(): Promise<RenewalRequestRow[]>
     readerName: row.reader_name,
     memberCode: row.member_code,
     title: row.title,
+    coverMediaId: row.cover_media_id,
     copyCode: row.copy_code,
     dueAt: row.due_at,
     renewalCount: row.renewal_count,
@@ -1473,6 +1483,7 @@ interface LoanListRow {
   copy_code: string;
   title: string;
   authors: string[];
+  cover_media_id: string | null;
   issued_at: Date;
   due_at: Date;
   returned_at: Date | null;
@@ -1550,7 +1561,7 @@ export async function listLoansForStaff(query: LoanQuery = {}): Promise<Page<Sta
     SELECT l.id AS loan_id, l.status, u.display_name AS reader_name,
            coalesce(m.member_code, '') AS member_code, l.member_user_id,
            c.id AS copy_id, c.copy_code, c.condition,
-           t.title, t.authors,
+           t.title, t.authors, t.cover_media_id,
            l.issued_at, l.due_at, l.returned_at, l.renewal_count
       FROM loan l
       JOIN book_copy c ON c.id = l.copy_id
@@ -1582,6 +1593,7 @@ function toStaffLoanRow(row: LoanListRow): StaffLoanRow {
     copyCode: row.copy_code,
     title: row.title,
     authors: row.authors,
+    coverMediaId: row.cover_media_id,
     issuedAt: row.issued_at,
     dueAt: row.due_at,
     returnedAt: row.returned_at,
@@ -1613,7 +1625,7 @@ export async function getLoanForStaff(loanId: string): Promise<StaffLoanDetail> 
     SELECT l.id AS loan_id, l.status, u.display_name AS reader_name,
            coalesce(m.member_code, '') AS member_code, l.member_user_id,
            c.id AS copy_id, c.copy_code, c.condition,
-           t.title, t.authors,
+           t.title, t.authors, t.cover_media_id,
            l.issued_at, l.due_at, l.returned_at, l.renewal_count
       FROM loan l
       JOIN book_copy c ON c.id = l.copy_id

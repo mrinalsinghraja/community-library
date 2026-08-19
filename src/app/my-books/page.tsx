@@ -3,8 +3,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { RenewalRequest } from "@/app/my-books/renewal-request";
-import { BookCover } from "@/components/library/book-cover";
+import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { PublicShell } from "@/components/layout/site-shell";
+import { Butterfly } from "@/components/library/library-logo";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
@@ -14,6 +15,7 @@ import { formatInTimezone } from "@/lib/dates";
 import { getActor } from "@/server/authz";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { listOwnLoans, type ReaderLoanCard } from "@/server/services/circulation-service";
+import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "My books" };
@@ -53,9 +55,10 @@ export default async function MyBooksPage() {
 
   return (
     <PublicShell branding={branding} signedIn>
-      <div className="mx-auto w-full max-w-5xl px-5 py-12 sm:px-8">
-        <h1 className="text-4xl">My books 📚</h1>
-        <p className="mt-3 text-lg text-ink-soft">
+      <div className="relative mx-auto w-full max-w-5xl px-5 py-12 sm:px-8">
+        <Butterfly className="drift pointer-events-none absolute right-4 top-8 w-10 opacity-70 sm:w-12" />
+        <h1 className="garden-rule inline-block text-4xl">My books</h1>
+        <p className="mt-8 text-lg text-ink-soft">
           {active.length === 0
             ? "You have nothing borrowed right now."
             : active.length === 1
@@ -68,10 +71,10 @@ export default async function MyBooksPage() {
         {active.length === 0 ? (
           <div className="mt-8">
             <EmptyState
-              illustration="🌱"
+              illustration={<Icon name="sparkle" />}
               title="Your shelf is empty — for now!"
               action={
-                <ButtonLink href="/books" size="lg" icon="🔍">
+                <ButtonLink href="/books" size="lg" icon={<Icon name="search" />}>
                   Find something to read
                 </ButtonLink>
               }
@@ -80,7 +83,17 @@ export default async function MyBooksPage() {
             </EmptyState>
           </div>
         ) : (
-          <ul className="mt-8 grid gap-5 sm:grid-cols-2">
+          <section aria-labelledby="shelf" className="mt-12">
+            {/*
+              The active books get a heading of their own. The history below
+              always had one, so the books a child actually holds were the only
+              unnamed section on the page — and "your reading shelf" is what
+              this screen is for.
+            */}
+            <h2 id="shelf" className="garden-rule inline-block text-2xl">
+              Your reading shelf
+            </h2>
+            <ul className="mt-8 grid gap-5 sm:grid-cols-2">
             {active.map((loan) => (
               <ActiveBookCard
                 key={loan.code}
@@ -89,7 +102,8 @@ export default async function MyBooksPage() {
                 renewalPeriodDays={renewalPeriodDays}
               />
             ))}
-          </ul>
+            </ul>
+          </section>
         )}
 
         {/* ---------------------------------------------------------------- */}
@@ -97,10 +111,10 @@ export default async function MyBooksPage() {
         {/* ---------------------------------------------------------------- */}
         {history.length > 0 ? (
           <section aria-labelledby="history" className="mt-14">
-            <h2 id="history" className="text-2xl">
-              Books you have read 🌟
+            <h2 id="history" className="garden-rule inline-block text-2xl">
+              Books you have read
             </h2>
-            <p className="mt-2 text-ink-soft">
+            <p className="mt-8 text-ink-soft">
               Everything you have borrowed and brought back. Borrowing the same book again
               starts a new line here.
             </p>
@@ -115,7 +129,12 @@ export default async function MyBooksPage() {
                   className="flex items-center gap-4 rounded-[var(--radius-field)] bg-surface-sunk p-4"
                 >
                   <span className="w-12 shrink-0">
-                    <BookCover coverMediaId={loan.coverMediaId} title={loan.title} sizes="48px" />
+                    <CoverThumbnail
+                      coverMediaId={loan.coverMediaId}
+                      title={loan.title}
+                      variant="thumb"
+                      sizes="48px"
+                    />
                   </span>
                   <span className="flex flex-1 flex-col">
                     <span className="font-display text-lg font-bold text-ink">{loan.title}</span>
@@ -134,10 +153,10 @@ export default async function MyBooksPage() {
         ) : null}
 
         <div className="mt-12 flex flex-wrap gap-3">
-          <ButtonLink href="/books" size="lg" icon="🔍">
+          <ButtonLink href="/books" size="lg" icon={<Icon name="search" />}>
             Find another book
           </ButtonLink>
-          <ButtonLink href="/account" variant="secondary" size="lg" icon="🪪">
+          <ButtonLink href="/account" variant="secondary" size="lg" icon={<Icon name="reader" />}>
             My library card
           </ButtonLink>
         </div>
@@ -159,9 +178,9 @@ function ActiveBookCard({
   const sentence = readerDueSentence(loan, timezone);
 
   return (
-    <Card as="li" tone="shelf" className="flex gap-5">
+    <Card as="li" tone="shelf" className="lift flex gap-5">
       <span className="w-24 shrink-0 sm:w-28">
-        <BookCover
+        <CoverThumbnail
           coverMediaId={loan.coverMediaId}
           title={loan.title}
           sizes="(min-width: 640px) 112px, 96px"
@@ -177,12 +196,14 @@ function ActiveBookCard({
         <p className="text-ink-soft">{loan.authors.join(", ")}</p>
 
         <CardBody className="mt-1">
-          <p>
-            Borrowed on{" "}
+          <p className="flex items-center gap-2">
+            <Icon name="book" className="text-ink-faint" />
+            Borrowed{" "}
             <strong className="text-ink">{formatInTimezone(loan.issuedAt, timezone, "d MMM")}</strong>
           </p>
-          <p className="mt-1">
-            Back by{" "}
+          <p className="mt-1 flex items-center gap-2">
+            <Icon name="calendar" className="text-ink-faint" />
+            Due back{" "}
             <strong className="text-ink">{formatInTimezone(loan.dueAt, timezone, "d MMM")}</strong>
           </p>
         </CardBody>

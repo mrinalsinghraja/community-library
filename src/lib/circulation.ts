@@ -329,9 +329,9 @@ export const CIRCULATION_MESSAGES = {
  */
 export const RENEWAL_REQUEST_MESSAGES = {
   invitation: "You can ask the librarian to keep this book for another",
-  pending: "You have asked to keep this one longer. The librarian will let you know.",
+  pending: "You've asked the librarian. They will let you know.",
   approved: "The librarian said yes! You can keep this one longer.",
-  declined: "The librarian would like this one back. Please bring it in.",
+  declined: "Please bring this one back — the librarian would like it in.",
 
   alreadyAsked: "You have already asked about this book. The librarian will see it.",
   noRenewalsLeft: "You have already kept this one for longer once. Please bring it back.",

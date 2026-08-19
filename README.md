@@ -49,12 +49,25 @@ npm run create-admin
 Full instructions: [`docs/SETUP.md`](docs/SETUP.md) and
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
+### Local work never talks to production
+
+`.env` is the whole local environment — development server, build and tests all
+run from it, and nothing else on disk is read. Production configuration lives in
+Vercel, and a copy pulled for a one-off command goes under
+`.env.vercel-production`, a name Next.js never loads.
+
+The name is the point. `next build` sets `NODE_ENV=production`, so Next.js reads
+`.env.production.local` ahead of `.env` — a forgotten pull file is enough to
+make an ordinary local build query the production database. `npm run build` now
+refuses to start when a production-only env file is present. See
+[`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md#which-file-a-command-reads).
+
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `npm run dev` | Development server |
-| `npm run build` | Production build (generates Prisma client first) |
+| `npm run build` | Production build (generates Prisma client first; refuses if a production `.env` file is lying about) |
 | `npm run verify` | Typecheck + lint + unit tests — run before pushing |
 | `npm test` | Unit tests (no database needed) |
 | `npm run test:db` | Database tests (needs `TEST_DATABASE_URL`) |

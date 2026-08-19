@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { PasswordField } from "@/components/ui/password-field";
 import { completePasswordResetAction, type ActionState } from "@/server/actions/account-actions";
+import { Icon } from "@/components/ui/icon";
 
 const INITIAL: ActionState = { status: "idle" };
 
@@ -39,7 +40,7 @@ export function ResetForm({ token, minLength }: { token: string; minLength: numb
         minLength={minLength}
       />
 
-      <Button type="submit" size="lg" fullWidth disabled={pending} icon="🔑">
+      <Button type="submit" size="lg" fullWidth disabled={pending} icon={<Icon name="key" />}>
         {pending ? "Saving…" : "Save my new secret word"}
       </Button>
     </form>

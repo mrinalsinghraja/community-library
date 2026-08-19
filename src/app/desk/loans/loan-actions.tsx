@@ -11,6 +11,7 @@ import {
   returnBookAction,
   type CirculationFormState,
 } from "@/server/actions/circulation-actions";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * The three things a librarian does to a book that is already out.
@@ -108,7 +109,7 @@ function ReturnControl({ loanId, copyCode }: { loanId: string; copyCode: string 
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" size="sm" icon="↩" disabled={pending}>
+        <Button type="submit" size="sm" icon={<Icon name="returnBook" />} disabled={pending}>
           {pending ? "Taking it back…" : "Return"}
         </Button>
         {!checking ? (
@@ -160,7 +161,7 @@ function RenewControl({
         Disabling is a courtesy; `renewLoan` re-checks both rules server-side
         and refuses regardless of what the browser did.
       */}
-      <Button type="submit" variant="secondary" size="sm" icon="⏳" disabled={pending || blocked}>
+      <Button type="submit" variant="secondary" size="sm" icon={<Icon name="renew" />} disabled={pending || blocked}>
         {blockedByOverdue
           ? "Return it first"
           : renewalsLeft <= 0
@@ -203,7 +204,7 @@ function CancelControl({ loanId, copyCode }: { loanId: string; copyCode: string 
 
   if (!confirming) {
     return (
-      <Button variant="quiet" size="sm" icon="✖" onClick={() => setConfirming(true)}>
+      <Button variant="quiet" size="sm" icon={<Icon name="cross" />} onClick={() => setConfirming(true)}>
         Issued by mistake
       </Button>
     );

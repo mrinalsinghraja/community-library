@@ -11,6 +11,7 @@ import {
   countDeskLoans,
   countPendingRenewalRequests,
 } from "@/server/services/circulation-service";
+import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Library desk" };
@@ -62,7 +63,7 @@ export default async function DeskPage() {
         {actor.permissions.has("loan.return") ? (
           <Link href="/desk/loans" className="no-underline">
             <Card tone={loans.overdue > 0 ? "shelf" : "plain"} className="h-full">
-              <CardTitle icon="📕">Books out</CardTitle>
+              <CardTitle icon={<Icon name="book" />}>Books out</CardTitle>
               <CardBody>
                 <p className="font-display text-5xl font-extrabold text-ink">{loans.active}</p>
                 <p className="mt-1">
@@ -82,7 +83,7 @@ export default async function DeskPage() {
         {actor.permissions.has("loan.renew") ? (
           <Link href="/desk/renewals" className="no-underline">
             <Card tone={renewalAsks > 0 ? "shelf" : "plain"} className="h-full">
-              <CardTitle icon="⏳">Asks to keep</CardTitle>
+              <CardTitle icon={<Icon name="renew" />}>Asks to keep</CardTitle>
               <CardBody>
                 <p className="font-display text-5xl font-extrabold text-ink">{renewalAsks}</p>
                 <p className="mt-1">
@@ -100,7 +101,7 @@ export default async function DeskPage() {
         {actor.permissions.has("registration.view") ? (
           <Link href="/desk/registrations" className="no-underline">
             <Card tone={pending > 0 ? "shelf" : "plain"} className="h-full">
-              <CardTitle icon="🙋">New members</CardTitle>
+              <CardTitle icon={<Icon name="reader" />}>New members</CardTitle>
               <CardBody>
                 <p className="font-display text-5xl font-extrabold text-ink">{pending}</p>
                 <p className="mt-1">
@@ -118,7 +119,7 @@ export default async function DeskPage() {
         {actor.permissions.has("member.view") ? (
           <Link href="/desk/members" className="no-underline">
             <Card className="h-full">
-              <CardTitle icon="📇">Readers</CardTitle>
+              <CardTitle icon={<Icon name="card" />}>Readers</CardTitle>
               <CardBody>Find a reader, pause an account, or send a fresh sign-in link.</CardBody>
             </Card>
           </Link>
@@ -127,7 +128,7 @@ export default async function DeskPage() {
         {actor.permissions.has("user.manage_staff") ? (
           <Link href="/admin/staff" className="no-underline">
             <Card className="h-full">
-              <CardTitle icon="🛠️">Staff</CardTitle>
+              <CardTitle icon={<Icon name="staff" />}>Staff</CardTitle>
               <CardBody>Add a librarian, change a role, or suspend an account.</CardBody>
             </Card>
           </Link>
@@ -136,13 +137,13 @@ export default async function DeskPage() {
 
       {actor.permissions.has("loan.issue") ? (
         <Card tone="sunk" className="mt-8">
-          <CardTitle icon="📚" as="h3">
+          <CardTitle icon={<Icon name="shelf" />} as="h3">
             Someone at the desk?
           </CardTitle>
           <CardBody>
             <p>Find the reader, find the book, check the date, hand it over.</p>
             <div className="mt-4">
-              <ButtonLink href="/desk/circulation" size="lg" icon="📚">
+              <ButtonLink href="/desk/circulation" size="lg" icon={<Icon name="shelf" />}>
                 Issue a book
               </ButtonLink>
             </div>

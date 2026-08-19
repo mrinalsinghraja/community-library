@@ -12,6 +12,8 @@ import {
   submitRegistrationAction,
   type RegistrationFormState,
 } from "@/server/actions/registration-actions";
+import { Icon } from "@/components/ui/icon";
+import { IconMedallion } from "@/components/ui/states";
 
 const INITIAL: RegistrationFormState = { status: "idle" };
 
@@ -44,9 +46,7 @@ export function JoinForm({
   if (state.status === "success") {
     return (
       <Card tone="primary" className="text-center">
-        <p className="text-6xl" aria-hidden="true">
-          🎉
-        </p>
+        <IconMedallion name="sparkle" tone="accent" />
         <h2 className="mt-4 text-3xl">Thank you!</h2>
         <p className="mt-3 text-lg text-ink-soft">
           We have your registration. Our librarian will take a look, and you will get an email at
@@ -268,7 +268,7 @@ export function JoinForm({
         <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
       </div>
 
-      <Button type="submit" size="lg" fullWidth disabled={pending} icon="✨">
+      <Button type="submit" size="lg" fullWidth disabled={pending} icon={<Icon name="sparkle" />}>
         {pending ? "Sending…" : "Send our registration"}
       </Button>
     </form>

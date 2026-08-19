@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
 import { MAIL_CAPTURE_DIR } from "@/server/lib/email/providers";
 import { isProduction } from "@/server/env";
+import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Captured mail (development)", robots: { index: false } };
@@ -65,7 +66,7 @@ export default async function DevMailPage() {
 
       {messages.length === 0 ? (
         <div className="mt-10">
-          <EmptyState illustration="📭" title="No mail captured yet">
+          <EmptyState illustration={<Icon name="mail" />} title="No mail captured yet">
             Approve a registration or ask for a password reset, and the message will appear here.
           </EmptyState>
         </div>

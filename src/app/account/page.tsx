@@ -12,6 +12,7 @@ import { signOutAction } from "@/server/actions/auth-actions";
 import { getActor } from "@/server/authz";
 import { getBrandingSafe } from "@/server/lib/settings";
 import { getOwnMemberCard } from "@/server/services/account-service";
+import { Icon } from "@/components/ui/icon";
 
 export const metadata: Metadata = { title: "My library" };
 
@@ -70,7 +71,7 @@ export default async function AccountPage() {
 
         <div className="mt-10 grid gap-6 md:grid-cols-2">
           <Card tone="shelf">
-            <CardTitle icon="🪪">Your account</CardTitle>
+            <CardTitle icon={<Icon name="card" />}>Your account</CardTitle>
             <CardBody>
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
                 <dt className="font-bold text-ink">Kind</dt>
@@ -93,7 +94,7 @@ export default async function AccountPage() {
           </Card>
 
           <Card tone="shelf">
-            <CardTitle icon="🔐">What you can do</CardTitle>
+            <CardTitle icon={<Icon name="key" />}>What you can do</CardTitle>
             <CardBody>
               <p className="mb-3">
                 These come from your roles in the database and are re-read on every request —
@@ -127,21 +128,21 @@ export default async function AccountPage() {
 
         <div className="mt-10 flex flex-wrap gap-3">
           {actor.kind === "MEMBER" ? (
-            <ButtonLink href="/my-books" size="lg" icon="📚">
+            <ButtonLink href="/my-books" size="lg" icon={<Icon name="shelf" />}>
               My books
             </ButtonLink>
           ) : null}
-          <ButtonLink href="/books" variant={actor.kind === "MEMBER" ? "secondary" : "primary"} size="lg" icon="🔍">
+          <ButtonLink href="/books" variant={actor.kind === "MEMBER" ? "secondary" : "primary"} size="lg" icon={<Icon name="search" />}>
             Find a book
           </ButtonLink>
-          <ButtonLink href="/account/password" variant="secondary" size="lg" icon="🔑">
+          <ButtonLink href="/account/password" variant="secondary" size="lg" icon={<Icon name="key" />}>
             Change my secret word
           </ButtonLink>
         </div>
 
         <div className="mt-6">
           <form action={signOutAction}>
-            <Button type="submit" variant="quiet" size="lg" icon="👋">
+            <Button type="submit" variant="quiet" size="lg" icon={<Icon name="signOut" />}>
               Sign out
             </Button>
           </form>

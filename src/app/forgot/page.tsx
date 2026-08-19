@@ -5,6 +5,7 @@ import { PublicShell } from "@/components/layout/site-shell";
 import { Card } from "@/components/ui/card";
 import { formatCode } from "@/server/lib/codes";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
+import { Butterfly } from "@/components/library/library-logo";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Forgotten secret word" };
@@ -22,9 +23,11 @@ export default async function ForgotPage() {
 
   return (
     <PublicShell branding={branding}>
-      <div className="mx-auto w-full max-w-xl px-5 py-14 sm:px-8">
-        <h1 className="text-4xl">Forgotten your secret word?</h1>
-        <p className="mt-3 text-lg text-ink-soft">
+      <div className="relative mx-auto w-full max-w-xl px-5 py-14 sm:px-8">
+        <Butterfly className="drift pointer-events-none absolute right-4 top-8 w-9 opacity-60 sm:w-12" />
+
+        <h1 className="garden-rule inline-block text-4xl">Forgotten your secret word?</h1>
+        <p className="mt-8 text-lg text-ink-soft">
           That happens to everyone. Tell us your library card number and we will email your parent
           or guardian a link to set a new one.
         </p>

@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
 import { getBrandingSafe } from "@/server/lib/settings";
 import { completeEmailChallenge } from "@/server/services/guardian-verification-service";
+import { Icon } from "@/components/ui/icon";
+import { IconMedallion } from "@/components/ui/states";
 
 /**
  * Guardian confirmation landing page.
@@ -50,9 +52,7 @@ export default async function VerifyPage({
       <div className="mx-auto w-full max-w-xl px-5 py-14 sm:px-8">
         {outcome.ok ? (
           <Card tone="primary" className="text-center">
-            <p className="text-6xl" aria-hidden="true">
-              ✅
-            </p>
+            <IconMedallion name="check" />
             <h1 className="mt-4 text-3xl">Thank you — that is confirmed</h1>
             <p className="mt-3 text-lg text-ink-soft">
               We now know this registration for {outcome.childName} came from you. Our librarian
@@ -64,7 +64,7 @@ export default async function VerifyPage({
           </Card>
         ) : (
           <EmptyState
-            illustration="🔗"
+            illustration={<Icon name="key" />}
             title="This link is no longer active"
             action={
               <ButtonLink href="/" size="lg">

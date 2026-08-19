@@ -9,6 +9,7 @@ import { formatInTimezone } from "@/lib/dates";
 import { requirePermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { listAuditEvents } from "@/server/services/audit-service";
+import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Audit" };
@@ -106,7 +107,7 @@ export default async function AuditPage({
             </Field>
 
             <div className="flex items-end gap-3">
-              <Button type="submit" size="md" icon="🔎">
+              <Button type="submit" size="md" icon={<Icon name="search" />}>
                 Search
               </Button>
               <Link href="/admin/audit" className="text-base font-bold text-ink-soft">

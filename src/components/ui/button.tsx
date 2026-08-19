@@ -17,8 +17,10 @@ type Size = "sm" | "md" | "lg";
 const VARIANT_CLASSES: Record<Variant, string> = {
   primary:
     "bg-primary text-white shadow-lift hover:bg-primary-deep active:translate-y-px",
-  // Accent is a shape colour and fails contrast under white text, so the
-  // secondary button is an outlined treatment with text-safe accent ink.
+  // The berry accent now passes AA under white (6.48:1), so this *could* be a
+  // solid fill. It stays outlined on purpose: two solid brand colours side by
+  // side give a child no clue which button is the main one, and half of these
+  // sit in admin forms where a loud pink submit would be wrong.
   secondary:
     "bg-surface text-accent-ink border-2 border-accent hover:bg-accent-wash active:translate-y-px",
   quiet:

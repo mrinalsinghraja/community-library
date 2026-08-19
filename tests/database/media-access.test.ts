@@ -96,6 +96,32 @@ describe("who may read a child's photograph", () => {
     expect(media.bytes.byteLength).toBeGreaterThan(0);
   });
 
+  /*
+   * The route decides how a response may be cached from the purpose this
+   * returns. A photograph of a child reporting anything other than
+   * `child_photo` would put it on the revalidatable list — see
+   * MEDIA_MAY_REVALIDATE and its unit tests — so the value is asserted against
+   * real data rather than assumed.
+   */
+  it("reports a photograph as a child photograph, with the digest of what was stored", async () => {
+    const child = await createMember(fixture.libraryId);
+    const mediaId = await givePhotoTo(child.id);
+
+    await actingAs(child.id, "MEMBER");
+    const media = await getAuthorizedMedia(mediaId);
+    const row = await db.mediaObject.findUniqueOrThrow({
+      where: { id: mediaId },
+      select: { purpose: true, checksumSha256: true },
+    });
+
+    expect(media.purpose).toBe("child_photo");
+    expect(media.purpose).toBe(row.purpose);
+    // The digest is what the route would use as an ETag, so it has to describe
+    // the bytes actually stored rather than the bytes uploaded.
+    expect(media.checksumSha256).toBe(row.checksumSha256);
+    expect(media.checksumSha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+
   it("refuses one child another child's photograph, as NotFound", async () => {
     const owner = await createMember(fixture.libraryId);
     const stranger = await createMember(fixture.libraryId);

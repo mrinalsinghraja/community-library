@@ -12,6 +12,7 @@ import { ageInYears, formatInTimezone } from "@/lib/dates";
 import { requirePermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { listMembers } from "@/server/services/account-service";
+import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Readers" };
@@ -71,7 +72,7 @@ export default async function MembersPage({
       </form>
 
       {members.length === 0 ? (
-        <EmptyState illustration="📇" title={q ? "No readers match that" : "No readers yet"}>
+        <EmptyState illustration={<Icon name="card" />} title={q ? "No readers match that" : "No readers yet"}>
           {q
             ? "Try part of a name, or a card number."
             : "Approved registrations appear here as library cards."}

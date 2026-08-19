@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, TextInput } from "@/components/ui/field";
 import { signInAction, type SignInState } from "@/server/actions/auth-actions";
+import { Icon } from "@/components/ui/icon";
 
 const INITIAL_STATE: SignInState = {};
 
@@ -29,9 +30,12 @@ export function LoginForm({ next, cardExample }: { next?: string; cardExample?: 
       {state.error ? (
         <p
           role="alert"
-          className="rounded-[var(--radius-field)] bg-danger-wash px-5 py-4 text-lg font-bold text-danger"
+          className="flex items-start gap-3 rounded-[var(--radius-field)] bg-danger-wash px-5 py-4 text-lg font-bold text-danger"
         >
-          {state.error}
+          {/* The wording is unchanged and deliberately vague — it must not say
+              which half was wrong. Only the presentation is friendlier. */}
+          <Icon name="info" className="mt-1 shrink-0" />
+          <span>{state.error}</span>
         </p>
       ) : null}
 
@@ -81,7 +85,7 @@ export function LoginForm({ next, cardExample }: { next?: string; cardExample?: 
         </div>
       </Field>
 
-      <Button type="submit" size="lg" fullWidth disabled={pending} icon="🔑">
+      <Button type="submit" size="lg" fullWidth disabled={pending} icon={<Icon name="key" />}>
         {pending ? "Just a moment…" : "Sign in"}
       </Button>
     </form>

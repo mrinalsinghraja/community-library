@@ -353,9 +353,9 @@ git push                              # Vercel builds from main
 Migrations are **not** run by the build. Apply them deliberately:
 
 ```bash
-vercel env pull .env.production.local
-npx dotenv -e .env.production.local -- npx prisma migrate deploy
-rm .env.production.local
+vercel env pull .env.vercel-production
+npx dotenv -e .env.vercel-production -- npx prisma migrate deploy
+rm .env.vercel-production
 ```
 
 ## Rolling back

@@ -5,6 +5,8 @@ import { PublicShell } from "@/components/layout/site-shell";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Callout } from "@/components/ui/states";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
+import { Icon } from "@/components/ui/icon";
+import { Butterfly } from "@/components/library/library-logo";
 
 export const metadata: Metadata = { title: "Join the library" };
 
@@ -31,9 +33,11 @@ export default async function JoinPage() {
 
   return (
     <PublicShell branding={branding}>
-      <div className="mx-auto w-full max-w-3xl px-5 py-14 sm:px-8">
-        <h1 className="text-4xl">Join {branding.libraryName}</h1>
-        <p className="mt-4 text-lg text-ink-soft">
+      <div className="relative mx-auto w-full max-w-3xl px-5 py-14 sm:px-8">
+        <Butterfly className="drift pointer-events-none absolute right-4 top-8 w-10 opacity-60 sm:w-12" />
+
+        <h1 className="garden-rule inline-block text-4xl">Join {branding.libraryName}</h1>
+        <p className="mt-8 text-lg text-ink-soft">
           Let&rsquo;s create your library account! It takes a minute, and a grown-up needs to fill
           it in.
         </p>
@@ -53,7 +57,7 @@ export default async function JoinPage() {
         )}
 
         <Card tone="primary" className="mt-12">
-          <CardTitle icon="🤝">Our promises</CardTitle>
+          <CardTitle icon={<Icon name="handshake" />}>Our promises</CardTitle>
           <CardBody>
             <ul className="flex flex-col gap-2">
               <li>Joining is free. There is no membership fee and no borrowing fee.</li>

@@ -8,12 +8,13 @@ import { getActor } from "@/server/authz";
 import { isAppError } from "@/server/lib/errors";
 import { getBrandingSafe } from "@/server/lib/settings";
 import { listDonorCredits } from "@/server/services/catalogue-service";
+import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Thank you, book donors" };
+export const metadata: Metadata = { title: "Thank you, book friends" };
 
 /**
- * Thank You, Book Donors.
+ * Thank You, Book Friends.
  *
  * Read the code behind this page and the most striking thing is what it does
  * not compute. There is no count, no total, no ordering by generosity, no
@@ -44,8 +45,8 @@ export default async function DonorsPage() {
   return (
     <PublicShell branding={branding} signedIn={Boolean(actor)}>
       <div className="mx-auto w-full max-w-4xl px-5 py-12 sm:px-8 sm:py-16">
-        <h1 className="text-4xl sm:text-5xl">Thank You, Book Donors ❤️</h1>
-        <p className="mt-4 max-w-2xl text-xl text-ink-soft">
+        <h1 className="garden-rule inline-block text-4xl sm:text-5xl">Thank You, Book Friends ❤️</h1>
+        <p className="mt-8 max-w-2xl text-xl text-ink-soft">
           Every book on our shelves is a gift to our young readers. Thank you to the families who
           have shared books with our community.
         </p>
@@ -53,10 +54,10 @@ export default async function DonorsPage() {
         <div className="mt-12">
           {credits.length === 0 ? (
             <EmptyState
-              illustration="🎁"
+              illustration={<Icon name="gift" />}
               title="Our first gift is still to come"
               action={
-                <ButtonLink href="/books" variant="secondary" size="lg" icon="📚">
+                <ButtonLink href="/books" variant="secondary" size="lg" icon={<Icon name="shelf" />}>
                   See the books
                 </ButtonLink>
               }

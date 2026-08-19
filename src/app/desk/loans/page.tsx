@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { LoanActions } from "@/app/desk/loans/loan-actions";
+import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
@@ -18,6 +19,7 @@ import { formatInTimezone } from "@/lib/dates";
 import { requireAnyPermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { listLoansForStaff } from "@/server/services/circulation-service";
+import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Books out" };
@@ -103,7 +105,7 @@ export default async function DeskLoansPage({
           {result.total === 1 ? "1 loan" : `${result.total} loans`}
         </p>
         {canIssue ? (
-          <ButtonLink href="/desk/circulation" icon="📚">
+          <ButtonLink href="/desk/circulation" icon={<Icon name="shelf" />}>
             Issue a book
           </ButtonLink>
         ) : null}
@@ -165,7 +167,7 @@ export default async function DeskLoansPage({
       <div className="mt-6">
         {result.items.length === 0 ? (
           <EmptyState
-            illustration={filter === "overdue" ? "🎉" : "📭"}
+            illustration={<Icon name={filter === "overdue" ? "check" : "book"} />}
             title={
               search
                 ? "Nothing matches that"
@@ -177,7 +179,7 @@ export default async function DeskLoansPage({
             }
             action={
               canIssue && !search ? (
-                <ButtonLink href="/desk/circulation" icon="📚">
+                <ButtonLink href="/desk/circulation" icon={<Icon name="shelf" />}>
                   Issue a book
                 </ButtonLink>
               ) : null
@@ -206,14 +208,31 @@ export default async function DeskLoansPage({
                   </td>
 
                   <td className="px-4 py-3">
-                    <Link
-                      href={`/admin/books/${loan.copyId}`}
-                      className="font-bold text-primary-deep"
-                    >
-                      {loan.title}
-                    </Link>
-                    <br />
-                    <span className="text-ink-soft">{loan.authors.join(", ")}</span>
+                    {/*
+                      Jacket first. A librarian scanning thirty rows for the
+                      book a child is holding recognises the cover well before
+                      they finish reading the title.
+                    */}
+                    <span className="flex items-start gap-3">
+                      <span className="w-11 shrink-0">
+                        <CoverThumbnail
+                          coverMediaId={loan.coverMediaId}
+                          title={loan.title}
+                          variant="thumb"
+                          sizes="44px"
+                        />
+                      </span>
+                      <span className="min-w-0">
+                        <Link
+                          href={`/admin/books/${loan.copyId}`}
+                          className="font-bold text-primary-deep"
+                        >
+                          {loan.title}
+                        </Link>
+                        <br />
+                        <span className="text-ink-soft">{loan.authors.join(", ")}</span>
+                      </span>
+                    </span>
                   </td>
 
                   <td className="px-4 py-3 font-mono">{loan.copyCode}</td>

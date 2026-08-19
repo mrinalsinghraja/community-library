@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { DecisionActions } from "@/app/desk/renewals/decision-actions";
+import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
@@ -12,6 +13,7 @@ import {
   countDeskLoans,
   listPendingRenewalRequests,
 } from "@/server/services/circulation-service";
+import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Asks to keep" };
@@ -60,10 +62,10 @@ export default async function DeskRenewalsPage() {
       <div className="mt-6">
         {requests.length === 0 ? (
           <EmptyState
-            illustration="📖"
+            illustration={<Icon name="renew" />}
             title="No one is asking"
             action={
-              <ButtonLink href="/desk/loans" variant="secondary" icon="📕">
+              <ButtonLink href="/desk/loans" variant="secondary" icon={<Icon name="book" />}>
                 See what is out
               </ButtonLink>
             }
@@ -80,14 +82,26 @@ export default async function DeskRenewalsPage() {
                 </td>
 
                 <td className="px-4 py-3">
-                  <p className="font-bold text-ink">{request.title}</p>
-                  {request.renewalCount > 0 ? (
-                    <p className="text-base text-ink-soft">
-                      {request.renewalCount === 1
-                        ? "kept longer once already"
-                        : `kept longer ${request.renewalCount} times already`}
-                    </p>
-                  ) : null}
+                  <div className="flex items-start gap-3">
+                    <span className="w-11 shrink-0">
+                      <CoverThumbnail
+                        coverMediaId={request.coverMediaId}
+                        title={request.title}
+                        variant="thumb"
+                        sizes="44px"
+                      />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-bold text-ink">{request.title}</p>
+                      {request.renewalCount > 0 ? (
+                        <p className="text-base text-ink-soft">
+                          {request.renewalCount === 1
+                            ? "kept longer once already"
+                            : `kept longer ${request.renewalCount} times already`}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
                 </td>
 
                 <td className="px-4 py-3 font-mono">{request.copyCode}</td>

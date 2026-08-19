@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { BookCardTile } from "@/components/library/book-card";
+import { Butterfly, LeafSprig } from "@/components/library/library-logo";
 import { PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
@@ -11,9 +12,14 @@ import { getActor } from "@/server/authz";
 import { isAppError } from "@/server/lib/errors";
 import { getBrandingSafe } from "@/server/lib/settings";
 import { browseCatalogue, listCategories } from "@/server/services/catalogue-service";
+import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Find a book" };
+
+const FIELD =
+  "min-h-14 w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface px-4 text-lg " +
+  "focus:border-accent";
 
 /**
  * The shelf, as a child meets it.
@@ -26,6 +32,10 @@ export const metadata: Metadata = { title: "Find a book" };
  * Search and filters live in the query string and run in PostgreSQL, so this
  * works with JavaScript off, can be bookmarked, and never ships the whole
  * catalogue to the browser to sift through.
+ *
+ * The shelf chips under the search card are the same query string by another
+ * road: one tap instead of open-select-scroll-choose-submit. They add no
+ * behaviour the form did not already have.
  */
 export default async function BooksPage({
   searchParams,
@@ -72,91 +82,141 @@ export default async function BooksPage({
 
   const filtering = Boolean(search || category || ageRaw);
 
+  /** Keeps the age filter when a shelf chip is tapped, drops the page number. */
+  const shelfHref = (slug: string): string => {
+    const query = new URLSearchParams();
+    if (search) query.set("q", search);
+    if (ageRaw) query.set("age", ageRaw);
+    if (slug) query.set("shelf", slug);
+    const string = query.toString();
+    return string ? `/books?${string}` : "/books";
+  };
+
+  const chip =
+    "inline-flex items-center gap-2 rounded-full border-2 px-4 py-2 text-base font-bold no-underline transition-colors";
+  const chipOff = "border-hairline bg-surface text-ink-soft hover:border-accent hover:text-accent-ink";
+  const chipOn = "border-accent bg-accent-wash text-accent-ink";
+
   return (
     <PublicShell branding={branding} signedIn={Boolean(actor)}>
-      <div className="mx-auto w-full max-w-6xl px-5 py-10 sm:px-8 sm:py-14">
-        <h1 className="text-4xl sm:text-5xl">Let&rsquo;s find your next book! 📚</h1>
-        <p className="mt-3 text-lg text-ink-soft">
+      <div className="relative mx-auto w-full max-w-6xl px-5 py-10 sm:px-8 sm:py-14">
+        <Butterfly className="drift pointer-events-none absolute right-4 top-6 w-10 opacity-70 sm:w-14" />
+
+        <h1 className="garden-rule inline-block text-4xl sm:text-5xl">
+          Let&rsquo;s find your next book!
+        </h1>
+        <p className="mt-8 text-lg text-ink-soft">
           {result.total === 1 ? "1 book" : `${result.total} books`} on our shelves.
         </p>
 
-        <form method="get" className="mt-8 flex flex-col gap-4">
-          <label className="flex flex-col gap-2">
-            <span className="font-display text-lg font-bold text-ink">
-              Look for a book
-            </span>
-            <input
-              type="search"
-              name="q"
-              defaultValue={search}
-              placeholder="A title, or who wrote it"
-              className="min-h-14 w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface px-5 text-lg placeholder:text-ink-faint"
-            />
-          </label>
-
-          <div className="grid gap-4 sm:grid-cols-2">
+        {/* ------------------------------------------------------------- */}
+        {/* Finding                                                        */}
+        {/* ------------------------------------------------------------- */}
+        <form
+          method="get"
+          className="mt-8 rounded-[var(--radius-card)] bg-surface p-5 shadow-lift sm:p-6"
+        >
+          <div className="flex flex-col gap-4">
             <label className="flex flex-col gap-2">
-              <span className="font-display text-lg font-bold text-ink">Shelf</span>
-              <select
-                name="shelf"
-                defaultValue={category?.slug ?? ""}
-                className="min-h-14 w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface px-4 text-lg"
-              >
-                <option value="">Every shelf</option>
-                {categories.map((entry) => (
-                  <option key={entry.id} value={entry.slug}>
-                    {entry.icon ? `${entry.icon} ` : ""}
-                    {entry.name}
-                  </option>
-                ))}
-              </select>
+              <span className="flex items-center gap-2 font-display text-lg font-bold text-ink">
+                <Icon name="search" className="text-accent-ink" />
+                Look for a book
+              </span>
+              <input
+                type="search"
+                name="q"
+                defaultValue={search}
+                placeholder="A title, or who wrote it"
+                className={`${FIELD} placeholder:text-ink-faint`}
+              />
             </label>
 
-            <label className="flex flex-col gap-2">
-              <span className="font-display text-lg font-bold text-ink">Ages</span>
-              <select
-                name="age"
-                defaultValue={ageRaw}
-                className="min-h-14 w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface px-4 text-lg"
-              >
-                <option value="">Any age</option>
-                {AGE_GROUPS.map((group) => (
-                  <option key={group.value} value={group.value}>
-                    {group.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="flex flex-col gap-2">
+                <span className="flex items-center gap-2 font-display text-lg font-bold text-ink">
+                  <Icon name="shelf" className="text-accent-ink" />
+                  Shelf
+                </span>
+                <select name="shelf" defaultValue={category?.slug ?? ""} className={FIELD}>
+                  <option value="">Every shelf</option>
+                  {categories.map((entry) => (
+                    <option key={entry.id} value={entry.slug}>
+                      {entry.icon ? `${entry.icon} ` : ""}
+                      {entry.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          <div className="flex flex-wrap items-center gap-4">
-            <button
-              type="submit"
-              className="min-h-14 rounded-full bg-primary px-8 text-lg font-bold text-white hover:bg-primary-deep"
-            >
-              <span aria-hidden="true">🔍</span> Show me
-            </button>
-            {filtering ? (
-              <Link href="/books" className="text-lg font-bold text-primary-deep">
-                Show everything
-              </Link>
-            ) : null}
+              <label className="flex flex-col gap-2">
+                <span className="flex items-center gap-2 font-display text-lg font-bold text-ink">
+                  <Icon name="age" className="text-accent-ink" />
+                  Ages
+                </span>
+                <select name="age" defaultValue={ageRaw} className={FIELD}>
+                  <option value="">Any age</option>
+                  {AGE_GROUPS.map((group) => (
+                    <option key={group.value} value={group.value}>
+                      {group.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4">
+              <button
+                type="submit"
+                className="inline-flex min-h-14 items-center gap-2.5 rounded-full bg-primary px-8 font-display text-lg font-bold text-white transition-colors hover:bg-primary-deep"
+              >
+                <Icon name="search" />
+                Show me
+              </button>
+              {filtering ? (
+                <Link href="/books" className="text-lg font-bold text-primary-deep">
+                  Show everything
+                </Link>
+              ) : null}
+            </div>
           </div>
         </form>
 
+        {/* The shelves, as a row of doors. */}
+        {categories.length > 0 ? (
+          <nav aria-label="Shelves" className="mt-6 flex flex-wrap gap-2.5">
+            <Link href={shelfHref("")} className={`${chip} ${category ? chipOff : chipOn}`}>
+              Every shelf
+            </Link>
+            {categories.map((entry) => (
+              <Link
+                key={entry.id}
+                href={shelfHref(entry.slug)}
+                aria-current={category?.id === entry.id ? "page" : undefined}
+                className={`${chip} ${category?.id === entry.id ? chipOn : chipOff}`}
+              >
+                {entry.icon ? <span aria-hidden="true">{entry.icon}</span> : null}
+                {entry.name}
+              </Link>
+            ))}
+          </nav>
+        ) : null}
+
+        {/* ------------------------------------------------------------- */}
+        {/* The shelf itself                                               */}
+        {/* ------------------------------------------------------------- */}
         <div className="mt-10">
           {result.items.length === 0 ? (
             search ? (
-              <EmptyState illustration="🔍" title="Oops! We couldn't find that book.">
+              <EmptyState illustration={<Icon name="search" />} title="Oops! We couldn't find that book.">
                 Try a shorter word, or check the spelling. You can also ask your librarian —
                 they know where everything is.
               </EmptyState>
             ) : filtering ? (
               <EmptyState
-                illustration="🧭"
+                illustration={<Icon name="shelf" />}
                 title="Nothing here yet. Try another shelf!"
                 action={
-                  <ButtonLink href="/books" variant="secondary" size="lg" icon="📚">
+                  <ButtonLink href="/books" variant="secondary" size="lg" icon={<Icon name="shelf" />}>
                     Show every book
                   </ButtonLink>
                 }
@@ -164,7 +224,7 @@ export default async function BooksPage({
                 No books on this shelf for these ages — but there are plenty next door.
               </EmptyState>
             ) : (
-              <EmptyState illustration="📚" title="Our shelves are waiting for more adventures!">
+              <EmptyState illustration={<Icon name="book" />} title="Our shelves are waiting for more adventures!">
                 No books yet. As soon as our librarians add some, they will appear right here.
               </EmptyState>
             )
@@ -205,10 +265,12 @@ export default async function BooksPage({
           </nav>
         ) : null}
 
-        <p className="mt-14 text-lg text-ink-soft">
+        <p className="relative mt-14 flex flex-wrap items-center gap-2 text-lg text-ink-soft">
+          <LeafSprig className="pointer-events-none hidden w-10 opacity-50 sm:block" />
           Every book here was given by a family in our community.{" "}
-          <Link href="/donors" className="font-bold text-primary-deep">
-            Say thank you →
+          <Link href="/donors" className="inline-flex items-center gap-1.5 font-bold text-primary-deep">
+            Say thank you
+            <Icon name="arrowRight" />
           </Link>
         </p>
       </div>

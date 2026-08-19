@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Baloo_2, Nunito_Sans } from "next/font/google";
+import { Nunito_Sans, Quicksand } from "next/font/google";
 
 import { getBrandingSafe } from "@/server/lib/settings";
 
@@ -10,11 +10,15 @@ import "./globals.css";
  * child's browser for a font, which is both a privacy property and the reason
  * connect-src can stay 'self'.
  */
-const baloo = Baloo_2({
+/*
+ * Quicksand echoes the geometric, wide-apertured sans on the library's own
+ * wordmark, so a heading and the mark beside it read as one piece of design.
+ */
+const quicksand = Quicksand({
   subsets: ["latin"],
-  variable: "--font-baloo",
+  variable: "--font-quicksand",
   display: "swap",
-  weight: ["500", "600", "700", "800"],
+  weight: ["500", "600", "700"],
 });
 
 const nunito = Nunito_Sans({
@@ -51,7 +55,7 @@ export default async function RootLayout({
   const branding = await getBrandingSafe();
 
   return (
-    <html lang="en" className={`${baloo.variable} ${nunito.variable}`}>
+    <html lang="en" className={`${quicksand.variable} ${nunito.variable}`}>
       <body
         /*
          * Branding arrives as CSS custom properties, so a Super Admin changing
