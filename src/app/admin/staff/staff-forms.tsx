@@ -47,7 +47,10 @@ export function CreateStaffForm() {
 
   return (
     <Card>
-      <h2 className="text-2xl">Add a librarian</h2>
+      <h2 className="text-2xl">Add Librarian</h2>
+      <p className="mt-2 text-ink-soft">
+        Create a Librarian account for helping manage the library.
+      </p>
       <p className="mt-2 text-ink-soft">
         They will be emailed a link to choose their own password. You will never see it.
       </p>
@@ -55,16 +58,16 @@ export function CreateStaffForm() {
       <form action={formAction} className="mt-6 flex flex-col gap-5">
         <Notice state={state} />
 
-        <Field id="displayName" label="Their name" error={state.fieldErrors?.displayName} required>
+        <Field id="displayName" label="Full name" error={state.fieldErrors?.displayName} required>
           <TextInput id="displayName" name="displayName" autoComplete="off" required />
         </Field>
 
-        <Field id="email" label="Their email" error={state.fieldErrors?.email} required>
+        <Field id="email" label="Email address" error={state.fieldErrors?.email} required>
           <TextInput id="email" name="email" type="email" autoCapitalize="none" required />
         </Field>
 
         <Button type="submit" size="md" disabled={pending} icon={<Icon name="plus" />}>
-          {pending ? "Creating…" : "Add librarian"}
+          {pending ? "Creating…" : "Add Librarian"}
         </Button>
       </form>
     </Card>

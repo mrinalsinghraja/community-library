@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Butterfly, LibraryLogo } from "@/components/library/library-logo";
+import { getActor } from "@/server/authz";
 import type { Branding } from "@/server/lib/settings";
 
 /**
@@ -16,13 +17,26 @@ const NAV_LINK =
   "rounded-full px-2.5 py-2.5 text-base font-bold font-display text-ink-soft no-underline " +
   "transition-colors hover:bg-accent-wash hover:text-accent-ink sm:px-4 sm:text-lg";
 
-export function SiteHeader({
+export async function SiteHeader({
   branding,
   signedIn = false,
 }: {
   branding: Branding;
   signedIn?: boolean;
 }) {
+  /*
+   * Read rather than passed down, because otherwise every page that renders
+   * this shell would have to remember to hand it a flag, and the one that
+   * forgot would be the one where an administrator could not find their way
+   * back. `getActor` is cached for the request, so on a page that already asked
+   * who is signed in this costs nothing at all.
+   *
+   * The permission decides, not the role name — same key that guards the page
+   * itself. A librarian and a reader do not hold it and see nothing.
+   */
+  const actor = await getActor();
+  const canManageStaff = actor?.permissions.has("user.manage_staff") ?? false;
+
   return (
     <header className="relative bg-surface">
       {/*
@@ -91,6 +105,21 @@ export function SiteHeader({
           <Link href="/rules" className={NAV_LINK}>
             Our rules
           </Link>
+          {/*
+            The fifth door, and the only one that breaks the ceiling above.
+            It is shown to whoever holds `user.manage_staff` — one person in
+            this library, on an adult's phone or a laptop — and never to a
+            reader, whose 375px screen the four-door rule was written for.
+
+            Without it the administrator's only way to the desk was to type a
+            URL: /account renders this shell, not the staff one, so somebody
+            signing in as the owner landed on a page with no door out.
+          */}
+          {canManageStaff ? (
+            <Link href="/admin/staff" className={NAV_LINK}>
+              Staff
+            </Link>
+          ) : null}
           <Link
             href={signedIn ? "/account" : "/login"}
             className="rounded-full bg-primary px-5 py-2.5 font-display text-base font-bold text-white no-underline transition-colors hover:bg-primary-deep sm:text-lg"

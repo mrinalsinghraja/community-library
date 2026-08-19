@@ -127,12 +127,35 @@ export default async function AccountPage() {
         </div>
 
         <div className="mt-10 flex flex-wrap gap-3">
+          {/*
+            The administrator's way back to their own library.
+            
+            This page renders the public shell, so before this existed somebody
+            signing in as the owner landed here with no door to the desk at all
+            and had to know the URL. Guarded by the same permission that guards
+            the page it opens — a librarian and a reader do not hold it.
+          */}
+          {actor.permissions.has("user.manage_staff") ? (
+            <ButtonLink href="/admin/staff" size="lg" icon={<Icon name="staff" />}>
+              Staff
+            </ButtonLink>
+          ) : null}
           {actor.kind === "MEMBER" ? (
             <ButtonLink href="/my-books" size="lg" icon={<Icon name="shelf" />}>
               My books
             </ButtonLink>
           ) : null}
-          <ButtonLink href="/books" variant={actor.kind === "MEMBER" ? "secondary" : "primary"} size="lg" icon={<Icon name="search" />}>
+          {/* One primary action per row: Staff takes it when there is one. */}
+          <ButtonLink
+            href="/books"
+            variant={
+              actor.kind === "MEMBER" || actor.permissions.has("user.manage_staff")
+                ? "secondary"
+                : "primary"
+            }
+            size="lg"
+            icon={<Icon name="search" />}
+          >
             Find a book
           </ButtonLink>
           <ButtonLink href="/account/password" variant="secondary" size="lg" icon={<Icon name="key" />}>
