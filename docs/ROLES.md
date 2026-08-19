@@ -37,14 +37,20 @@ suspend an account and reactivate it, send a fresh activation or reset link, see
 and correct guardian contact details, record a guardian verification, manage a
 child's photograph.
 
-**Registrations** — see the queue and the family's details.
+**Registrations** — see the queue and the family's whole submission: the
+child's name, age, flat and picture, the guardian's name, phone and email, when
+it arrived, every consent one line at a time, and how the guardian was verified.
+They can record a guardian verification. They cannot approve or reject, and the
+screen says so rather than offering a button that fails: *"Waiting for Super
+Admin approval."* See ADR-040.
 
 ## What a librarian cannot do
 
 | They cannot | Because |
 |---|---|
-| Delete a book, a reader or anybody else | Deletion is the Super Admin's alone (ADR-039). Everything a librarian needs in order to fix a mistake is reversible. |
-| Approve or reject a registration | Whether a child joins this library is the owner's decision (ADR-037). The librarian sees the queue. |
+| Delete a book, a reader or anybody else | Deletion is the Super Admin's alone — `book.delete` (ADR-039) and `user.delete` (ADR-042). Everything a librarian needs in order to fix a mistake is reversible. |
+| Approve or reject a registration | Whether a child joins this library is the owner's decision (ADR-037). The librarian sees the whole submission and no decision buttons (ADR-040). |
+| See the evidence behind a joining decision, months later | Consent records and guardian verification on the reader detail page follow `registration.review`. The card, the flat and the guardian's phone number — what running the library needs — are theirs. |
 | Close a membership (`member.deactivate`) | Ending a membership when a family leaves belongs with whoever approved it. Suspending — reversible — is theirs. |
 | Create staff, promote anybody, change a role | There is no code that does any of this. `setStaffRole` does not exist. |
 | Change settings, branding, consent or verification policy | Configuration is the owner's. |
@@ -104,3 +110,37 @@ them back.
 The last active Super Admin cannot be suspended or closed, and nobody can
 suspend, close or change their own account — the two ways a community library
 locks itself out of its own software.
+
+
+## Permanent deletion
+
+One permission, `user.delete`, held by the Super Admin and by nobody else. It
+permits an *attempt*; almost every attempt is refused.
+
+An account can be erased only if **nobody ever lived in it**. A reader who has
+borrowed a book, asked for one, had a photograph stored, appeared in the audit
+log or simply signed in once is refused; so is a librarian who has worked the
+desk, answered a child, verified a guardian or signed in. The last active Super
+Admin is refused outright, and nobody may delete themselves.
+
+Everything else is closed or archived instead, and the answer is always the same
+sentence:
+
+> This account has library history and cannot be permanently deleted.
+> Deactivate/archive it instead.
+
+The two situations this exists for are the duplicate card and the invitation
+sent to a mistyped address — both accounts with no history by definition.
+
+When a reader is deleted, the family's **registration request survives**, with
+its consent records and its guardian verification. The account goes; the
+library's record that somebody applied, and what they agreed to, stays. Every
+deletion and every refusal is audited, and the deletion's audit row is written
+inside the same transaction that performs it. See ADR-042.
+
+## The flat number
+
+`P-15`, `A-102`, `B12`, `Tower-A-15`. Letters, digits and hyphens between them,
+trimmed, twenty characters at most — enforced in the service, not only in the
+form. Nothing else in the application uses this rule, and names in particular do
+not. See ADR-041.

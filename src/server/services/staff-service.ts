@@ -8,6 +8,7 @@ import { EmailService } from "@/server/lib/email";
 import { ConflictError, NotFoundError, RuleViolationError, ValidationError } from "@/server/lib/errors";
 import { mintToken, revokeTokens, TOKEN_LIFETIME } from "@/server/lib/tokens";
 import { ROLE_KEYS } from "@/lib/permissions";
+import { DELETE_REFUSED_MESSAGE } from "@/server/services/account-service";
 import { env } from "@/server/env";
 
 /**
@@ -536,4 +537,144 @@ export async function reissueStaffActivation(staffUserId: string): Promise<boole
     expiresInDays: Math.round(TOKEN_LIFETIME.ACTIVATION.hours / 24),
     userId: staff.id,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Permanent deletion
+// ---------------------------------------------------------------------------
+
+/**
+ * Erases a staff account.
+ *
+ * The situation this is for: an invitation sent to a mistyped address, or to
+ * somebody who turned out not to be joining. Nothing else. A colleague who has
+ * worked a single shift has issued books, answered a child, or written a line
+ * into the audit log, and every one of those is a refusal — their account is
+ * deactivated, which keeps the record of what they did.
+ *
+ * Three guards no history check can substitute for:
+ *
+ *   1. **Nobody deletes themselves.** The same rule suspend and deactivate
+ *      already carry.
+ *   2. **The last active Super Admin is never removed.** Version 1 has exactly
+ *      one, so in practice this refuses every attempt to delete an
+ *      administrator — which is the intended answer.
+ *   3. **Deletion is audited inside the transaction**, carrying the name, the
+ *      email and the role, because afterwards there is no account left to look
+ *      at.
+ *
+ * Cascades take the roles, sessions and any live activation token with it.
+ */
+export async function deleteStaffAccount(
+  staffUserId: string,
+  reason: string,
+): Promise<{ displayName: string }> {
+  const actor = await requirePermission("user.delete");
+
+  if (staffUserId === actor.userId) {
+    throw new RuleViolationError(
+      "Self-deletion attempt",
+      "You cannot delete your own account.",
+    );
+  }
+
+  const trimmed = reason.trim();
+  if (trimmed.length < 3) {
+    throw new ValidationError(
+      { reason: "Please note why, for the library's records." },
+      "Staff deletion attempted without a reason",
+    );
+  }
+
+  // `loadStaff` scopes to kind STAFF and to this library, so a reader's id or
+  // another community's staff id resolves to nothing.
+  const staff = await loadStaff(actor, staffUserId);
+
+  if (isSuperAdmin(staff)) {
+    await assertNotLastSuperAdmin(actor.libraryId, staff.id);
+  }
+
+  const [
+    auditRows,
+    issued,
+    returned,
+    cancelled,
+    loanEvents,
+    borrowDecisions,
+    renewalDecisions,
+    verificationsPerformed,
+    donationsRecorded,
+    consentsRecorded,
+    registrationsReviewed,
+    mediaUploaded,
+    account,
+  ] = await Promise.all([
+    prisma.auditLog.count({ where: { actorUserId: staff.id } }),
+    prisma.loan.count({ where: { issuedById: staff.id } }),
+    prisma.loan.count({ where: { returnedById: staff.id } }),
+    prisma.loan.count({ where: { cancelledById: staff.id } }),
+    prisma.loanEvent.count({ where: { actorUserId: staff.id } }),
+    prisma.borrowRequest.count({ where: { decidedById: staff.id } }),
+    prisma.renewalRequest.count({ where: { decidedById: staff.id } }),
+    prisma.guardianVerification.count({ where: { performedById: staff.id } }),
+    prisma.donation.count({ where: { recordedById: staff.id } }),
+    prisma.consentRecord.count({ where: { recordedById: staff.id } }),
+    prisma.registrationRequest.count({ where: { reviewedById: staff.id } }),
+    prisma.mediaObject.count({ where: { uploadedById: staff.id } }),
+    prisma.appUser.findUnique({ where: { id: staff.id }, select: { lastLoginAt: true } }),
+  ]);
+
+  const history: string[] = [];
+  if (auditRows > 0) history.push("they appear in the library's records");
+  if (issued + returned + cancelled > 0) history.push("they have worked the desk");
+  if (loanEvents > 0) history.push("they have recorded something about a loan");
+  if (borrowDecisions + renewalDecisions > 0) history.push("they have answered a child");
+  if (verificationsPerformed > 0) history.push("they have confirmed a guardian");
+  if (donationsRecorded > 0) history.push("they have recorded a donation");
+  if (consentsRecorded > 0) history.push("they have recorded a consent");
+  if (registrationsReviewed > 0) history.push("they have reviewed a registration");
+  if (mediaUploaded > 0) history.push("they have uploaded a picture");
+  if (account?.lastLoginAt) history.push("they have signed in");
+
+  if (history.length > 0) {
+    await recordAudit(prisma, {
+      libraryId: actor.libraryId,
+      action: AUDIT_ACTIONS.USER_DELETE_REFUSED,
+      entityType: "app_user",
+      entityId: staff.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      metadata: { kind: "STAFF", because: history },
+    }).catch(() => undefined);
+
+    throw new RuleViolationError(
+      `Refusing to delete staff ${staff.id}: ${history.join(", ")}`,
+      DELETE_REFUSED_MESSAGE,
+    );
+  }
+
+  await revokeAllSessionsForUser(staff.id);
+
+  await prisma.$transaction(async (tx) => {
+    await recordAudit(tx, {
+      libraryId: actor.libraryId,
+      action: AUDIT_ACTIONS.USER_DELETED,
+      entityType: "app_user",
+      entityId: staff.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      metadata: {
+        kind: "STAFF",
+        displayName: staff.displayName,
+        email: staff.email,
+        roles: staff.userRoles.map((entry) => entry.role.key),
+        previousStatus: staff.status,
+        reason: trimmed.slice(0, 500),
+      },
+    });
+
+    await tx.appUser.delete({ where: { id: staff.id } });
+  });
+
+  return { displayName: staff.displayName };
 }

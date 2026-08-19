@@ -14,6 +14,11 @@ import {
 } from "@/server/actions/registration-actions";
 import { Icon } from "@/components/ui/icon";
 import { IconMedallion } from "@/components/ui/states";
+import {
+  APARTMENT_HINT,
+  APARTMENT_MAX_LENGTH,
+  APARTMENT_PATTERN,
+} from "@/lib/apartment";
 
 const INITIAL: RegistrationFormState = { status: "idle" };
 
@@ -103,12 +108,25 @@ export function JoinForm({
             />
           </Field>
 
-          <Field id="apartment" label="Your flat" error={fieldError("apartment")} required>
+          <Field
+            id="apartment"
+            label="Your flat"
+            hint={APARTMENT_HINT}
+            error={fieldError("apartment")}
+            required
+          >
+            {/*
+              The browser check is a courtesy — it catches a typo before the page
+              reloads. The server refuses the same values whether or not this
+              attribute survived the journey. See src/lib/apartment.ts.
+            */}
             <TextInput
               id="apartment"
               name="apartment"
               autoComplete="off"
-              placeholder="P15"
+              placeholder="P-15"
+              maxLength={APARTMENT_MAX_LENGTH}
+              pattern={APARTMENT_PATTERN.source}
               required
               invalid={Boolean(fieldError("apartment"))}
             />

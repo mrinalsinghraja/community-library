@@ -17,9 +17,16 @@ const INITIAL: DeskActionState = { status: "idle" };
 /**
  * Approve and reject controls for one registration.
  *
- * Approve is one click, because it is the common case and a librarian may have
- * a child waiting. Reject asks for a reason first — the reason is for the
- * library's own records and is never sent to the family.
+ * Approve is one click, because it is the common case and a child may be
+ * waiting. Reject asks for a reason first — the reason is for the library's own
+ * records and is never sent to the family.
+ *
+ * **Deciding is the Super Admin's.** A librarian holds `registration.view` and
+ * not `registration.review`, so they see the whole submission — that is how
+ * they recognise the family at the desk — and they see no Approve or Reject
+ * button at all. The server refuses either way: `approveRegistration` and
+ * `rejectRegistration` both call `requirePermission("registration.review")`, so
+ * hiding the buttons removes a dead end, not a control. See ADR-040.
  *
  * When the library requires stronger guardian verification than the form can
  * produce, the approve button is replaced by the way to close that gap. The
@@ -30,11 +37,13 @@ export function ReviewActions({
   registrationId,
   verificationSatisfied,
   awaitingGuardian,
+  canReview,
   canVerify,
 }: {
   registrationId: string;
   verificationSatisfied: boolean;
   awaitingGuardian: boolean;
+  canReview: boolean;
   canVerify: boolean;
 }) {
   const [approveState, approve, approving] = useActionState(approveRegistrationAction, INITIAL);
@@ -121,6 +130,23 @@ export function ReviewActions({
             </Button>
           </div>
         </form>
+      ) : !canReview ? (
+        /* A librarian's view: everything above this point still renders, so the
+           details are all there to read. What is missing is the decision. */
+        <div className="flex flex-col gap-3">
+          <p className="rounded-lg bg-warn-wash px-3 py-2 text-base font-bold text-ink">
+            Waiting for Super Admin approval.
+          </p>
+          <p className="text-base text-ink-soft">
+            You can review the details, but only the Super Admin can approve or reject a new
+            member.
+          </p>
+          {canVerify && !verificationSatisfied ? (
+            <Button size="sm" onClick={() => setShowVerify(true)} icon={<Icon name="handshake" />}>
+              Confirm the guardian
+            </Button>
+          ) : null}
+        </div>
       ) : (
         <div className="flex flex-wrap gap-2">
           {verificationSatisfied ? (

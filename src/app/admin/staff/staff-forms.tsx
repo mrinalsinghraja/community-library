@@ -8,6 +8,7 @@ import { Field, TextInput } from "@/components/ui/field";
 import {
   createStaffAction,
   deactivateStaffAction,
+  deleteStaffAction,
   issueStaffActivationLinkAction,
   reactivateStaffAction,
   reissueStaffActivationAction,
@@ -78,29 +79,39 @@ export function CreateStaffForm() {
 /** Per-person controls. `isSelf` disables everything that would lock you out. */
 export function StaffRowActions({
   staffId,
+  displayName,
   status,
   isSelf,
   mustSetPassword,
   invitationEmailSent,
+  canDelete,
 }: {
   staffId: string;
+  displayName: string;
   status: string;
   isSelf: boolean;
   /** They have not chosen a password yet, so the invitation still matters. */
   mustSetPassword: boolean;
   /** Null when nothing was ever attempted. False when the mailer refused. */
   invitationEmailSent: boolean | null;
+  /** Super Admin only. Hiding it is a courtesy; the service is what refuses. */
+  canDelete: boolean;
 }) {
   const [suspendState, suspend, suspending] = useActionState(suspendStaffAction, INITIAL);
   const [reactivateState, reactivate, reactivating] = useActionState(reactivateStaffAction, INITIAL);
   const [deactivateState, deactivate, deactivating] = useActionState(deactivateStaffAction, INITIAL);
   const [reissueState, reissue, reissuing] = useActionState(reissueStaffActivationAction, INITIAL);
 
-  const [prompt, setPrompt] = useState<"suspend" | "deactivate" | null>(null);
+  const [deleteState, remove, removing] = useActionState(deleteStaffAction, INITIAL);
 
-  const state = [suspendState, reactivateState, deactivateState, reissueState].find(
+  const [prompt, setPrompt] = useState<"suspend" | "deactivate" | "delete" | null>(null);
+  const [typedName, setTypedName] = useState("");
+
+  const state = [suspendState, reactivateState, deactivateState, reissueState, deleteState].find(
     (candidate) => candidate.status !== "idle",
   );
+
+  const nameMatches = typedName.trim().toLowerCase() === displayName.trim().toLowerCase();
 
   if (isSelf) {
     return (
@@ -125,7 +136,55 @@ export function StaffRowActions({
         <ActivationFallback staffId={staffId} emailSent={invitationEmailSent} />
       ) : null}
 
-      {prompt ? (
+      {prompt === "delete" ? (
+        /*
+          Two deliberate steps, and the second asks for the person's name. Not
+          security — whoever is here already holds `user.delete` — but a pause,
+          because this is the one control on the screen that removes a record
+          rather than changing its state.
+        */
+        <form action={remove} className="flex flex-col gap-2">
+          <input type="hidden" name="staffId" value={staffId} />
+          <p className="rounded-lg bg-danger-wash px-3 py-2 text-base text-ink">
+            This removes {displayName}&rsquo;s account for good. It cannot be undone, and it only
+            works for an account nobody has ever used.
+          </p>
+          <label htmlFor={`staff-confirm-${staffId}`} className="text-base font-bold text-ink">
+            Type {displayName} to confirm
+          </label>
+          <TextInput
+            id={`staff-confirm-${staffId}`}
+            value={typedName}
+            onChange={(event) => setTypedName(event.target.value)}
+            autoComplete="off"
+          />
+          <label htmlFor={`staff-delete-reason-${staffId}`} className="text-base font-bold text-ink">
+            Why? (our records only)
+          </label>
+          <TextInput
+            id={`staff-delete-reason-${staffId}`}
+            name="reason"
+            required
+            minLength={3}
+            maxLength={500}
+          />
+          <div className="flex gap-2">
+            <Button type="submit" variant="danger" size="sm" disabled={!nameMatches || removing}>
+              {removing ? "Deleting…" : "Delete permanently"}
+            </Button>
+            <Button
+              variant="quiet"
+              size="sm"
+              onClick={() => {
+                setPrompt(null);
+                setTypedName("");
+              }}
+            >
+              Keep this account
+            </Button>
+          </div>
+        </form>
+      ) : prompt ? (
         <form action={prompt === "suspend" ? suspend : deactivate} className="flex flex-col gap-2">
           <input type="hidden" name="staffId" value={staffId} />
           <label htmlFor={`staff-reason-${staffId}`} className="text-base font-bold text-ink">
@@ -168,6 +227,12 @@ export function StaffRowActions({
           {!isPaused ? (
             <Button variant="quiet" size="sm" onClick={() => setPrompt("deactivate")}>
               Close
+            </Button>
+          ) : null}
+
+          {canDelete ? (
+            <Button variant="quiet" size="sm" onClick={() => setPrompt("delete")}>
+              Delete permanently
             </Button>
           ) : null}
         </div>

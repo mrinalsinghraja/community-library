@@ -129,6 +129,19 @@ export const PERMISSIONS = {
   "settings.edit": { category: "administration", description: "Change library rules and settings" },
   "branding.edit": { category: "administration", description: "Change logo, colours and names" },
   "user.manage_staff": { category: "administration", description: "Create and manage staff accounts" },
+  /**
+   * Erase an account that has no library history.
+   *
+   * Deliberately separate from `member.deactivate` and `user.manage_staff`.
+   * Closing an account is a lifecycle change that keeps the record; this key
+   * removes the record, and the two should never be reachable through the same
+   * grant. Only SUPER_ADMIN holds it, and the services behind it refuse
+   * anything that has borrowed, asked, been photographed or acted.
+   */
+  "user.delete": {
+    category: "administration",
+    description: "Permanently delete an account that has no library history",
+  },
   "role.manage": {
     category: "administration",
     description: "Not yet implemented — nothing in the application reads this",
@@ -359,6 +372,7 @@ export const ASSIGNABLE_STAFF_ROLE_KEYS: readonly RoleKey[] = [ROLE_KEYS.LIBRARI
  */
 export const DESTRUCTIVE_PERMISSIONS: readonly PermissionKey[] = [
   "book.delete",
+  "user.delete",
   "member.deactivate",
   "registration.review",
   "role.manage",
@@ -384,6 +398,7 @@ export const PERMISSIONS_FORBIDDEN_FOR_CHILD_STAFF: readonly PermissionKey[] = [
   "member.manage_photo",
   "guardian.verify",
   "book.delete",
+  "user.delete",
   "loan.override_rules",
   // Correcting circulation state means editing what the record says happened.
   // A child volunteer may hand books out and take them back all day; rewriting

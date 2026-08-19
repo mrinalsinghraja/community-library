@@ -14,12 +14,14 @@ import {
 } from "@/server/services/password-service";
 import {
   deactivateMember,
+  deleteMemberAccount,
   reactivateMember,
   reissueActivation,
   suspendMember,
 } from "@/server/services/account-service";
 import {
   createStaffAccount,
+  deleteStaffAccount,
   issueStaffActivationLink,
   deactivateStaff,
   reactivateStaff,
@@ -229,6 +231,33 @@ export async function deactivateMemberAction(
   }
 }
 
+/**
+ * Erases a reader's account, and says so plainly.
+ *
+ * `redirect` on success because the page the control lives on may be that
+ * reader's own detail page, which no longer exists. Redirecting from a server
+ * action throws by design, so it sits after the try/catch rather than inside
+ * it — a `NEXT_REDIRECT` caught by `toState` would be reported to the Super
+ * Admin as a failure of a deletion that in fact succeeded.
+ */
+export async function deleteMemberAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  let deleted: { displayName: string };
+  try {
+    deleted = await deleteMemberAccount(
+      String(formData.get("memberId") ?? ""),
+      String(formData.get("reason") ?? ""),
+    );
+  } catch (error) {
+    return toState(error);
+  }
+
+  revalidatePath("/desk/members");
+  redirect(`/desk/members?deleted=${encodeURIComponent(deleted.displayName)}`);
+}
+
 export async function reissueActivationAction(
   _previous: ActionState,
   formData: FormData,
@@ -351,6 +380,31 @@ export async function reissueStaffActivationAction(
     return {
       status: sent ? "success" : "error",
       message: sent ? "A fresh link has been sent." : "The link could not be sent.",
+    };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+/**
+ * Erases a staff account that was never used.
+ *
+ * Stays on `/admin/staff`, which survives the deletion, so the outcome is
+ * reported in place rather than through a redirect.
+ */
+export async function deleteStaffAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const deleted = await deleteStaffAccount(
+      String(formData.get("staffId") ?? ""),
+      String(formData.get("reason") ?? ""),
+    );
+    revalidatePath("/admin/staff");
+    return {
+      status: "success",
+      message: `${deleted.displayName}'s account has been deleted.`,
     };
   } catch (error) {
     return toState(error);

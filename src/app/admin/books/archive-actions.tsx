@@ -76,7 +76,7 @@ function DeleteButton({ copyId, copyCode }: { copyId: string; copyCode: string }
   if (!confirming) {
     return (
       <Button variant="quiet" size="sm" onClick={() => setConfirming(true)}>
-        Remove duplicate
+        Delete permanently
       </Button>
     );
   }
@@ -99,7 +99,7 @@ function DeleteButton({ copyId, copyCode }: { copyId: string; copyCode: string }
       />
       <div className="flex gap-2">
         <Button type="submit" variant="danger" size="sm">
-          Remove for good
+          Delete permanently
         </Button>
         <Button variant="quiet" size="sm" onClick={() => setConfirming(false)}>
           Keep it

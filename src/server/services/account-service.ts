@@ -430,3 +430,331 @@ export async function listMembers(options: { search?: string } = {}) {
     })),
   }));
 }
+
+// ---------------------------------------------------------------------------
+// One reader, in full
+// ---------------------------------------------------------------------------
+
+/**
+ * Everything the library holds about one reader, shaped for the person looking.
+ *
+ * Three blocks, and two of them can be null:
+ *
+ *   - **The card.** Name, age, flat, picture, card code, status. Operational —
+ *     every staff member who can see the reader list can see this.
+ *   - **Contact.** The guardian's name, phone and email. Present only for an
+ *     actor holding `member.view_contact`.
+ *   - **The decision.** How the family joined: when they applied, what they
+ *     consented to, and how the guardian was verified. Present only for an
+ *     actor holding `registration.review` — the person who makes that decision
+ *     is the person who needs to see the evidence behind it. A librarian runs
+ *     the library day to day and does not need to know, months later, which
+ *     consent boxes a parent ticked.
+ *
+ * Nothing here is a secret: no password hash, no token, no token hash, no
+ * session, no internal status reason. The select lists columns explicitly for
+ * that reason — a `include: { user: true }` would ship `passwordHash` to a
+ * React component the day somebody adds a spread.
+ */
+export interface MemberDetail {
+  id: string;
+  displayName: string;
+  status: UserStatus;
+  mustSetPassword: boolean;
+  lastLoginAt: Date | null;
+  createdAt: Date;
+  memberCode: string | null;
+  apartment: string | null;
+  dateOfBirth: Date | null;
+  avatarKey: string | null;
+  photoMediaId: string | null;
+  guardians: { id: string; fullName: string; email: string | null; phone: string | null; isPrimary: boolean }[];
+  /** Null when the actor may not see how the joining decision was made. */
+  registration: {
+    status: string;
+    submittedAt: Date;
+    reviewedAt: Date | null;
+    reviewedBy: string | null;
+    consents: { type: string; status: string; consentVersion: string; grantedAt: Date | null }[];
+  } | null;
+  /** Null for the same reason, and separately from consent: they are not the same question. */
+  verification: {
+    method: string;
+    status: string;
+    strength: string;
+    verifiedAt: Date | null;
+    performedBy: string | null;
+  }[] | null;
+}
+
+export async function getMemberDetail(memberUserId: string): Promise<MemberDetail> {
+  const actor = await requirePermission("member.view");
+  const canSeeContact = actor.permissions.has("member.view_contact");
+  const canSeeDecision = actor.permissions.has("registration.review");
+
+  const user = await prisma.appUser.findFirst({
+    where: { id: memberUserId, libraryId: actor.libraryId, kind: "MEMBER" },
+    select: {
+      id: true,
+      displayName: true,
+      status: true,
+      mustSetPassword: true,
+      lastLoginAt: true,
+      createdAt: true,
+      memberProfile: {
+        select: {
+          memberCode: true,
+          apartment: true,
+          dateOfBirth: true,
+          avatarKey: true,
+          // The id only. The bytes come from /api/media/[id], which makes its
+          // own authorization decision for the person actually looking.
+          photoMediaId: true,
+        },
+      },
+      guardianLinks: {
+        orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+        select: {
+          isPrimary: true,
+          guardian: { select: { id: true, fullName: true, email: true, phone: true } },
+        },
+      },
+    },
+  });
+
+  // `kind: "MEMBER"` is in the where clause, so a staff id resolves to nothing
+  // here rather than leaking a colleague's record through the reader screen.
+  if (!user) {
+    throw new NotFoundError(`Reader ${memberUserId} not found in library ${actor.libraryId}`);
+  }
+
+  const registration = canSeeDecision
+    ? await prisma.registrationRequest.findFirst({
+        where: { libraryId: actor.libraryId, createdMemberUserId: user.id },
+        select: {
+          status: true,
+          submittedAt: true,
+          reviewedAt: true,
+          reviewedBy: { select: { displayName: true } },
+          consents: {
+            select: { type: true, status: true, consentVersion: true, grantedAt: true },
+            orderBy: { grantedAt: "asc" },
+          },
+        },
+      })
+    : null;
+
+  const verifications = canSeeDecision
+    ? await prisma.guardianVerification.findMany({
+        where: { memberUserId: user.id },
+        orderBy: { requestedAt: "asc" },
+        select: {
+          method: true,
+          status: true,
+          strength: true,
+          verifiedAt: true,
+          performedBy: { select: { displayName: true } },
+        },
+      })
+    : null;
+
+  return {
+    id: user.id,
+    displayName: user.displayName,
+    status: user.status,
+    mustSetPassword: user.mustSetPassword,
+    lastLoginAt: user.lastLoginAt,
+    createdAt: user.createdAt,
+    memberCode: user.memberProfile?.memberCode ?? null,
+    apartment: user.memberProfile?.apartment ?? null,
+    dateOfBirth: user.memberProfile?.dateOfBirth ?? null,
+    avatarKey: user.memberProfile?.avatarKey ?? null,
+    photoMediaId: user.memberProfile?.photoMediaId ?? null,
+    // Stripped at the service boundary, not in the template. A component that
+    // forgets to check must still get nothing.
+    guardians: user.guardianLinks.map((link) => ({
+      id: link.guardian.id,
+      fullName: link.guardian.fullName,
+      email: canSeeContact ? link.guardian.email : null,
+      phone: canSeeContact ? link.guardian.phone : null,
+      isPrimary: link.isPrimary,
+    })),
+    registration: registration
+      ? {
+          status: registration.status,
+          submittedAt: registration.submittedAt,
+          reviewedAt: registration.reviewedAt,
+          reviewedBy: registration.reviewedBy?.displayName ?? null,
+          consents: registration.consents.map((consent) => ({
+            type: consent.type,
+            status: consent.status,
+            consentVersion: consent.consentVersion,
+            grantedAt: consent.grantedAt,
+          })),
+        }
+      : null,
+    verification: verifications
+      ? verifications.map((entry) => ({
+          method: entry.method,
+          status: entry.status,
+          strength: entry.strength,
+          verifiedAt: entry.verifiedAt,
+          performedBy: entry.performedBy?.displayName ?? null,
+        }))
+      : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Permanent deletion
+// ---------------------------------------------------------------------------
+
+/**
+ * The one message a member of staff ever sees when a deletion is refused.
+ *
+ * Deliberately the same sentence whatever the reason. Which of eight checks
+ * caught it is the library's business, not a hint to be read off a screen; the
+ * audit row records the actual reasons, and the answer for the person standing
+ * there is the same in every case: archive it instead.
+ */
+export const DELETE_REFUSED_MESSAGE =
+  "This account has library history and cannot be permanently deleted. Deactivate/archive it instead.";
+
+/**
+ * Erases a reader's account.
+ *
+ * This is the only operation in the application that removes a person, and it
+ * exists for exactly one situation: a duplicate card that was created and never
+ * used. Anything that has been *lived in* — a book borrowed, a book asked for,
+ * a photograph held, a single sign-in — is refused and archived instead, because
+ * the library's account of what happened must not develop holes.
+ *
+ * What survives a deletion, and why:
+ *
+ *   - **The registration request.** It is the family's application and the home
+ *     of their consent records. The account goes; the library's record that
+ *     somebody applied, and what they agreed to, stays. `createdMemberUserId`
+ *     is cleared so it does not point at a row that no longer exists.
+ *   - **Guardian verifications.** Detached from the member and left attached to
+ *     the registration, because the FK would otherwise cascade and delete the
+ *     library's evidence that a grown-up was ever checked. A verification that
+ *     could not survive the detach is itself a refusal.
+ *   - **The guardian.** Only the join row is removed. A parent is usually the
+ *     contact for more than one child.
+ *   - **The audit row.** Written inside the same transaction as the delete, and
+ *     carrying the name and card code, because afterwards it is the only record
+ *     the library has that this account existed at all.
+ *
+ * Cascades handle the rest: profile, roles, sessions and any live tokens.
+ */
+export async function deleteMemberAccount(
+  memberUserId: string,
+  reason: string,
+): Promise<{ displayName: string }> {
+  const actor = await requirePermission("user.delete");
+
+  const trimmed = reason.trim();
+  if (trimmed.length < 3) {
+    throw new ValidationError(
+      { reason: "Please note why, for the library's records." },
+      "Member deletion attempted without a reason",
+    );
+  }
+
+  // Reuses the member loader, which refuses a STAFF id outright: a colleague is
+  // never reachable through the reader path, whatever id is posted.
+  const member = await loadMember(actor, memberUserId);
+
+  const [
+    loans,
+    borrowRequests,
+    renewalRequests,
+    loanEvents,
+    donations,
+    auditRows,
+    profile,
+    account,
+    strandedVerifications,
+  ] = await Promise.all([
+    prisma.loan.count({ where: { memberUserId: member.id } }),
+    prisma.borrowRequest.count({ where: { memberUserId: member.id } }),
+    prisma.renewalRequest.count({ where: { requestedById: member.id } }),
+    prisma.loanEvent.count({ where: { actorUserId: member.id } }),
+    prisma.donation.count({ where: { donorUserId: member.id } }),
+    prisma.auditLog.count({ where: { actorUserId: member.id } }),
+    prisma.memberProfile.findUnique({
+      where: { userId: member.id },
+      select: { photoMediaId: true },
+    }),
+    prisma.appUser.findUnique({ where: { id: member.id }, select: { lastLoginAt: true } }),
+    // A verification carrying neither a guardian nor a registration would break
+    // its own "always about somebody" CHECK the moment the member is detached.
+    prisma.guardianVerification.count({
+      where: { memberUserId: member.id, guardianId: null, registrationRequestId: null },
+    }),
+  ]);
+
+  const history: string[] = [];
+  if (loans > 0) history.push("they have borrowed a book");
+  if (borrowRequests > 0) history.push("they have asked for a book");
+  if (renewalRequests > 0) history.push("they have asked to keep a book longer");
+  if (loanEvents > 0) history.push("the desk has recorded something for them");
+  if (donations > 0) history.push("they gave a book to the library");
+  if (auditRows > 0) history.push("they have acted in the library's records");
+  if (profile?.photoMediaId) history.push("the library holds a photograph of them");
+  if (account?.lastLoginAt) history.push("they have signed in");
+  if (strandedVerifications > 0) history.push("a guardian check is attached only to this account");
+
+  if (history.length > 0) {
+    await recordAudit(prisma, {
+      libraryId: actor.libraryId,
+      action: AUDIT_ACTIONS.USER_DELETE_REFUSED,
+      entityType: "app_user",
+      entityId: member.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      metadata: { kind: "MEMBER", because: history },
+    }).catch(() => undefined);
+
+    throw new RuleViolationError(
+      `Refusing to delete member ${member.id}: ${history.join(", ")}`,
+      DELETE_REFUSED_MESSAGE,
+    );
+  }
+
+  // Before, not after: if the delete then fails, the account has been signed
+  // out unnecessarily, which is the harmless direction to be wrong in.
+  await revokeAllSessionsForUser(member.id);
+
+  await prisma.$transaction(async (tx) => {
+    await recordAudit(tx, {
+      libraryId: actor.libraryId,
+      action: AUDIT_ACTIONS.USER_DELETED,
+      entityType: "app_user",
+      entityId: member.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      metadata: {
+        kind: "MEMBER",
+        displayName: member.displayName,
+        memberCode: member.memberProfile?.memberCode ?? null,
+        previousStatus: member.status,
+        reason: trimmed.slice(0, 500),
+      },
+    });
+
+    await tx.registrationRequest.updateMany({
+      where: { createdMemberUserId: member.id },
+      data: { createdMemberUserId: null },
+    });
+
+    await tx.guardianVerification.updateMany({
+      where: { memberUserId: member.id },
+      data: { memberUserId: null },
+    });
+
+    await tx.appUser.delete({ where: { id: member.id } });
+  });
+
+  return { displayName: member.displayName };
+}

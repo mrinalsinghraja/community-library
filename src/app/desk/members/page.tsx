@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { MemberActions } from "@/app/desk/members/member-actions";
 import { PhotoActions } from "@/app/desk/members/photo-actions";
@@ -45,14 +46,14 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function MembersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; deleted?: string }>;
 }) {
   const actor = await requirePermissionForPage("member.view", {
     signedOutTo: "/login?next=/desk/members",
   });
   const branding = await getBrandingSafe();
   const { settings } = await getCurrentLibrary();
-  const { q } = await searchParams;
+  const { q, deleted } = await searchParams;
 
   const members = await listMembers({ search: q });
   const canSeeContact = actor.permissions.has("member.view_contact");
@@ -60,6 +61,17 @@ export default async function MembersPage({
 
   return (
     <StaffShell branding={branding} actor={actor} title="Readers">
+      {/* Set by the redirect after a permanent deletion. The reader's own page
+          no longer exists to say it on. */}
+      {deleted ? (
+        <p
+          role="status"
+          className="mb-6 rounded-[var(--radius-field)] bg-success-wash px-5 py-4 text-base font-bold text-ink"
+        >
+          {deleted}&rsquo;s account has been deleted.
+        </p>
+      ) : null}
+
       <form method="get" className="mb-6 flex flex-wrap items-end gap-3">
         <div className="min-w-64 flex-1">
           <Field id="q" label="Find a reader" hint="By name or library card number.">
@@ -100,7 +112,10 @@ export default async function MembersPage({
                     size={40}
                   />
                   <div>
-                    <p className="font-bold text-ink">{member.displayName}</p>
+                    {/* The whole record, for whoever is allowed to see it. */}
+                    <Link href={`/desk/members/${member.id}`} className="font-bold text-ink">
+                      {member.displayName}
+                    </Link>
                     {member.memberProfile?.dateOfBirth ? (
                       <p className="text-base text-ink-soft">
                         {ageInYears(member.memberProfile.dateOfBirth, settings.timezone)} years old

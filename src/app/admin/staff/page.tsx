@@ -34,6 +34,8 @@ export default async function StaffPage() {
   const branding = await getBrandingSafe();
   const { settings } = await getCurrentLibrary();
   const staff = await listStaff();
+  // Super Admin only, and refused again by `deleteStaffAccount`.
+  const canDelete = actor.permissions.has("user.delete");
 
   return (
     <StaffShell branding={branding} actor={actor} title="Staff">
@@ -46,7 +48,10 @@ export default async function StaffPage() {
           container; the page is never meant to.
         */}
         <div className="min-w-0">
-          <DataTable headers={["Name", "Role", "Status", "Added", "Last signed in", "Actions"]}>
+          {/* The columns the brief asks for, in that order. "Last signed in"
+              rides under Status rather than taking a seventh column: on a
+              narrow desk screen the table already scrolls. */}
+          <DataTable headers={["Name", "Email", "Role", "Status", "Added", "Actions"]}>
             {staff.map((person) => {
               const primaryRole = person.roleKeys.includes(ROLE_KEYS.SUPER_ADMIN)
                 ? ROLE_KEYS.SUPER_ADMIN
@@ -56,7 +61,10 @@ export default async function StaffPage() {
                 <tr key={person.id} className="border-t-2 border-hairline align-top">
                   <td className="px-4 py-3">
                     <p className="font-bold text-ink">{person.displayName}</p>
-                    <p className="break-words text-base text-ink-soft">{person.email}</p>
+                  </td>
+
+                  <td className="px-4 py-3 text-base text-ink-soft">
+                    <span className="break-words">{person.email}</span>
                   </td>
 
                   <td className="px-4 py-3">
@@ -69,25 +77,26 @@ export default async function StaffPage() {
                     <StatusBadge tone={STATUS_TONE[person.status] ?? "neutral"}>
                       {person.status === "INVITED" ? "Not set up yet" : person.status}
                     </StatusBadge>
+                    <p className="mt-1 text-base text-ink-soft">
+                      {person.lastLoginAt
+                        ? `Last signed in ${formatInTimezone(person.lastLoginAt, settings.timezone, "d MMM yyyy")}`
+                        : "Never signed in"}
+                    </p>
                   </td>
 
                   <td className="px-4 py-3 text-base text-ink-soft">
                     {formatInTimezone(person.createdAt, settings.timezone, "d MMM yyyy")}
                   </td>
 
-                  <td className="px-4 py-3 text-base text-ink-soft">
-                    {person.lastLoginAt
-                      ? formatInTimezone(person.lastLoginAt, settings.timezone, "d MMM yyyy")
-                      : "Never"}
-                  </td>
-
                   <td className="px-4 py-3">
                     <StaffRowActions
                       staffId={person.id}
+                      displayName={person.displayName}
                       status={person.status}
                       mustSetPassword={person.mustSetPassword}
                       invitationEmailSent={person.invitationEmailSent}
                       isSelf={person.id === actor.userId}
+                      canDelete={canDelete}
                     />
                   </td>
                 </tr>

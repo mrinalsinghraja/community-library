@@ -28,6 +28,19 @@ export const AUDIT_ACTIONS = {
   USER_SUSPENDED: "user.suspended",
   USER_REACTIVATED: "user.reactivated",
   USER_DEACTIVATED: "user.deactivated",
+  /**
+   * An account was erased. The row outlives the account on purpose: it is the
+   * library's only remaining record that the person existed, so it carries the
+   * display name, the role and what was checked before the deletion went ahead.
+   * Written inside the same transaction as the delete.
+   */
+  USER_DELETED: "user.deleted",
+  /**
+   * A deletion the rules turned down, kept for the same reason
+   * `loan.issue.refused` is: a refused destructive action is the interesting
+   * one, and it is the only trace an attempt leaves.
+   */
+  USER_DELETE_REFUSED: "user.delete_refused",
   ROLE_GRANTED: "user.role.granted",
   ROLE_REVOKED: "user.role.revoked",
   ROLE_PERMISSIONS_CHANGED: "role.permissions.changed",

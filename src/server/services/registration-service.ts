@@ -35,6 +35,7 @@ import {
 } from "@/server/services/guardian-verification-service";
 import { ageInYears } from "@/lib/dates";
 import { CONSENT_TEXTS, CURRENT_CONSENT_TYPES, REQUIRED_CONSENT_TYPES } from "@/lib/consent";
+import { APARTMENT_ERROR, isValidApartment, normaliseApartment } from "@/lib/apartment";
 import {
   VERIFICATION_CHALLENGE_HOURS,
   highestStrength,
@@ -89,6 +90,16 @@ export async function submitRegistration(input: SubmitRegistrationInput): Promis
     );
   }
 
+  // --- Flat number ----------------------------------------------------------
+  //
+  // Checked here and not only in the form's schema. The action is one caller;
+  // this service is the boundary, and a value that never passed through a zod
+  // schema — a seed, a script, a future import — must be refused in the same
+  // way. See src/lib/apartment.ts for what the shape is and why it is narrow.
+  if (!isValidApartment(input.apartment)) {
+    throw new ValidationError({ apartment: APARTMENT_ERROR }, "Registration submitted with an invalid flat number");
+  }
+
   // --- Consent must be present ----------------------------------------------
   if (!input.consentTypes.includes("CHILD_ACCOUNT_CREATION")) {
     throw new ValidationError(
@@ -122,7 +133,7 @@ export async function submitRegistration(input: SubmitRegistrationInput): Promis
           status: "PENDING",
           childName: input.childName.trim(),
           childDob: input.childDateOfBirth,
-          apartment: input.apartment.trim(),
+          apartment: normaliseApartment(input.apartment),
           guardianName: input.guardianName.trim(),
           guardianEmail,
           guardianPhone: input.guardianPhone.trim(),

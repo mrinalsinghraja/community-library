@@ -1,0 +1,34 @@
+# Findings this repository has looked at and deliberately keeps.
+#
+# Every line is a FINGERPRINT — commit, file, rule and line — not a rule name
+# and not a path. Ignoring a whole rule or a whole directory would mean the next
+# real secret committed to a test file goes unreported; these entries cannot do
+# that, because a fingerprint stops matching the moment the line changes.
+#
+# ---------------------------------------------------------------------------
+# tests/database/staff-activation-link.test.ts — the password a test types
+# ---------------------------------------------------------------------------
+#
+# Seven hits, two distinct strings, both invented for that file: they are what
+# the test passes to `activateAccount` as the password a newly invited librarian
+# chooses. They authenticate nothing. No account in development, in the test
+# database or in production has ever had either of them, they appear in no
+# environment file, and they exist only inside a suite that runs against a
+# throwaway database it truncates on every test.
+#
+# They trip `generic-api-key` on entropy alone — four hyphenated words and a
+# number is exactly the shape of a generated key, which is also why they were
+# chosen: a password the real policy would accept. The alternative, weakening
+# the passwords until the scanner stops noticing, would make the test prove
+# less.
+#
+# Noted for the record: the scan run before this file entered history reported
+# no leaks, because at that moment the commit below did not exist. The finding
+# arrived with the commit, not with a later change.
+b74c647f61857e642ddb36f206b25699a87837b3:tests/database/staff-activation-link.test.ts:generic-api-key:157
+b74c647f61857e642ddb36f206b25699a87837b3:tests/database/staff-activation-link.test.ts:generic-api-key:197
+b74c647f61857e642ddb36f206b25699a87837b3:tests/database/staff-activation-link.test.ts:generic-api-key:204
+b74c647f61857e642ddb36f206b25699a87837b3:tests/database/staff-activation-link.test.ts:generic-api-key:227
+b74c647f61857e642ddb36f206b25699a87837b3:tests/database/staff-activation-link.test.ts:generic-api-key:247
+b74c647f61857e642ddb36f206b25699a87837b3:tests/database/staff-activation-link.test.ts:generic-api-key:255
+b74c647f61857e642ddb36f206b25699a87837b3:tests/database/staff-activation-link.test.ts:generic-api-key:360

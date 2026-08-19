@@ -1136,3 +1136,132 @@ now guards the one irreversible action in the system.
 **Held by test.** `tests/database/deletion.test.ts` — a librarian and a reader
 are both refused server-side; the Super Admin may remove a copy with no history
 and may not remove one that has been borrowed, asked for or donated.
+
+---
+
+## ADR-040 — A librarian sees the whole family, and decides nothing about them
+
+**Status.** Accepted, Version 1.
+
+**Context.** ADR-037 moved `registration.review` to the Super Admin. That
+settled who is *authorised* to approve a child's registration and left the
+screen unchanged: the librarian still saw an Approve button, pressed it, and got
+a refusal. A control that exists in order to fail is worse than no control — it
+teaches the person using it that the software is unreliable, and it is the last
+thing anybody wants to discover with a family standing at the desk.
+
+The opposite mistake was equally available: hide the registration queue from
+librarians altogether. That would be wrong for a different reason. The librarian
+is the one who will meet the child, recognise the family, and know that this is
+the second application from flat P-15.
+
+**Decision.** Separate *seeing* from *deciding*, all the way through the screen.
+
+- `/desk/registrations` renders the **whole submission** for anybody holding
+  `registration.view`: the child's name, age, flat and picture; the guardian's
+  name, phone and email; when it arrived; every consent, one line at a time,
+  with photo consent shown only when a photograph was actually uploaded; and how
+  the guardian was verified, by which method and by whom.
+- The **decision** is behind `registration.review`. A librarian sees no Approve
+  button and no Reject button, and reads instead: *"Waiting for Super Admin
+  approval."*
+- The librarian keeps `guardian.verify`, because confirming a grown-up at the
+  desk is their job and is not a decision about membership.
+
+**Consequence.** The two failure modes swap places: an unauthorised approval is
+now impossible to attempt rather than merely refused, and the information a
+librarian needs in order to be useful is not rationed to protect an authority
+they never had.
+
+The reader detail page draws the same line from the other side. Contact details
+follow `member.view_contact`; the *evidence behind the joining decision* —
+consent records and guardian verification — follows `registration.review`, so
+the person who made the decision can see what it was made on and the person
+running the library day to day sees the card, the flat and the phone number.
+
+**Held by test.** `tests/database/people-management.test.ts` — a librarian reads
+the whole submission and is refused both approve and reject server-side; a
+reader cannot see the queue at all; the Super Admin's reader detail carries the
+consent and verification blocks and the librarian's carries nulls.
+`tests/unit/people-management-ui.test.ts` holds the screen to it.
+
+---
+
+## ADR-041 — A flat number has a shape; a name does not
+
+**Status.** Accepted, Version 1.
+
+**Context.** The registration form accepted any twenty characters as a flat
+number. That string is rendered on the registration queue, the reader list and
+the reader detail page — it is one of the few free-text values a stranger can
+put in front of library staff — and "flat number" is not free text in a building
+that assigns them.
+
+**Decision.** One narrow, isomorphic rule in `src/lib/apartment.ts`: alphanumeric
+groups joined by single hyphens, trimmed, at most twenty characters. `P-15`,
+`A-102`, `B12` and `Tower-A-15` are accepted; `P@15`, `P/15`, `<P-15>` and blank
+are refused, all with the same message — *"Enter a valid flat number, for example
+P-15."* — because a family should not have to work out which character offended.
+
+Enforced in the **service**, not only in the form's schema. The action is one
+caller; a seed, a script or a future import is another, and the boundary that
+must refuse is the one they all pass through. The form's `pattern` attribute is
+a courtesy that catches a typo before a page reload.
+
+**Deliberately not applied to names.** A child called O'Brien or Anne-Marie must
+be able to join a library. A format rule that is right for a door number is
+wrong for a person, and the temptation to reuse it is exactly how that goes
+wrong.
+
+**Held by test.** `tests/unit/apartment.test.ts` for the shape, including a
+value whose second line is a script tag; `tests/database/people-management.test.ts`
+calls the service directly, bypassing the form, and is refused.
+
+---
+
+## ADR-042 — An account may be erased only if nobody ever lived in it
+
+**Status.** Accepted, Version 1.
+
+**Context.** ADR-039 established deletion for books. The same real problem
+exists for people: a family registered twice, or an invitation sent to a
+mistyped address. Neither is a person the library knows; both leave a row that
+misrepresents the membership.
+
+**Decision.** A permission of its own — `user.delete`, SUPER_ADMIN only — and
+the same rule ADR-039 drew for books, drawn around history rather than status.
+
+A **reader** is refused if they have borrowed a book, asked for one, had
+anything recorded about a loan, given a book, appear as an actor in the audit
+log, have a photograph held, or have ever signed in. An **invited or working
+librarian** is refused if they appear in the audit log, have worked the desk,
+answered a child, confirmed a guardian, recorded a donation or a consent,
+reviewed a registration, uploaded a picture, or have ever signed in. The last
+active Super Admin is refused outright, and nobody may delete themselves.
+
+Everything else is archived, and the refusal says so, in one sentence and always
+the same one: *"This account has library history and cannot be permanently
+deleted. Deactivate/archive it instead."* Which of the checks caught it is in
+the audit row, not on the screen.
+
+**What survives a reader's deletion.** The registration request — it is the
+family's application and the home of their consent records — with
+`created_member_user_id` cleared so it does not point at a row that is gone.
+Guardian verifications are *detached* from the member and left attached to the
+registration, because the foreign key would otherwise cascade and delete the
+library's evidence that a grown-up was ever checked; a verification that could
+not survive the detach is itself a refusal. The guardian survives: only the join
+row goes.
+
+**The audit row is written inside the transaction that performs the delete**,
+carrying the name, the card code or email, the role and the reason — afterwards
+it is the only record the library has that the account existed.
+
+**Consequence.** In practice almost nothing is deletable, which is the intended
+answer. The two accidents this exists for — the duplicate card and the mistyped
+invitation — are both cases where the account has no history by definition.
+
+**Held by test.** `tests/database/people-management.test.ts` — readers and
+librarians are refused server-side; an unused account goes and its family's
+application stays; a reader who has merely *asked* for a book cannot be deleted;
+the last Super Admin is protected; both the deletion and the refusal are audited.

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { CURRENT_CONSENT_TYPES, REQUIRED_CONSENT_TYPES, type ConsentTypeKey } from "@/lib/consent";
+import { APARTMENT_ERROR, APARTMENT_MAX_LENGTH, isValidApartment } from "@/lib/apartment";
 import { isAvatarKey } from "@/lib/avatars";
 import { toFriendlyMessage, ValidationError, isAppError } from "@/server/lib/errors";
 import { getCurrentLibrary } from "@/server/lib/settings";
@@ -32,7 +33,14 @@ const registrationSchema = z.object({
     .min(1, "Please give your child's date of birth.")
     .refine((value) => !Number.isNaN(Date.parse(value)), "That date does not look right.")
     .transform((value) => new Date(`${value}T00:00:00Z`)),
-  apartment: z.string().trim().min(1, "Which flat do you live in?").max(20),
+  // One rule, one message. `refine` rather than three chained checks, so a
+  // blank, an over-long value and `<P-15>` all come back saying the same thing —
+  // a family should not have to work out which part of a door number was wrong.
+  apartment: z
+    .string()
+    .trim()
+    .max(APARTMENT_MAX_LENGTH, APARTMENT_ERROR)
+    .refine(isValidApartment, APARTMENT_ERROR),
   guardianName: z.string().trim().min(1, "Please give your name.").max(80),
   guardianEmail: z
     .string()
