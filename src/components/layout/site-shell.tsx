@@ -89,7 +89,7 @@ export function SiteHeader({
             </>
           ) : null}
           <Link href="/rules" className={NAV_LINK}>
-            How it works
+            Our rules
           </Link>
           <Link
             href={signedIn ? "/account" : "/login"}
