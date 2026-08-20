@@ -76,6 +76,40 @@ close as it gets.
 resource and creating it again — free and instant while both are empty, and
 neither once they are not.
 
+## 2b-i. Where the *code* runs
+
+The two sections above settled where the data sits and then stopped, which left
+the third leg unexamined: where the code that reads that data runs. It ran in
+`iad1`, Northern Virginia — Vercel's default, chosen by nobody.
+
+So a reader in India was served like this: Mumbai edge → **Virginia** to render
+the page → **Singapore** for every query → back again. Measured on production,
+`/api/health` — one `SELECT 1` — took **0.55s**, while a static file from the
+Mumbai edge took **0.10s**. Around 0.44s of every request was the detour.
+
+Functions now run in **`sin1` (Singapore)**, next to the database. Set in two
+places, which must agree:
+
+```bash
+# vercel.json
+"regions": ["sin1"]
+```
+
+and the project's own default region (Settings → Functions → Region). A single
+region is selectable on the Hobby plan; multiple regions are not.
+
+`bom1` would put the code nearer the readers and was rejected: a page asks the
+database several questions in turn and each would pay the crossing, whereas the
+reader pays it once. Unlike the storage regions, this one **can** be changed at
+any time — it is a setting, not a resource. See ADR-044.
+
+Verify from any response header — the second field is the function region:
+
+```bash
+curl -sI https://library.msrx.co.in/api/health | grep x-vercel-id
+# x-vercel-id: bom1::sin1::…
+```
+
 ## 2c. The Blob store's access mode
 
 A Blob store is private or public, decided at creation and **fixed** — "private

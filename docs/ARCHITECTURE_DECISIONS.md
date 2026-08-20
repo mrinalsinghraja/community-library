@@ -1331,3 +1331,46 @@ works once, expires, and retires both its predecessor and the emailed one; the
 raw value appears in no audit row, no stored token, and nothing either screen is
 given. `tests/unit/activation-fallback-ui.test.ts` holds the wiring and the
 permission each screen asks for.
+
+## ADR-044 — The code runs next to the database, not next to the reader
+
+Until this decision the deployment was spread over three continents by nobody's
+choice. Vercel's default function region is `iad1` (Washington, D.C.); the Neon
+database was created in `ap-southeast-1` (Singapore); the readers are in India.
+A request therefore entered the Mumbai edge, crossed the Pacific to Virginia to
+run the page, crossed back to Singapore for every query, and returned the same
+way. `x-vercel-id: bom1::iad1::…` said so on every response.
+
+Measured on production before the change: a static file from the Mumbai edge
+answered in **0.10s**; `/api/health`, which is one `SELECT 1` and nothing else,
+answered in **0.55s**; the public pages sat between **1.0s and 1.4s**. The
+cleanest reading came from two redirects that do the same amount of thinking:
+`/desk`, decided by middleware at the Mumbai edge, returned its 307 in
+**0.12s**, while `/my-books`, decided inside a function, took **1.02s**. Nine
+times the cost for the same answer, and none of it was the application's doing.
+
+**Functions now run in `sin1` (Singapore), beside the database.** Both
+`vercel.json` and the project's default region say so; they must not disagree.
+
+The alternative was `bom1` (Mumbai), which is nearer the readers. It is the
+wrong choice here. A page renders by asking the database several questions in
+turn, and each one would pay the Mumbai–Singapore crossing; the reader pays the
+crossing to the function **once**. Put the hop where it happens once, not where
+it happens per query.
+
+Moving the *database* to India instead would be the better answer if Neon
+offered it, and would remove the last hop entirely. It does not, on this plan,
+and it would mean migrating a live database that already holds a real child's
+record. Not for a latency win that co-location already collects.
+
+**What this does not fix.** The database sleeps. Neon's free plan suspends an
+idle compute after five minutes and the timeout cannot be raised, so the first
+request after a quiet spell still waits for it to wake — that is the occasional
+3s reading, and it is unrelated to geography. Keeping it awake means either a
+paid Neon plan or an always-on pinger, and a pinger on the free compute-hour
+allowance leaves no headroom for a busy day. That is a spending decision, not an
+engineering one, and it is recorded here rather than taken.
+
+The blob store was checked at the same time and is already in `bom1`. It is not
+on the page-rendering path — the library's mark is a static file, not stored
+media — so its distance from `sin1` costs a reader nothing on a normal page.
