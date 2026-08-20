@@ -98,9 +98,16 @@ export const config = {
      * route sets on the bytes it serves. Serving a child's photograph under the
      * *application's* script policy is not what that route intends, and it does
      * its own authorization on every request, so it needs nothing from here.
+     *
+     * `api/reports` is excluded for exactly that reason too. A PDF is an active
+     * document format, and the bytes of an exported list of children go out
+     * under the same `default-src 'none'; sandbox` the route sets for itself.
+     * It also authorises every request twice over — `report.view`, then the
+     * permission the underlying screen demands — so the cookie-presence check
+     * here would add nothing but a redirect an API caller cannot follow.
      */
     {
-      source: "/((?!api/media|_next/static|_next/image|favicon.ico|avatars|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)",
+      source: "/((?!api/media|api/reports|_next/static|_next/image|favicon.ico|avatars|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)",
       missing: [{ type: "header", key: "next-router-prefetch" }],
     },
   ],

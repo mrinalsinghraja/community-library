@@ -115,9 +115,19 @@ export const PERMISSIONS = {
   },
 
   // --- Library operations ---------------------------------------------------
+  /**
+   * Take a list out of the library as a file.
+   *
+   * Seeded in Phase 0 and dormant until Version 1 gave it meaning. It is the
+   * authority to export, and only that — it widens nothing. Every report is
+   * loaded by the service that already owns the corresponding screen, so this
+   * key lets a person save what they can already read and nothing more. A
+   * librarian holding it still cannot export the audit log, because the audit
+   * service asks for `audit.view`. See ADR-045.
+   */
   "report.view": {
     category: "reports",
-    description: "Not yet implemented — nothing in the application reads this",
+    description: "Export a list you can already see, as a spreadsheet or a PDF",
   },
   "announcement.manage": {
     category: "operations",
@@ -174,12 +184,14 @@ export const PERMISSION_KEYS = Object.keys(PERMISSIONS) as PermissionKey[];
 export const DORMANT_PERMISSIONS = [
   "loan.override_rules",
   "loan.mark_lost",
-  // Joined the list in Phase 5. Both were seeded in Phase 0 and neither has ever
-  // guarded anything: there are no reports and no announcements. They are named
-  // on the settings screen under "Not available yet" for the same reason the
-  // other two are — a permission that looks like a capability and is not one is
-  // a promise the software will not keep.
-  "report.view",
+  // `report.view` left this list in Version 1, in the change that gave it
+  // meaning — which is the rule this comment block asks for. It now guards the
+  // export of every desk listing.
+  //
+  // `announcement.manage` was seeded in Phase 0 and still guards nothing: there
+  // are no announcements. It is named on the settings screen under "Not
+  // available yet" for the same reason the others are — a permission that looks
+  // like a capability and is not one is a promise the software will not keep.
   "announcement.manage",
   // Joined the list in Version 1, when the role editor was removed. There are
   // exactly three assignable roles and one Super Admin; the only role the staff

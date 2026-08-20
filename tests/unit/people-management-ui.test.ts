@@ -143,8 +143,14 @@ describe("deletion says what it is", () => {
 
 describe("the staff table", () => {
   it("shows the columns the brief asks for, in order", () => {
+    /*
+     * The leading empty header is the export selection column, added in
+     * Version 1 (ADR-045). It is not one of the columns the brief names, which
+     * is why it is written out here rather than folded into the list — the
+     * assertion is still about the six named columns and their order.
+     */
     expect(flattened(code(STAFF_PAGE))).toContain(
-      '["Name", "Email", "Role", "Status", "Added", "Actions"]',
+      '["", "Name", "Email", "Role", "Status", "Added", "Actions"]',
     );
   });
 

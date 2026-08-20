@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { ArchiveActions } from "@/app/admin/books/archive-actions";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
+import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-panel";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
@@ -99,6 +100,24 @@ export default async function AdminBooksPage({
   });
 
   const filtering = Boolean(search || categoryId || ageGroupRaw || conditionRaw || statusRaw);
+
+  /*
+   * The filters, as the export route will read them back.
+   *
+   * Built from the values this page already validated rather than from the raw
+   * query string, so "export everything" means the list on the screen and not
+   * whatever a hand-edited URL asked for. The route validates them again on
+   * arrival — a filter that travels through a browser is an input, not a fact.
+   */
+  const exportFilter: Record<string, string> = {
+    ...(search ? { search } : {}),
+    ...(categoryId ? { category: categoryId } : {}),
+    ...(isAgeGroup(ageGroupRaw) ? { age: ageGroupRaw } : {}),
+    ...(isCondition(conditionRaw) ? { condition: conditionRaw } : {}),
+    ...(status ? { status } : {}),
+    ...(includeArchived ? { archived: "1" } : {}),
+    sort,
+  };
 
   return (
     <StaffShell branding={branding} actor={actor} title="Books">
@@ -222,11 +241,23 @@ export default async function AdminBooksPage({
             </EmptyState>
           )
         ) : (
-          <DataTable headers={["Book ID", "Title", "Shelf", "Age", "Condition", "Status", "Donated", ""]}>
+          <ReportExport
+            report="books"
+            canExport={actor.permissions.has("report.view")}
+            ids={result.items.map((book) => book.copyId)}
+            totalAvailable={result.total}
+            filter={exportFilter}
+          >
+            <DataTable
+              headers={["", "Book ID", "Title", "Shelf", "Age", "Condition", "Status", "Donated", ""]}
+            >
             {result.items.map((book) => {
               const status = statusDefinition(book.status);
               return (
                 <tr key={book.copyId} className="border-t-2 border-hairline align-top">
+                  <td className="px-3.5 py-2.5 align-top">
+                    <ReportRowCheckbox id={book.copyId} label={`${book.copyCode} ${book.title}`} />
+                  </td>
                   <td className="px-3.5 py-2.5 align-top code">{book.copyCode}</td>
                   <td className="px-3.5 py-2.5 align-top">
                     <span className="flex items-start gap-3">
@@ -284,7 +315,8 @@ export default async function AdminBooksPage({
                 </tr>
               );
             })}
-          </DataTable>
+            </DataTable>
+          </ReportExport>
         )}
       </div>
 

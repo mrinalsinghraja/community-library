@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
+import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-panel";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Select, TextInput } from "@/components/ui/field";
@@ -124,9 +125,25 @@ export default async function AuditPage({
         </p>
 
         {result.entries.length > 0 ? (
-          <DataTable headers={["When", "Who", "What happened", "Record", "Details"]}>
+          <ReportExport
+            report="audit"
+            canExport={actor.permissions.has("report.view")}
+            ids={result.entries.map((entry) => entry.id)}
+            filter={{
+              ...(filter.from ? { from: filter.from } : {}),
+              ...(filter.to ? { to: filter.to } : {}),
+              ...(filter.action ? { action: filter.action } : {}),
+              ...(filter.actor ? { actor: filter.actor } : {}),
+              ...(filter.entityType ? { entityType: filter.entityType } : {}),
+              page: String(filter.page),
+            }}
+          >
+          <DataTable headers={["", "When", "Who", "What happened", "Record", "Details"]}>
             {result.entries.map((entry) => (
               <tr key={entry.id} className="border-t-2 border-hairline align-top">
+                <td className="px-3.5 py-2.5 align-top">
+                  <ReportRowCheckbox id={entry.id} label={`${entry.action} by ${entry.actorLabel}`} />
+                </td>
                 <td className="px-3.5 py-2.5 align-top whitespace-nowrap">
                   {formatInTimezone(entry.occurredAt, settings.timezone, "d MMM yyyy HH:mm")}
                 </td>
@@ -145,6 +162,7 @@ export default async function AuditPage({
               </tr>
             ))}
           </DataTable>
+          </ReportExport>
         ) : null}
 
         {result.pageCount > 1 ? (

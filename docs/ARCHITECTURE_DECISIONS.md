@@ -1387,3 +1387,96 @@ spending decision in any case. Recorded, not taken.
 The blob store was checked at the same time and is already in `bom1`. It is not
 on the page-rendering path — the library's mark is a static file, not stored
 media — so its distance from `sin1` costs a reader nothing on a normal page.
+
+## ADR-045 — An export is the same list in a different container
+
+Every desk listing can now be taken away as a spreadsheet or a PDF: books,
+readers, staff, books out, books asked for, asks to keep, new members and the
+audit log. Rows are ticked individually or all at once, and the file is the
+rows that were ticked.
+
+**The danger is not the file. It is the second route.** An export feature is a
+new way to read every table the library has, and the easy way to build one is a
+`reports` module with its own queries. That module then has its own idea of who
+may see guardian phone numbers, and the day the rule changes, one of the two
+copies is updated. So there is no second query anywhere in this feature: each
+report is loaded by calling the *same service the screen calls*.
+`listBooksForStaff` demands the catalogue-management permissions;
+`listMembers` demands `member.view` and nulls out guardian contact details
+itself when the viewer lacks `member.view_contact`; `listAuditEvents` demands
+`audit.view`. The registry chooses which of those to call and nothing else. A
+librarian can therefore export six lists and not the audit log — not because
+the export code says so, but because the audit service does.
+
+**`report.view` stopped being dormant.** It was seeded in Phase 0, described
+itself as "not yet implemented", and sat on the dormant list whose comment says
+to take a key off it in the same change that gives it meaning. This is that
+change. It is the authority to export *and only that*: it widens nothing,
+because everything it can reach is still guarded by the permission it was
+already guarded by. Both Librarian and Super Admin hold it, which is the whole
+point — a librarian who has just catalogued forty books should be able to take
+the list home without asking the owner of the library for it.
+
+**Two permissions, checked in two places, deliberately.** `report.view` in
+`exportReport`, and the screen's own permission inside the loader. Neither is
+restated in terms of the other, and neither is sufficient alone.
+
+**Written by hand rather than depended upon.** The spreadsheet writer builds
+the ZIP and the SpreadsheetML itself. The alternative was a hundred packages
+and a transitive advisory added to a system holding children's names, to
+produce one sheet of one table — the subset of the format that needs is small
+enough to own. The PDF does use `pdf-lib`, because a PDF cross-reference table
+is not a weekend's work and the library is dependency-free and does no file
+system access.
+
+**Excel is the lossless one, and the PDF says so.** The fourteen standard PDF
+fonts are encoded in WinAnsi, which has no room for a name written in Assamese
+or Devanagari, and `drawText` throws rather than guessing. Embedding a Unicode
+font with the shaping those scripts need would add a megabyte to every
+download. So the PDF filters what it cannot draw and **prints a line saying it
+did**, naming the Excel export as the one with the exact text. Silently
+replacing a child's name with question marks and handing the file over was the
+one option that was not acceptable.
+
+**Every export is audited; the audit says nothing about who was on the list.**
+A screen stops showing a child's details when the person closes it. A
+spreadsheet keeps working after they stop being a librarian, so the fact that
+one was taken is recorded: which report, which format, how many rows, whether a
+selection was made, by whom. Not which rows — an audit trail that names the
+children is a second copy of the thing it exists to keep track of. The row is
+written after the file renders and before the bytes are returned, so a failed
+render is not logged as a disclosure and a successful one cannot escape being
+logged.
+
+**A donor's wish travels with their name.** The books export carries a "Credit"
+column recording what the donor agreed to, including "asked to stay anonymous".
+On a screen the name is read by the person who opened the page; a spreadsheet
+gets forwarded, and somebody three messages away should not have to guess. There
+are still no totals, no rankings and no leaderboard, here or anywhere.
+
+**The route is a route, not an action, and pays for it.** A download needs
+`Content-Disposition`, which a server action cannot set. That forfeits the
+origin check actions get for free, so the handler makes its own: a cross-origin
+POST is refused. The risk is not a stolen spreadsheet — the browser would not
+let the attacker read the reply — it is a page that can make a librarian's
+browser emit "a list of children was exported" into the audit log, which would
+make the log lie.
+
+**The audit log exports one page at a time.** It is the only report that does
+not offer its whole filtered set. `listAuditEvents` pages in SQL and has no
+"everything" mode, and giving it one would mean an unbounded query against the
+table that exists to be the record of last resort. Narrowing by date is how a
+wider slice is taken.
+
+**Held by test.** `tests/database/report-export.test.ts` — a librarian, a
+reader, a signed-out caller and a role stripped of `report.view` are each
+refused what they should be; the staff list and the audit log are refused to a
+librarian; another library's rows appear in no export and cannot be requested by
+id; the contact columns disappear entirely rather than emptying; no internal id,
+storage key or photograph reaches a cell; and the audit row carries the shape of
+what left without carrying its contents.
+`tests/unit/report-export-format.test.ts` unzips the spreadsheet and reads the
+XML, because "it produced four kilobytes" would have passed every version of
+this code that Excel refused to open.
+`tests/unit/report-export-wiring.test.ts` holds the eight screens, the
+permission gate, and the rule that the registry never touches the database.

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { LoanActions } from "@/app/desk/loans/loan-actions";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
+import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-panel";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
@@ -192,8 +193,15 @@ export default async function DeskLoansPage({
                 : "Books appear here as soon as they are issued."}
           </EmptyState>
         ) : (
+          <ReportExport
+            report="loans"
+            canExport={actor.permissions.has("report.view")}
+            ids={result.items.map((loan) => loan.loanId)}
+            totalAvailable={result.total}
+            filter={{ filter, ...(search ? { search } : {}) }}
+          >
           <DataTable
-            headers={["Reader", "Book", "Book ID", "Issued", "Due", "Status", "Actions"]}
+            headers={["", "Reader", "Book", "Book ID", "Issued", "Due", "Status", "Actions"]}
           >
             {result.items.map((loan) => {
               const condition = loanCondition(loan, settings.timezone);
@@ -202,6 +210,12 @@ export default async function DeskLoansPage({
 
               return (
                 <tr key={loan.loanId} className="border-t-2 border-hairline align-top">
+                  <td className="px-3.5 py-2.5 align-top">
+                    <ReportRowCheckbox
+                      id={loan.loanId}
+                      label={`${loan.title} — ${loan.readerName}`}
+                    />
+                  </td>
                   <td className="px-3.5 py-2.5 align-top">
                     <p className="font-bold text-ink">{loan.readerName}</p>
                     <p className="code text-base text-ink-soft">{loan.memberCode}</p>
@@ -307,6 +321,7 @@ export default async function DeskLoansPage({
               );
             })}
           </DataTable>
+          </ReportExport>
         )}
       </div>
 

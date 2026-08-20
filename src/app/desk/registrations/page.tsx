@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { ReviewActions } from "@/app/desk/registrations/review-actions";
 import { MemberAvatar } from "@/components/library/avatar";
 import { StaffShell } from "@/components/layout/staff-shell";
+import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-panel";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -79,6 +80,8 @@ export default async function RegistrationsPage() {
           When a family fills in the join form, their registration appears here.
         </EmptyState>
       ) : (
+        <ReportExport report="registrations"
+            canExport={actor.permissions.has("report.view")} ids={requests.map((request) => request.id)}>
         <div className="flex flex-col gap-5">
           {requests.map((request) => {
             const age = ageInYears(request.childDob, settings.timezone);
@@ -111,6 +114,7 @@ export default async function RegistrationsPage() {
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-3">
+                      <ReportRowCheckbox id={request.id} label={request.childName} />
                       <h2 className="text-2xl">{request.childName}</h2>
                       <StatusBadge tone={request.status === "PENDING" ? "soon" : "neutral"}>
                         {request.status === "PENDING" ? "New" : "Being reviewed"}
@@ -247,6 +251,7 @@ export default async function RegistrationsPage() {
             );
           })}
         </div>
+        </ReportExport>
       )}
     </StaffShell>
   );

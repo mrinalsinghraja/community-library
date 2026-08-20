@@ -136,6 +136,21 @@ export const AUDIT_ACTIONS = {
   // Configuration
   SETTINGS_UPDATED: "settings.updated",
   BRANDING_UPDATED: "branding.updated",
+
+  /**
+   * A list left the system as a file.
+   *
+   * Recorded because a spreadsheet of children's names is the one thing here
+   * that keeps working after the person who took it stops being a librarian.
+   * Nothing on a screen has that property, so nothing on a screen is logged
+   * this way, and an export is.
+   *
+   * The metadata says which report, which format, how many rows and whether a
+   * selection was made. It never says *which* rows: naming the children in the
+   * log would make the audit trail a second copy of the very thing it exists to
+   * keep track of.
+   */
+  REPORT_EXPORTED: "report.exported",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

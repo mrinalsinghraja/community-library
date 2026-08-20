@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { DecisionActions } from "@/app/desk/renewals/decision-actions";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
+import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-panel";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -73,9 +74,17 @@ export default async function DeskRenewalsPage() {
             When a reader asks to keep a book for longer, it appears here for you to say yes or no.
           </EmptyState>
         ) : (
-          <DataTable headers={["Reader", "Book", "Book ID", "Due now", "Asked", "Answer"]}>
+          <ReportExport report="renewal-requests"
+            canExport={actor.permissions.has("report.view")} ids={requests.map((r) => r.requestId)}>
+          <DataTable headers={["", "Reader", "Book", "Book ID", "Due now", "Asked", "Answer"]}>
             {requests.map((request) => (
               <tr key={request.requestId} className="border-t-2 border-hairline align-top">
+                <td className="px-3.5 py-2.5 align-top">
+                  <ReportRowCheckbox
+                    id={request.requestId}
+                    label={`${request.title} — ${request.readerName}`}
+                  />
+                </td>
                 <td className="px-3.5 py-2.5 align-top">
                   <p className="font-bold text-ink">{request.readerName}</p>
                   <p className="code text-base text-ink-soft">{request.memberCode}</p>
@@ -137,6 +146,7 @@ export default async function DeskRenewalsPage() {
               </tr>
             ))}
           </DataTable>
+          </ReportExport>
         )}
       </div>
     </StaffShell>
