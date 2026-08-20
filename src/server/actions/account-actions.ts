@@ -15,6 +15,7 @@ import {
 import {
   deactivateMember,
   deleteMemberAccount,
+  issueMemberActivationLink,
   reactivateMember,
   reissueActivation,
   suspendMember,
@@ -37,9 +38,10 @@ export interface ActionState {
    * A one-time activation link, returned to the Super Admin who asked for it
    * and to nobody else.
    *
-   * Only `issueStaffActivationLinkAction` ever sets this. It is not stored,
-   * not logged and not persisted anywhere — it lives in one server-action
-   * response, is copied to a clipboard, and is gone.
+   * Only the two `issue…ActivationLinkAction` calls ever set this — one for a
+   * librarian, one for a reader. It is not stored, not logged and not
+   * persisted anywhere: it lives in one server-action response, is copied to a
+   * clipboard, and is gone.
    */
   activationUrl?: string;
 }
@@ -256,6 +258,36 @@ export async function deleteMemberAction(
 
   revalidatePath("/desk/members");
   redirect(`/desk/members?deleted=${encodeURIComponent(deleted.displayName)}`);
+}
+
+/**
+ * Fallback for a library whose email is not configured yet — the reader half.
+ *
+ * Returns the raw activation URL to the Super Admin who asked for it. The
+ * permission is checked inside the service, as everywhere else, so a
+ * hand-written POST from a librarian's session is refused exactly as a hidden
+ * button is.
+ *
+ * Nothing is revalidated into the page: the URL is in this response, and then
+ * it is the administrator's to deliver.
+ */
+export async function issueMemberActivationLinkAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const { url, displayName } = await issueMemberActivationLink(
+      String(formData.get("memberId") ?? ""),
+    );
+
+    return {
+      status: "success",
+      message: `One-time link for ${displayName}. It replaces any earlier link and works once.`,
+      activationUrl: url,
+    };
+  } catch (error) {
+    return toState(error);
+  }
 }
 
 export async function reissueActivationAction(

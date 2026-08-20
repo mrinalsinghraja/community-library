@@ -112,6 +112,34 @@ suspend, close or change their own account — the two ways a community library
 locks itself out of its own software.
 
 
+## When email is not working
+
+A library can be running before its mail provider is. In that state an
+invitation goes nowhere, and the account — a librarian's or an approved
+reader's — exists with nobody able to get into it.
+
+Both screens answer this the same way. Where an account is waiting for a
+password, the Super Admin sees **Copy activation link** beside the ordinary
+**Send link again**, and delivers the link by hand.
+
+It is the ordinary activation token: minted when the button is pressed, single
+use, expiring, stored only as its hash, and retiring any live link — including
+one the mailer had already sent. There is still no password field: the person
+whose account it is chooses their own.
+
+**Only the Super Admin may take a raw link out of the system.** Sending a link
+puts it in the guardian's inbox; copying one puts a live credential in somebody's
+hand, and those are not the same act. The staff fallback asks for
+`user.manage_staff`; the reader fallback asks for `registration.review`, the
+Super-Admin-only permission that decides whether a child joins at all. A
+librarian keeps **Send link again** and does not get the raw link. The service
+refuses regardless of what the screen shows. See ADR-043.
+
+An account that has already chosen a password is refused — that is the reset
+flow, which writes to the person concerned. So is a suspended, closed or
+archived one.
+
+
 ## Permanent deletion
 
 One permission, `user.delete`, held by the Super Admin and by nobody else. It

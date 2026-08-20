@@ -155,7 +155,13 @@ describe("the staff table", () => {
 
   it("keeps the activation fallback that email failure needs", () => {
     const rendered = flattened(code(STAFF_FORMS));
-    expect(rendered).toContain("Copy activation link");
+    // The panel itself now lives in one shared component, so both the staff and
+    // the reader screens read the same words — see activation-fallback-ui. What
+    // the staff screen still owns is the wiring, and losing that would take the
+    // fallback away just as surely as deleting the words would.
+    expect(rendered).toContain("<ActivationFallback");
+    expect(rendered).toContain('fieldName="staffId"');
+    expect(rendered).toContain("action={issueStaffActivationLinkAction}");
     expect(rendered).toContain("Send link again");
   });
 });

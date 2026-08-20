@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { DeleteAccount } from "@/app/desk/members/[id]/delete-account";
+import { ActivationFallback } from "@/components/library/activation-fallback";
 import { MemberAvatar } from "@/components/library/avatar";
 import { StaffShell } from "@/components/layout/staff-shell";
 import { Card, CardTitle } from "@/components/ui/card";
@@ -14,6 +15,7 @@ import { METHOD_LABELS, STRENGTH_LABELS } from "@/lib/guardian-verification";
 import { NotFoundError } from "@/server/lib/errors";
 import { requirePermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
+import { issueMemberActivationLinkAction } from "@/server/actions/account-actions";
 import { getMemberDetail } from "@/server/services/account-service";
 
 export const dynamic = "force-dynamic";
@@ -103,6 +105,23 @@ export default async function MemberDetailPage({
 
   const canDelete = actor.permissions.has("user.delete");
 
+  /*
+   * The reader is approved and still cannot get in.
+   *
+   * Shown here as well as on the reader list because this is the page an
+   * administrator opens when a family says "the link never arrived" — and the
+   * answer to that has to be on the screen they are already looking at.
+   *
+   * `registration.review` is Super-Admin only: the person who admits a reader
+   * is the person who may hand them the way in. See ADR-043.
+   */
+  const showActivationFallback =
+    member.mustSetPassword &&
+    member.status !== "SUSPENDED" &&
+    member.status !== "DEACTIVATED" &&
+    member.status !== "ARCHIVED" &&
+    actor.permissions.has("registration.review");
+
   return (
     <StaffShell branding={branding} actor={actor} title={member.displayName}>
       <p className="mb-6">
@@ -112,6 +131,17 @@ export default async function MemberDetailPage({
       </p>
 
       <div className="flex flex-col gap-6">
+        {showActivationFallback ? (
+          <ActivationFallback
+            subjectId={member.id}
+            fieldName="memberId"
+            action={issueMemberActivationLinkAction}
+            emailSent={member.activationEmailSent}
+            waitingLabel="Waiting for the family to set a password"
+            waitingDetail="They have not chosen a password yet."
+          />
+        ) : null}
+
         <Card>
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
             <MemberAvatar

@@ -162,6 +162,11 @@ export default async function MembersPage({
                   canSuspend={actor.permissions.has("member.suspend")}
                   canDeactivate={actor.permissions.has("member.deactivate")}
                   canReissue={actor.permissions.has("member.reset_password")}
+                  mustSetPassword={member.mustSetPassword}
+                  activationEmailSent={member.activationEmailSent}
+                  // The Super-Admin-only permission that admits a reader is the
+                  // one that may hand them the way in. See ADR-043.
+                  canIssueLink={actor.permissions.has("registration.review")}
                 />
                 {canManagePhoto ? (
                   <div className="mt-2">

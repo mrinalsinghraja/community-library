@@ -2,10 +2,12 @@
 
 import { useActionState, useState } from "react";
 
+import { ActivationFallback } from "@/components/library/activation-fallback";
 import { Button } from "@/components/ui/button";
 import { TextInput } from "@/components/ui/field";
 import {
   deactivateMemberAction,
+  issueMemberActivationLinkAction,
   reactivateMemberAction,
   reissueActivationAction,
   suspendMemberAction,
@@ -27,12 +29,21 @@ export function MemberActions({
   canSuspend,
   canDeactivate,
   canReissue,
+  mustSetPassword,
+  activationEmailSent,
+  canIssueLink,
 }: {
   memberId: string;
   status: string;
   canSuspend: boolean;
   canDeactivate: boolean;
   canReissue: boolean;
+  /** They have not chosen a password yet, so the invitation still matters. */
+  mustSetPassword: boolean;
+  /** Null when nothing was ever attempted. False when the mailer refused. */
+  activationEmailSent: boolean | null;
+  /** Super Admin only. Hiding it is a courtesy; the service is what refuses. */
+  canIssueLink: boolean;
 }) {
   const [suspendState, suspend, suspending] = useActionState(suspendMemberAction, INITIAL);
   const [reactivateState, reactivate, reactivating] = useActionState(reactivateMemberAction, INITIAL);
@@ -49,6 +60,23 @@ export function MemberActions({
 
   return (
     <div className="flex flex-col gap-2">
+      {/*
+        The account exists and nobody can get into it. A normal state for a
+        library whose email is not configured yet, so it explains itself rather
+        than looking like a fault — and it gives the Super Admin the one way in
+        that does not depend on email working.
+      */}
+      {mustSetPassword && !isPaused && status !== "ARCHIVED" && canIssueLink ? (
+        <ActivationFallback
+          subjectId={memberId}
+          fieldName="memberId"
+          action={issueMemberActivationLinkAction}
+          emailSent={activationEmailSent}
+          waitingLabel="Waiting for the family to set a password"
+          waitingDetail="They have not chosen a password yet."
+        />
+      ) : null}
+
       {state?.message ? (
         <p
           role={state.status === "error" ? "alert" : "status"}

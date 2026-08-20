@@ -2,6 +2,7 @@ import "server-only";
 
 import type { UserStatus } from "@prisma/client";
 
+import { env } from "@/server/env";
 import { prisma } from "@/server/db";
 import { requireActor, requirePermission, type Actor } from "@/server/authz";
 import { revokeAllSessionsForUser } from "@/server/auth/session-store";
@@ -290,6 +291,90 @@ export async function reissueActivation(memberUserId: string): Promise<boolean> 
 }
 
 /**
+ * Hands the Super Admin one activation link for a reader, to deliver by hand.
+ *
+ * **This exists because email might not.** A family's registration can be
+ * approved in a library whose mail provider is not configured yet, and in that
+ * state the child's account exists and nobody can get into it. The
+ * administrator copies the link and gives it to the guardian through a channel
+ * they trust — at the desk, in person. The guardian still chooses the
+ * password, and nobody ever sets it for them.
+ *
+ * The counterpart of `issueStaffActivationLink`, deliberately identical in
+ * every respect that matters: the ordinary activation token, same generator,
+ * same 7-day life, same single use, same hash-only storage. Nothing new was
+ * invented for this, and minting revokes any live one, so at most one link is
+ * ever valid.
+ *
+ * **The raw token exists only in the return value of this call.** Not stored,
+ * not logged, not written to the audit row — the row records that a link was
+ * issued, by whom, for whom, and when it expires. A lost link is replaced by
+ * issuing another; there is nowhere to go and look one up.
+ *
+ * Two things are stricter here than in `reissueActivation` beside it:
+ *
+ *   1. **A librarian cannot reach it.** Reissuing *sends* a link to the address
+ *      already on file, which is why `member.reset_password` is enough for it —
+ *      the link lands with the guardian either way. Handing the raw URL to a
+ *      person is different: whoever holds it can walk into the child's account
+ *      without the family ever hearing about it. So this asks for
+ *      `registration.review`, the Super-Admin-only permission that decides
+ *      whether a child joins the library at all. The person who admits a reader
+ *      is the person who may hand them the way in.
+ *   2. **It refuses an account that has already chosen a password.** That is
+ *      not a stalled activation, it is a live account, and a live account with
+ *      a forgotten password uses the reset flow, which writes to the guardian.
+ */
+export async function issueMemberActivationLink(
+  memberUserId: string,
+): Promise<{ url: string; expiresAt: Date; displayName: string }> {
+  const actor = await requirePermission("registration.review");
+  const member = await loadMember(actor, memberUserId);
+
+  if (member.status === "SUSPENDED" || member.status === "DEACTIVATED" || member.status === "ARCHIVED") {
+    throw new RuleViolationError(
+      `Cannot issue an activation link for ${member.status} member`,
+      "Reactivate the account first.",
+    );
+  }
+
+  if (!member.mustSetPassword) {
+    throw new RuleViolationError(
+      `Member ${memberUserId} has already chosen a password`,
+      "They have already set a password. Send them a reset link instead.",
+    );
+  }
+
+  const token = await prisma.$transaction(async (tx) => {
+    const minted = await mintToken(tx, {
+      userId: member.id,
+      type: "ACTIVATION",
+      createdById: actor.userId,
+    });
+
+    await recordAudit(tx, {
+      libraryId: actor.libraryId,
+      action: AUDIT_ACTIONS.ACTIVATION_LINK_ISSUED,
+      entityType: "app_user",
+      entityId: member.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      // No token, and no URL. Deliberately: an audit log is read by more people
+      // and kept for longer than the thing it describes.
+      metadata: { kind: "MEMBER", delivery: "manual", expiresAt: minted.expiresAt.toISOString() },
+    });
+
+    return minted;
+  });
+
+  return {
+    url: `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/activate/${token.rawToken}`,
+    expiresAt: token.expiresAt,
+    displayName: member.displayName,
+  };
+}
+
+/**
  * Updates guardian contact details.
  *
  * Staff-only, always. The guardian's email is the *recovery channel* for a
@@ -419,16 +504,62 @@ export async function listMembers(options: { search?: string } = {}) {
     },
   });
 
+  const activationEmailSent = await latestActivationDelivery(
+    actor.libraryId,
+    members.filter((member) => member.mustSetPassword).map((member) => member.id),
+  );
+
   // Contact details are stripped at the service boundary, not hidden in the
   // template. A component that forgets to check must still get nothing.
   return members.map((member) => ({
     ...member,
+    activationEmailSent: activationEmailSent.get(member.id) ?? null,
     guardianLinks: member.guardianLinks.map((link) => ({
       guardian: canSeeContact
         ? link.guardian
         : { id: link.guardian.id, fullName: link.guardian.fullName, email: null, phone: null },
     })),
   }));
+}
+
+/**
+ * Did the activation email actually reach a provider?
+ *
+ * Reads `email_event`, which the mailer already writes for every attempt —
+ * not a new column, and not an assumption. `false` is the difference between
+ * "waiting for the family to choose a password" and "nobody was ever written
+ * to", and the desk has to be able to tell an administrator which of the two
+ * it is looking at. Null when no activation email has ever been attempted.
+ *
+ * One query for the whole page, mirroring `listStaff`.
+ */
+async function latestActivationDelivery(
+  libraryId: string,
+  memberUserIds: string[],
+): Promise<Map<string, boolean>> {
+  const latest = new Map<string, boolean>();
+  if (memberUserIds.length === 0) return latest;
+
+  const events = await prisma.emailEvent.findMany({
+    where: {
+      libraryId,
+      template: "activation",
+      relatedEntityType: "app_user",
+      relatedEntityId: { in: memberUserIds },
+    },
+    select: { relatedEntityId: true, status: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  for (const event of events) {
+    if (!event.relatedEntityId) continue;
+    // Ordered newest first, so the first one seen for a reader is the latest.
+    if (!latest.has(event.relatedEntityId)) {
+      latest.set(event.relatedEntityId, event.status === "SENT");
+    }
+  }
+
+  return latest;
 }
 
 // ---------------------------------------------------------------------------
@@ -468,6 +599,12 @@ export interface MemberDetail {
   dateOfBirth: Date | null;
   avatarKey: string | null;
   photoMediaId: string | null;
+  /**
+   * Whether the last activation email reached a provider. Null when none was
+   * ever attempted, and null for a reader who has already set a password —
+   * there is nothing waiting, so there is nothing to report.
+   */
+  activationEmailSent: boolean | null;
   guardians: { id: string; fullName: string; email: string | null; phone: string | null; isPrimary: boolean }[];
   /** Null when the actor may not see how the joining decision was made. */
   registration: {
@@ -558,11 +695,16 @@ export async function getMemberDetail(memberUserId: string): Promise<MemberDetai
       })
     : null;
 
+  const activationEmailSent = user.mustSetPassword
+    ? (await latestActivationDelivery(actor.libraryId, [user.id])).get(user.id) ?? null
+    : null;
+
   return {
     id: user.id,
     displayName: user.displayName,
     status: user.status,
     mustSetPassword: user.mustSetPassword,
+    activationEmailSent,
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
     memberCode: user.memberProfile?.memberCode ?? null,

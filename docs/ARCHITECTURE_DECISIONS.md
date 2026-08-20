@@ -1265,3 +1265,69 @@ invitation — are both cases where the account has no history by definition.
 librarians are refused server-side; an unused account goes and its family's
 application stays; a reader who has merely *asked* for a book cannot be deleted;
 the last Super Admin is protected; both the deletion and the refusal are audited.
+
+---
+
+## ADR-043 — A copied activation link is a stronger act than an emailed one
+
+**Status.** Accepted.
+
+**Context.** The library's mail provider is not configured, so every invitation
+fails. An approved reader's account exists and nobody can get into it, and the
+same was true for a new librarian until the staff fallback was built. The
+obvious move is to give the reader screen the same "Copy activation link"
+button, gated on the permission the reader screen already uses for the
+neighbouring "Send link again" — `member.reset_password`, which a librarian
+holds.
+
+That would be wrong, and the reason is worth writing down.
+
+**Decision.** The two acts are not the same act.
+
+*Sending* a link puts it in the guardian's inbox. Whoever pressed the button
+never sees it, and the family learns that somebody asked for one. That is why
+`member.reset_password` is enough for reissuing, and why a librarian may hold
+it: the worst they can do is cause the family to be written to.
+
+*Copying* a link puts a live credential in the hand of the person who pressed
+the button. Whoever holds it can set the child's password and walk into the
+account, and nobody outside the room ever hears about it. So the reader
+fallback asks for **`registration.review`** — the Super-Admin-only permission
+that decides whether a child joins the library at all. The person who admits a
+reader is the person who may hand them the way in. The staff fallback keeps
+`user.manage_staff` for the same reason at one remove: creating the librarian
+and letting them in are the same authority.
+
+**What is deliberately shared, and what is not.** One component renders the
+panel on both screens, so the words an administrator reads about a stalled
+activation do not depend on which list they opened. The *permission* is not
+shared — each service asks for its own, and hiding the button is a courtesy on
+top of a refusal, never instead of one.
+
+**Nothing new was invented.** The same `mintToken`, the same 7-day life, the
+same single use, the same hash-only storage, the same revocation — issuing a
+link retires any live one, including one the mailer had already sent, so two
+live doors into a child's account is not a state that can exist. No new token
+type, no new table, no second activation page, and no password field anywhere:
+the person whose account it is still chooses their own.
+
+**Where the raw token lives.** In the return value of one server action, and
+nowhere else. Not stored, not logged, not revalidated back into a page, and not
+in the audit row — that row records that a link was issued, by whom, for whom,
+and when it expires. A lost link is replaced by issuing another; there is
+nowhere to go and look one up. Nothing on either screen holds a token until an
+administrator presses the button, so opening the reader list does not put
+credentials on anybody's screen.
+
+**A manual link records no delivery.** `email_event` is what the desk reads to
+tell "waiting for the family" from "nobody was ever written to". A link taken
+out by hand was not sent, so it writes nothing there — an administrator reading
+the mail log must not find a message that never existed.
+
+**Held by test.** `tests/database/member-activation-link.test.ts` — a librarian,
+a reader, a signed-out caller, an already-activated account, a suspended one, a
+staff id and another library's reader are all refused; the link activates,
+works once, expires, and retires both its predecessor and the emailed one; the
+raw value appears in no audit row, no stored token, and nothing either screen is
+given. `tests/unit/activation-fallback-ui.test.ts` holds the wiring and the
+permission each screen asks for.
