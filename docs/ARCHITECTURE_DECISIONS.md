@@ -1363,13 +1363,26 @@ offered it, and would remove the last hop entirely. It does not, on this plan,
 and it would mean migrating a live database that already holds a real child's
 record. Not for a latency win that co-location already collects.
 
-**What this does not fix.** The database sleeps. Neon's free plan suspends an
-idle compute after five minutes and the timeout cannot be raised, so the first
-request after a quiet spell still waits for it to wake — that is the occasional
-3s reading, and it is unrelated to geography. Keeping it awake means either a
-paid Neon plan or an always-on pinger, and a pinger on the free compute-hour
-allowance leaves no headroom for a busy day. That is a spending decision, not an
-engineering one, and it is recorded here rather than taken.
+**What this does not fix, measured.** The database sleeps. Neon's free plan
+suspends an idle compute after five minutes and the timeout cannot be raised, so
+the first request after a quiet spell waits for it to wake. Measured after a
+genuine idle window with no other traffic — the first attempt at this was void,
+because the benchmark itself kept the compute awake and the gap was 90 seconds
+rather than five minutes:
+
+| | cold | warm |
+|---|---|---|
+| `/api/health`, 7 min idle | **1.32s** | 0.20–0.22s |
+| `/`, 8 min idle | **0.39s** | 0.22–0.26s |
+
+The wake cost is real but erratic — 1.1s once, 0.17s the next — so a single
+reading would have misled. **The worst cold response now is about the speed of
+an ordinary response before this change**, and every other request is a fifth of
+what it was. Removing the last second would mean a paid Neon plan or an always-on
+pinger; a pinger at 0.25 CU consumes roughly 182 of the 191.9 free compute-hours
+in a month, leaving no headroom, and an overrun suspends the database for the
+rest of the month. At this library's traffic that is poor value, and it is a
+spending decision in any case. Recorded, not taken.
 
 The blob store was checked at the same time and is already in `bom1`. It is not
 on the page-rendering path — the library's mark is a static file, not stored

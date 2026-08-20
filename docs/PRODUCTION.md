@@ -103,6 +103,20 @@ database several questions in turn and each would pay the crossing, whereas the
 reader pays it once. Unlike the storage regions, this one **can** be changed at
 any time — it is a setting, not a resource. See ADR-044.
 
+Measured after the move, p50 over seven samples each:
+
+| route | before (`iad1`) | after (`sin1`) |
+|---|---|---|
+| `/api/health` | 0.55s | **0.20s** |
+| `/` | 1.23s | **0.22s** |
+| `/books` | 1.45s | **0.22s** |
+| `/login` | 1.02s | **0.22s** |
+
+What remains is Neon's five-minute idle suspend, not distance: a first request
+after a genuine quiet spell measured **1.32s** once and **0.39s** the next, and
+warm requests 0.20–0.26s throughout. Measuring this needs total silence — a
+first attempt was void because the benchmark kept the compute awake.
+
 Verify from any response header — the second field is the function region:
 
 ```bash
