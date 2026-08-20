@@ -88,7 +88,7 @@ function ReturnControl({ loanId, copyCode }: { loanId: string; copyCode: string 
         <>
           <label
             htmlFor={`condition-${loanId}`}
-            className="font-display text-base font-bold text-ink"
+            className="text-base font-semibold text-ink"
           >
             How is it?
           </label>

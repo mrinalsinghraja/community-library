@@ -71,7 +71,7 @@ export function BrandingForm({ values }: { values: BrandingFormValues }) {
             name="primaryColor"
             type="color"
             defaultValue={values.primaryColor}
-            className="h-14 w-24 rounded-[var(--radius-field)] border-2 border-control-border bg-surface p-1"
+            className="h-14 w-24 rounded-[var(--radius-field)] border border-control-border bg-surface p-1"
           />
         </Field>
 
@@ -101,7 +101,7 @@ export function BrandingForm({ values }: { values: BrandingFormValues }) {
             defaultValue={values.rulesMarkdown}
             rows={5}
             maxLength={8000}
-            className="w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface p-4 text-lg"
+            className="w-full rounded-[var(--radius-field)] border border-control-border bg-surface p-4 text-lg"
           />
         </Field>
 
@@ -117,7 +117,7 @@ export function BrandingForm({ values }: { values: BrandingFormValues }) {
             defaultValue={values.donationPolicyMarkdown}
             rows={4}
             maxLength={8000}
-            className="w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface p-4 text-lg"
+            className="w-full rounded-[var(--radius-field)] border border-control-border bg-surface p-4 text-lg"
           />
         </Field>
 
@@ -170,7 +170,7 @@ export function LogoForm({ hasLogo }: { hasLogo: boolean }) {
             name="logo"
             type="file"
             accept="image/png,image/jpeg,image/webp"
-            className="w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface p-3 text-base"
+            className="w-full rounded-[var(--radius-field)] border border-control-border bg-surface p-3 text-base"
           />
         </Field>
 

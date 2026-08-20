@@ -205,7 +205,7 @@ export default async function MyBooksPage() {
                     />
                   </span>
                   <span className="flex flex-1 flex-col">
-                    <span className="font-display text-lg font-bold text-ink">{loan.title}</span>
+                    <span className="text-base font-semibold text-ink">{loan.title}</span>
                     <span className="text-base text-ink-soft">{loan.authors.join(", ")}</span>
                     <span className="text-base text-ink-soft">
                       Borrowed {formatInTimezone(loan.issuedAt, settings.timezone, "d MMM yyyy")}

@@ -107,12 +107,12 @@ export function CoverThumbnail({
               className="mx-auto max-h-[64dvh] w-auto max-w-full rounded-[var(--radius-field)] object-contain"
             />
           </div>
-          <p className="text-center font-display text-lg font-bold text-white">{title}</p>
+          <p className="text-center text-base font-semibold text-white">{title}</p>
           <div className="flex justify-center">
             <button
               type="button"
               onClick={close}
-              className="inline-flex min-h-14 items-center gap-2.5 rounded-full bg-primary px-8 font-display text-lg font-bold text-white transition-colors hover:bg-primary-deep"
+              className="inline-flex min-h-14 items-center gap-2.5 rounded-[var(--radius-button)] bg-primary px-8 text-base font-semibold text-white transition-colors hover:bg-primary-deep"
             >
               <Icon name="cross" />
               Close

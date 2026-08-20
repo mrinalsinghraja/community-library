@@ -99,7 +99,7 @@ export default async function MembersPage({
         >
           {members.map((member) => (
             <tr key={member.id} className="border-t-2 border-hairline align-top">
-              <td className="px-4 py-3">
+              <td className="px-3.5 py-2.5 align-top">
                 <div className="flex items-center gap-3">
                   <MemberAvatar
                     avatarKey={member.memberProfile?.avatarKey}
@@ -125,26 +125,26 @@ export default async function MembersPage({
                 </div>
               </td>
 
-              <td className="px-4 py-3 font-mono text-base text-ink-soft">
+              <td className="px-3.5 py-2.5 align-top code text-base text-ink-soft">
                 {member.memberProfile?.memberCode ?? "—"}
               </td>
 
-              <td className="px-4 py-3 text-ink-soft">{member.memberProfile?.apartment ?? "—"}</td>
+              <td className="px-3.5 py-2.5 align-top text-ink-soft">{member.memberProfile?.apartment ?? "—"}</td>
 
-              <td className="px-4 py-3">
+              <td className="px-3.5 py-2.5 align-top">
                 <StatusBadge tone={STATUS_TONE[member.status] ?? "neutral"}>
                   {STATUS_LABEL[member.status] ?? member.status}
                 </StatusBadge>
               </td>
 
-              <td className="px-4 py-3 text-base text-ink-soft">
+              <td className="px-3.5 py-2.5 align-top text-base text-ink-soft">
                 {member.lastLoginAt
                   ? formatInTimezone(member.lastLoginAt, settings.timezone, "d MMM yyyy")
                   : "Never"}
               </td>
 
               {canSeeContact ? (
-                <td className="px-4 py-3 text-base text-ink-soft">
+                <td className="px-3.5 py-2.5 align-top text-base text-ink-soft">
                   {member.guardianLinks.map((link) => (
                     <div key={link.guardian.id} className="break-words">
                       <p className="font-bold text-ink">{link.guardian.fullName}</p>
@@ -155,7 +155,7 @@ export default async function MembersPage({
                 </td>
               ) : null}
 
-              <td className="px-4 py-3">
+              <td className="px-3.5 py-2.5 align-top">
                 <MemberActions
                   memberId={member.id}
                   status={member.status}

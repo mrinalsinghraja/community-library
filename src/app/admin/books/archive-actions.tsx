@@ -52,7 +52,9 @@ export function ArchiveActions({
   if (!canArchive && !canDelete) return null;
 
   return (
-    <div className="flex flex-col gap-2">
+    /* Side by side. Two stacked buttons made every catalogue row 40px taller
+       than the book in it needed. */
+    <div className="flex flex-wrap items-start gap-2">
       {canArchive ? (
         archived ? (
           <RestoreButton copyId={copyId} />

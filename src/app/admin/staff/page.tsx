@@ -59,21 +59,21 @@ export default async function StaffPage() {
 
               return (
                 <tr key={person.id} className="border-t-2 border-hairline align-top">
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-2.5 align-top">
                     <p className="font-bold text-ink">{person.displayName}</p>
                   </td>
 
-                  <td className="px-4 py-3 text-base text-ink-soft">
+                  <td className="px-3.5 py-2.5 align-top text-base text-ink-soft">
                     <span className="break-words">{person.email}</span>
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-2.5 align-top">
                     <StatusBadge tone={primaryRole === ROLE_KEYS.SUPER_ADMIN ? "neutral" : "out"}>
                       {primaryRole === ROLE_KEYS.SUPER_ADMIN ? "Super Admin" : "Librarian"}
                     </StatusBadge>
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-2.5 align-top">
                     <StatusBadge tone={STATUS_TONE[person.status] ?? "neutral"}>
                       {person.status === "INVITED" ? "Not set up yet" : person.status}
                     </StatusBadge>
@@ -84,11 +84,11 @@ export default async function StaffPage() {
                     </p>
                   </td>
 
-                  <td className="px-4 py-3 text-base text-ink-soft">
+                  <td className="px-3.5 py-2.5 align-top text-base text-ink-soft">
                     {formatInTimezone(person.createdAt, settings.timezone, "d MMM yyyy")}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-2.5 align-top">
                     <StaffRowActions
                       staffId={person.id}
                       displayName={person.displayName}

@@ -123,8 +123,8 @@ export default async function DeskLoansPage({
             aria-current={key === filter ? "page" : undefined}
             className={
               key === filter
-                ? "rounded-full bg-primary px-5 py-2.5 text-base font-bold text-white no-underline"
-                : "rounded-full border-2 border-control-border px-5 py-2.5 text-base font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
+                ? "rounded-[var(--radius-button)] bg-primary px-5 py-2.5 text-base font-bold text-white no-underline"
+                : "rounded-[var(--radius-button)] border border-control-border px-5 py-2.5 text-base font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
             }
           >
             {FILTER_LABELS[key]}
@@ -135,7 +135,7 @@ export default async function DeskLoansPage({
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
         <input type="hidden" name="filter" value={filter} />
         <div className="min-w-64 flex-1">
-          <label htmlFor="q" className="font-display text-lg font-bold text-ink">
+          <label htmlFor="q" className="text-base font-semibold text-ink">
             Find a loan
           </label>
           <p id="q-hint" className="mt-1 text-base text-ink-soft">
@@ -148,12 +148,12 @@ export default async function DeskLoansPage({
             defaultValue={search}
             autoComplete="off"
             aria-describedby="q-hint"
-            className="mt-2 min-h-14 w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface px-4 text-lg"
+            className="mt-2 min-h-14 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-4 text-lg"
           />
         </div>
         <button
           type="submit"
-          className="min-h-14 rounded-full bg-primary px-6 text-lg font-bold text-white hover:bg-primary-deep"
+          className="min-h-14 rounded-[var(--radius-button)] bg-primary px-6 text-lg font-bold text-white hover:bg-primary-deep"
         >
           Search
         </button>
@@ -202,12 +202,12 @@ export default async function DeskLoansPage({
 
               return (
                 <tr key={loan.loanId} className="border-t-2 border-hairline align-top">
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-2.5 align-top">
                     <p className="font-bold text-ink">{loan.readerName}</p>
-                    <p className="font-mono text-base text-ink-soft">{loan.memberCode}</p>
+                    <p className="code text-base text-ink-soft">{loan.memberCode}</p>
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-2.5 align-top">
                     {/*
                       Jacket first. A librarian scanning thirty rows for the
                       book a child is holding recognises the cover well before
@@ -235,13 +235,13 @@ export default async function DeskLoansPage({
                     </span>
                   </td>
 
-                  <td className="px-4 py-3 font-mono">{loan.copyCode}</td>
+                  <td className="px-3.5 py-2.5 align-top code">{loan.copyCode}</td>
 
-                  <td className="px-4 py-3 text-ink-soft">
+                  <td className="px-3.5 py-2.5 align-top text-ink-soft">
                     {formatInTimezone(loan.issuedAt, settings.timezone)}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-2.5 align-top">
                     <span className="text-ink">
                       {formatInTimezone(loan.dueAt, settings.timezone)}
                     </span>
@@ -257,7 +257,7 @@ export default async function DeskLoansPage({
                     ) : null}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-2.5 align-top">
                     {/*
                       Word first. The badge carries a colour AND a shape mark AND
                       the word, because colour alone fails a child — or a
@@ -283,7 +283,7 @@ export default async function DeskLoansPage({
                     ) : null}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-2.5 align-top">
                     {loan.status === "ACTIVE" ? (
                       <LoanActions
                         loanId={loan.loanId}
@@ -320,7 +320,7 @@ export default async function DeskLoansPage({
               className={
                 number === result.page
                   ? "rounded-lg bg-primary px-4 py-2 font-bold text-white no-underline"
-                  : "rounded-lg border-2 border-control-border px-4 py-2 font-bold text-ink-soft no-underline hover:bg-surface-sunk"
+                  : "rounded-lg border border-control-border px-4 py-2 font-bold text-ink-soft no-underline hover:bg-surface-sunk"
               }
             >
               {number}

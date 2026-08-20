@@ -29,8 +29,13 @@ export function Field({
   const errorId = error ? `${id}-error` : undefined;
 
   return (
-    <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="font-display text-lg font-bold text-ink">
+    <div className="flex flex-col gap-1.5">
+      {/*
+        The body face, not the display serif. A label names a box; it is not a
+        heading, and setting every one of them in Fraunces at 700 was what made
+        a four-field form look like a stack of chapter titles.
+      */}
+      <label htmlFor={id} className="text-base font-semibold text-ink">
         {label}
         {required ? (
           <>
@@ -44,7 +49,7 @@ export function Field({
       </label>
 
       {hint ? (
-        <p id={hintId} className="text-base text-ink-soft">
+        <p id={hintId} className="text-sm text-ink-soft">
           {hint}
         </p>
       ) : null}
@@ -52,7 +57,7 @@ export function Field({
       {children}
 
       {error ? (
-        <p id={errorId} role="alert" className="flex items-start gap-2 text-base font-bold text-danger">
+        <p id={errorId} role="alert" className="flex items-start gap-2 text-sm font-semibold text-danger">
           <span aria-hidden="true">⚠</span>
           {error}
         </p>
@@ -75,7 +80,7 @@ type SelectProps = ComponentPropsWithoutRef<"select"> & {
  * worse for a seven-year-old on a tablet.
  *
  * `appearance-none` plus a drawn chevron, because the default arrow is tiny and
- * the field has to read as tappable at 56px.
+ * the field has to read as tappable at 48px.
  */
 export function Select({ invalid, describedBy, className, children, ...rest }: SelectProps) {
   return (
@@ -85,8 +90,8 @@ export function Select({ invalid, describedBy, className, children, ...rest }: S
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
         className={cn(
-          "min-h-14 w-full appearance-none rounded-[var(--radius-field)] border-2 bg-surface",
-          "ps-4 pe-12 text-lg text-ink",
+          "min-h-12 w-full appearance-none rounded-[var(--radius-field)] border bg-surface",
+          "ps-3.5 pe-11 text-base text-ink",
           invalid ? "border-danger" : "border-control-border",
           className,
         )}
@@ -115,7 +120,7 @@ export function TextInput({ invalid, describedBy, className, ...rest }: TextInpu
       aria-invalid={invalid || undefined}
       aria-describedby={describedBy}
       className={cn(
-        "min-h-14 w-full rounded-[var(--radius-field)] border-2 bg-surface px-4 text-lg",
+        "min-h-12 w-full rounded-[var(--radius-field)] border bg-surface px-3.5 text-base",
         "placeholder:text-ink-faint",
         invalid ? "border-danger" : "border-control-border",
         className,

@@ -101,7 +101,7 @@ export default async function AccountPage() {
                 nothing is cached in your browser.
               </p>
               {permissions.length > 0 ? (
-                <ul className="grid gap-1.5 font-mono text-base">
+                <ul className="grid gap-1.5 code text-base">
                   {permissions.map((permission) => (
                     <li key={permission}>
                       {permission}

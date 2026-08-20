@@ -170,7 +170,7 @@ export default async function MemberDetailPage({
 
               <dl className="mt-5 grid gap-x-6 gap-y-3 text-base sm:grid-cols-2">
                 <Row label="Library card">
-                  <span className="font-mono">{member.memberCode ?? "—"}</span>
+                  <span className="code">{member.memberCode ?? "—"}</span>
                 </Row>
                 <Row label="Flat">{member.apartment ?? "—"}</Row>
                 <Row label="Joined">

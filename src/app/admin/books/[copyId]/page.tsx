@@ -50,7 +50,7 @@ export default async function EditBookPage({
 
   return (
     <StaffShell branding={branding} actor={actor} title={book.title}>
-      <p className="font-mono text-base text-ink-soft">{book.copyCode}</p>
+      <p className="code text-base text-ink-soft">{book.copyCode}</p>
 
       {book.archivedAt ? (
         <Callout tone="warn" title="This book is archived" className="mt-4 max-w-2xl">

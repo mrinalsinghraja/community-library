@@ -57,13 +57,13 @@ export function IssueConfirm({
           */}
           <a
             href="/desk/circulation"
-            className="inline-flex min-h-14 items-center justify-center gap-2.5 rounded-full bg-primary px-6 text-lg font-bold text-white no-underline hover:bg-primary-deep"
+            className="inline-flex min-h-14 items-center justify-center gap-2.5 rounded-[var(--radius-button)] bg-primary px-6 text-lg font-bold text-white no-underline hover:bg-primary-deep"
           >
             Next reader
           </a>
           <a
             href="/desk/loans"
-            className="inline-flex min-h-14 items-center justify-center gap-2.5 rounded-full border-2 border-control-border px-6 text-lg font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
+            className="inline-flex min-h-14 items-center justify-center gap-2.5 rounded-[var(--radius-button)] border border-control-border px-6 text-lg font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
           >
             See books out
           </a>

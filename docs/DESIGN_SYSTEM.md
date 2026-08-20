@@ -90,18 +90,79 @@ describing components.
 
 | role | face | why |
 |---|---|---|
-| display | **Quicksand** 500/600/700 | the wordmark on the mark is a wide geometric sans with open apertures; headings and logo now rhyme instead of arguing |
+| display | **Fraunces** variable, weight 600, `SOFT 40` `WONK 1`, `opsz` auto | a low-contrast soft serif from mid-century children's-book lettering. Warm, and it belongs to books |
 | body | **Nunito Sans** | tall x-height, unambiguous `a` and `g` — what a six-year-old needs |
+| code | system `ui-monospace` | codes and counts only; no web font for eight characters |
 
-Both are self-hosted by `next/font` at build time. **No request ever leaves a
-child's browser for a font**, which is a privacy property and the reason
-`connect-src` can stay `'self'`.
+Both web faces are self-hosted by `next/font` at build time. **No request ever
+leaves a child's browser for a font**, which is a privacy property and the
+reason `connect-src` can stay `'self'`.
 
-**Body text starts at 18px, not 16px** (`--text-base: 1.125rem`), line-height
-1.65. These readers are still learning. Headings run to 3.75rem, tracking
-`-0.015em`, line-height 1.15.
+**Fraunces replaced Quicksand.** Quicksand echoed the wordmark and did it
+honestly, but a wide rounded geometric sans at 700 weight and 48px reads as a
+craft-fair poster, and the library outgrew that.
 
-Never set body copy in the display face, and never below 18px.
+### The display face is for headings and nothing else
+
+The old system set navigation, buttons, form labels and table headers in the
+display face too. That was the other half of the problem: a characterful face
+sprayed across every control makes an interface look like a poster instead of a
+place to work. Reserve it and it starts to mean something.
+
+Everything that is not a heading — labels, buttons, navigation, tables, hints —
+is Nunito Sans at 600. The one exception is a **book title**, which is the
+library's own subject matter and keeps the serif.
+
+### The scale
+
+| token | size |
+|---|---|
+| `--text-base` | 1.0625rem (17px), line-height 1.6 |
+| `--text-lg` | 1.125rem |
+| `--text-xl` | 1.25rem |
+| `--text-2xl` | 1.5rem |
+| `--text-3xl` | 1.75rem |
+| `--text-4xl` | 2.125rem |
+| `--text-5xl` | 2.625rem |
+
+It came down by about a third. 18px body with a 60px display was a picture book
+blown up to fill a laptop: a librarian could see six table rows, and a heading
+ate the top of every screen.
+
+**17px is the child-facing floor and it stays above 16px.** The desk steps down
+to 16px through one class — see §11.
+
+Headings are weight **600**, not 700: weight was doing the job that size should
+have been doing. Tracking `-0.008em` (a serif needs far less negative tracking
+than a wide geometric sans), line-height 1.2.
+
+Never set body copy in the display face, and never below 16px anywhere.
+
+---
+
+## 3b. The garden — the ambient layer
+
+One fixed layer of drawings sits behind the whole **reader-facing** application:
+a fox, a cat, a rabbit, a bird, a stack of books, sprigs, and the mark's own
+butterflies (`components/library/story-characters.tsx`).
+
+Three rules keep it from becoming wallpaper in the bad sense:
+
+1. **It is barely there** — 5% opacity in leaf green, berry and sun. Every
+   contrast ratio in this system was measured against the flat ground, and at
+   this strength the drawings move none of them.
+2. **It never reaches the desk.** Staff screens keep their plain white. A
+   librarian is working with a queue of children in front of them.
+3. **It is decoration and says so** — `aria-hidden`, no pointer events, and the
+   smaller drawings drop out below `sm`.
+
+Each motif is a **silhouette**, and that is a constraint rather than a style: at
+5% an eye or a page line disappears and leaves a smudge, while a shape
+recognisable by its outline alone still reads. Every part of a drawing overlaps
+the mass it belongs to — an ear drawn *beside* a head reads as a floating
+triangle. And no two animals share a silhouette: the rabbit's ears are rounded
+where the cat's and the fox's are pointed, and the fox is told from the cat by
+its snout and the brush of its tail.
 
 ---
 
@@ -169,7 +230,15 @@ book can go home today. The green background is confirmation, not information.
 
 ## 7. Shape, depth, motion
 
-- `--radius-card` 1.25rem · `--radius-field` 0.875rem · `--radius-button` 999px.
+- `--radius-card` 0.875rem · `--radius-field` 0.6rem · `--radius-button` 0.7rem.
+- **The fully round button is gone.** A pill is the shape of a toy, and every
+  control on the screen being a lozenge was, with the old rounded face, the
+  other half of why this looked like a game. Pills survive in exactly two
+  places, where they are conventional and mean something: status badges and
+  count badges.
+- Control borders are 1px, not 2px. `--color-control-border` is 3.85:1, so the
+  3:1 boundary rule is met by the colour, not by the thickness. Checkboxes and
+  radios keep 2px — a 1px box at 24px reads as empty.
 - `--shadow-lift` for resting cards, `--shadow-raise` for hover and heroes. Both
   are warm and soft — lit from a window, not a spotlight.
 - `.lift` — a 3px rise on hover. Transform and shadow only; no layout property is
@@ -370,8 +439,10 @@ Same system, different volume.
 | | child-facing | staff |
 |---|---|---|
 | ground | warm paper with grain | plain white |
-| headings | up to 3.75rem | 3rem, with the rule |
-| decoration | butterflies, sprigs, washes | the header rule, and nothing else |
+| body | 17px | 16px, via `.desk-density` on the shell |
+| headings | up to 2.625rem | 1.875rem, with the rule |
+| width | a reading measure | `max-w-[104rem]` — a table is scanned across, not read |
+| decoration | the garden layer, butterflies, sprigs | the header rule, and nothing else |
 | density | generous, two columns | compact, tables where genuinely useful |
 | language | "My books", "Ask to Keep Longer" | "Books out", "Asks to keep" |
 

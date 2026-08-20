@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Find a book" };
 
 const FIELD =
-  "min-h-14 w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface px-4 text-lg " +
+  "min-h-14 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-4 text-lg " +
   "focus:border-accent";
 
 /**
@@ -118,7 +118,7 @@ export default async function BooksPage({
         >
           <div className="flex flex-col gap-4">
             <label className="flex flex-col gap-2">
-              <span className="flex items-center gap-2 font-display text-lg font-bold text-ink">
+              <span className="flex items-center gap-2 text-base font-semibold text-ink">
                 <Icon name="search" className="text-accent-ink" />
                 Look for a book
               </span>
@@ -133,7 +133,7 @@ export default async function BooksPage({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="flex flex-col gap-2">
-                <span className="flex items-center gap-2 font-display text-lg font-bold text-ink">
+                <span className="flex items-center gap-2 text-base font-semibold text-ink">
                   <Icon name="shelf" className="text-accent-ink" />
                   Shelf
                 </span>
@@ -149,7 +149,7 @@ export default async function BooksPage({
               </label>
 
               <label className="flex flex-col gap-2">
-                <span className="flex items-center gap-2 font-display text-lg font-bold text-ink">
+                <span className="flex items-center gap-2 text-base font-semibold text-ink">
                   <Icon name="age" className="text-accent-ink" />
                   Ages
                 </span>
@@ -167,7 +167,7 @@ export default async function BooksPage({
             <div className="flex flex-wrap items-center gap-4">
               <button
                 type="submit"
-                className="inline-flex min-h-14 items-center gap-2.5 rounded-full bg-primary px-8 font-display text-lg font-bold text-white transition-colors hover:bg-primary-deep"
+                className="inline-flex min-h-14 items-center gap-2.5 rounded-[var(--radius-button)] bg-primary px-8 text-base font-semibold text-white transition-colors hover:bg-primary-deep"
               >
                 <Icon name="search" />
                 Show me
@@ -254,8 +254,8 @@ export default async function BooksPage({
                   aria-current={number === result.page ? "page" : undefined}
                   className={
                     number === result.page
-                      ? "min-h-12 rounded-full bg-primary px-5 py-2.5 text-lg font-bold text-white no-underline"
-                      : "min-h-12 rounded-full border-2 border-control-border px-5 py-2.5 text-lg font-bold text-ink-soft no-underline hover:bg-surface-sunk"
+                      ? "min-h-12 rounded-[var(--radius-button)] bg-primary px-5 py-2.5 text-lg font-bold text-white no-underline"
+                      : "min-h-12 rounded-[var(--radius-button)] border border-control-border px-5 py-2.5 text-lg font-bold text-ink-soft no-underline hover:bg-surface-sunk"
                   }
                 >
                   {number}

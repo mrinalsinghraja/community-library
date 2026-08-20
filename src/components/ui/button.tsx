@@ -6,9 +6,13 @@ import { cn } from "@/lib/cn";
 /**
  * The one button in the system.
  *
- * Sizing note: `md` is 56px tall and `lg` is 68px. That is larger than a typical
- * web button on purpose — the smallest hands using this application are five
- * years old, and 44px targets are sized for adult thumbs.
+ * Sizing note: `md` is 48px tall and `lg` is 58px — still above the 44px target
+ * everyone quotes, because the smallest hands using this application are five
+ * years old. They came down from 56 and 68: a button that tall next to 17px
+ * text is not generous, it is a slab, and three of them in a row filled a
+ * phone screen.
+ *
+ * `sm` is 40px and is what the desk uses. A librarian is clicking with a mouse.
  */
 
 type Variant = "primary" | "secondary" | "quiet" | "danger";
@@ -24,18 +28,24 @@ const VARIANT_CLASSES: Record<Variant, string> = {
   secondary:
     "bg-surface text-accent-ink border-2 border-accent hover:bg-accent-wash active:translate-y-px",
   quiet:
-    "bg-transparent text-ink-soft border-2 border-control-border hover:bg-surface-sunk hover:text-ink",
+    "bg-transparent text-ink-soft border border-control-border hover:bg-surface-sunk hover:text-ink",
   danger: "bg-danger text-white shadow-lift hover:brightness-110 active:translate-y-px",
 };
 
 const SIZE_CLASSES: Record<Size, string> = {
-  sm: "min-h-11 px-4 text-base gap-2",
-  md: "min-h-14 px-6 text-lg gap-2.5",
-  lg: "min-h-17 px-8 text-xl gap-3",
+  sm: "min-h-10 px-3.5 text-sm gap-1.5",
+  md: "min-h-12 px-5 text-base gap-2",
+  lg: "min-h-[3.625rem] px-7 text-lg gap-2.5",
 };
 
+/*
+ * The body face, not the display serif, and no longer a pill.
+ *
+ * Both were deliberate reversals: a rounded display face on every control plus
+ * a 999px radius is the shape language of a game, and this is a library.
+ */
 const BASE_CLASSES =
-  "inline-flex items-center justify-center rounded-full font-bold font-display " +
+  "inline-flex items-center justify-center rounded-[var(--radius-button)] font-semibold " +
   "transition-[background-color,transform,filter] duration-150 " +
   "disabled:opacity-55 disabled:pointer-events-none " +
   "no-underline text-center";

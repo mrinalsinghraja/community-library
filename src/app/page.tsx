@@ -45,7 +45,7 @@ export default async function HomePage() {
         <div className="mx-auto max-w-5xl px-5 pt-6 sm:px-8">
           <Callout tone="warn" title="This library is not set up yet">
             No library configuration was found. Run the seed described in{" "}
-            <code className="font-mono text-base">docs/SETUP.md</code> to create the community,
+            <code className="code text-base">docs/SETUP.md</code> to create the community,
             library and settings rows.
           </Callout>
         </div>
@@ -55,10 +55,13 @@ export default async function HomePage() {
       {/* Hero                                                              */}
       {/* ---------------------------------------------------------------- */}
       <section className="relative overflow-hidden">
-        {/* the garden, drawn in soft washes behind everything */}
+        {/*
+          The two big wash circles that used to sit here are gone. The garden is
+          drawn once now, behind the whole reader app (`StoryCharacters`), and
+          two ambient systems on one page is one too many — the blobs were
+          reading as smudges under the drawings rather than as anything.
+        */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-24 -top-16 h-72 w-72 rounded-full bg-primary-wash opacity-70" />
-          <div className="absolute -right-20 top-24 h-80 w-80 rounded-full bg-accent-wash opacity-60" />
           <Butterfly className="drift absolute right-[12%] top-10 w-10 opacity-80 sm:w-14" />
           <LeafSprig className="absolute bottom-6 left-[4%] hidden w-12 opacity-50 md:block" />
         </div>

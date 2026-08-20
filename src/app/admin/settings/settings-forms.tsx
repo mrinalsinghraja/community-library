@@ -420,7 +420,7 @@ export function UnavailableFeatures() {
       <dl className="mt-5 flex flex-col gap-4">
         {UNAVAILABLE_FEATURES.map((feature) => (
           <div key={feature.label}>
-            <dt className="font-display text-lg font-bold text-ink">{feature.label}</dt>
+            <dt className="text-base font-semibold text-ink">{feature.label}</dt>
             <dd className="text-base text-ink-soft">{feature.reason}</dd>
           </div>
         ))}

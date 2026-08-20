@@ -76,12 +76,12 @@ export default async function DeskRenewalsPage() {
           <DataTable headers={["Reader", "Book", "Book ID", "Due now", "Asked", "Answer"]}>
             {requests.map((request) => (
               <tr key={request.requestId} className="border-t-2 border-hairline align-top">
-                <td className="px-4 py-3">
+                <td className="px-3.5 py-2.5 align-top">
                   <p className="font-bold text-ink">{request.readerName}</p>
-                  <p className="font-mono text-base text-ink-soft">{request.memberCode}</p>
+                  <p className="code text-base text-ink-soft">{request.memberCode}</p>
                 </td>
 
-                <td className="px-4 py-3">
+                <td className="px-3.5 py-2.5 align-top">
                   <div className="flex items-start gap-3">
                     <span className="w-11 shrink-0">
                       <CoverThumbnail
@@ -104,9 +104,9 @@ export default async function DeskRenewalsPage() {
                   </div>
                 </td>
 
-                <td className="px-4 py-3 font-mono">{request.copyCode}</td>
+                <td className="px-3.5 py-2.5 align-top code">{request.copyCode}</td>
 
-                <td className="px-4 py-3">
+                <td className="px-3.5 py-2.5 align-top">
                   <span className="text-ink">
                     {formatInTimezone(request.dueAt, settings.timezone)}
                   </span>
@@ -122,11 +122,11 @@ export default async function DeskRenewalsPage() {
                   )}
                 </td>
 
-                <td className="px-4 py-3 text-ink-soft">
+                <td className="px-3.5 py-2.5 align-top text-ink-soft">
                   {formatInTimezone(request.requestedAt, settings.timezone)}
                 </td>
 
-                <td className="px-4 py-3">
+                <td className="px-3.5 py-2.5 align-top">
                   <DecisionActions
                     requestId={request.requestId}
                     readerName={request.readerName}

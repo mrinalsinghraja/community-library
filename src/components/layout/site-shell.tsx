@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Butterfly, LibraryLogo } from "@/components/library/library-logo";
+import { StoryCharacters } from "@/components/library/story-characters";
 import { getActor } from "@/server/authz";
 import type { Branding } from "@/server/lib/settings";
 
@@ -13,9 +14,16 @@ import type { Branding } from "@/server/lib/settings";
  * parked in a corner. Everything visible here comes from configuration.
  */
 
+/*
+ * Navigation is set in the body face, not the display one.
+ *
+ * A characterful serif on every control is what made this read as a poster. The
+ * headings keep Fraunces; the doors are quiet, so the reader's eye goes to the
+ * page rather than to the way out of it.
+ */
 const NAV_LINK =
-  "rounded-full px-2.5 py-2.5 text-base font-bold font-display text-ink-soft no-underline " +
-  "transition-colors hover:bg-accent-wash hover:text-accent-ink sm:px-4 sm:text-lg";
+  "rounded-[var(--radius-button)] px-2.5 py-2 text-base font-semibold text-ink-soft no-underline " +
+  "transition-colors hover:bg-accent-wash hover:text-accent-ink sm:px-3.5";
 
 export async function SiteHeader({
   branding,
@@ -45,7 +53,7 @@ export async function SiteHeader({
         buttons either shreds it into four lines or truncates the community's
         own name — neither is acceptable on the front door.
       */}
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 sm:px-8">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-3 px-5 py-3.5 sm:px-8">
         <Link
           href="/"
           className="flex items-center gap-3 no-underline sm:gap-4"
@@ -54,11 +62,11 @@ export async function SiteHeader({
           <LibraryLogo
             logoUrl={branding.logoUrl}
             libraryName={branding.libraryName}
-            size={52}
-            className="w-11 shrink-0 sm:w-14"
+            size={48}
+            className="w-10 shrink-0 sm:w-12"
           />
           <span className="flex flex-col leading-tight">
-            <span className="font-display text-lg font-bold text-ink sm:text-2xl">
+            <span className="font-display text-lg font-semibold text-ink sm:text-2xl">
               {branding.libraryName}
             </span>
             <span className="text-sm text-ink-soft sm:text-base">{branding.communityName}</span>
@@ -122,7 +130,7 @@ export async function SiteHeader({
           ) : null}
           <Link
             href={signedIn ? "/account" : "/login"}
-            className="rounded-full bg-primary px-5 py-2.5 font-display text-base font-bold text-white no-underline transition-colors hover:bg-primary-deep sm:text-lg"
+            className="rounded-[var(--radius-button)] bg-primary px-4 py-2 text-base font-semibold text-white no-underline transition-colors hover:bg-primary-deep"
           >
             {signedIn ? "My library" : "Sign in"}
           </Link>
@@ -143,8 +151,8 @@ export async function SiteHeader({
 
 export function SiteFooter({ branding }: { branding: Branding }) {
   return (
-    <footer className="mt-20 border-t-2 border-hairline bg-surface">
-      <div className="mx-auto flex max-w-5xl flex-col gap-4 px-5 py-10 text-base text-ink-soft sm:px-8">
+    <footer className="mt-16 border-t border-hairline bg-surface">
+      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-9 text-base text-ink-soft sm:px-8">
         <div className="flex items-center gap-3">
           <LibraryLogo
             logoUrl={branding.logoUrl}
@@ -153,7 +161,7 @@ export function SiteFooter({ branding }: { branding: Branding }) {
             priority={false}
             className="w-9 shrink-0"
           />
-          <p className="font-display text-lg font-bold text-ink">{branding.libraryName}</p>
+          <p className="font-display text-lg font-semibold text-ink">{branding.libraryName}</p>
         </div>
         <p className="max-w-2xl">
           A free library run by and for the {branding.communityName} community. Books are shared,
@@ -188,6 +196,8 @@ export function PublicShell({
 }) {
   return (
     <div className="flex min-h-screen flex-col">
+      {/* Behind everything on the reader side, and never on the desk. */}
+      <StoryCharacters />
       <SiteHeader branding={branding} signedIn={signedIn} />
       <main id="main" className="flex-1">
         {children}
@@ -216,7 +226,7 @@ export function PageHeading({
       {butterfly ? (
         <Butterfly className="drift absolute -top-2 right-0 w-9 opacity-80 sm:w-12" />
       ) : null}
-      {children ? <p className="mt-8 max-w-2xl text-lg text-ink-soft">{children}</p> : null}
+      {children ? <p className="mt-7 max-w-2xl text-lg text-ink-soft">{children}</p> : null}
     </div>
   );
 }

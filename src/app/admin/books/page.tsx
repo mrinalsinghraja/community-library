@@ -116,16 +116,22 @@ export default async function AdminBooksPage({
 
       <form
         method="get"
-        className="mt-6 grid gap-4 rounded-[var(--radius-card)] bg-surface-sunk p-5 sm:grid-cols-2 lg:grid-cols-3"
+        /*
+          A filter bar, not a filter page. Six controls used to sit two-per-row
+          in a well the height of a small screen, each stretched to 600px to
+          hold the word "Any"; now they line up across the top and the results
+          start where the eye already is.
+        */
+        className="mt-5 grid gap-x-4 gap-y-3 rounded-[var(--radius-card)] bg-surface-sunk px-4 py-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6"
       >
-        <label className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-3">
-          <span className="font-display font-bold text-ink">Search</span>
+        <label className="flex flex-col gap-1 sm:col-span-2">
+          <span className="text-sm font-semibold text-ink-soft">Search</span>
           <input
             type="search"
             name="q"
             defaultValue={search}
             placeholder="Title, author or book ID"
-            className="min-h-12 w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface px-4 text-base"
+            className="min-h-10 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-3 text-base"
           />
         </label>
 
@@ -168,7 +174,7 @@ export default async function AdminBooksPage({
           <option value="code">Book ID</option>
         </FilterSelect>
 
-        <label className="flex items-center gap-3 self-end pb-1">
+        <label className="flex items-center gap-2.5 self-end pb-1.5">
           <input
             type="checkbox"
             name="archived"
@@ -176,18 +182,18 @@ export default async function AdminBooksPage({
             defaultChecked={includeArchived}
             className="size-6 rounded border-2 border-control-border"
           />
-          <span className="font-display font-bold text-ink">Include archived</span>
+          <span className="text-sm font-semibold text-ink">Include archived</span>
         </label>
 
-        <div className="flex items-center gap-3 sm:col-span-2 lg:col-span-3">
+        <div className="flex items-center gap-3 self-end pb-0.5 sm:col-span-2 lg:col-span-1">
           <button
             type="submit"
-            className="rounded-full bg-primary px-6 py-3 text-base font-bold text-white hover:bg-primary-deep"
+            className="min-h-10 rounded-[var(--radius-button)] bg-primary px-5 text-sm font-semibold text-white hover:bg-primary-deep"
           >
             Apply
           </button>
           {filtering || includeArchived ? (
-            <Link href="/admin/books" className="text-base font-bold text-primary-deep">
+            <Link href="/admin/books" className="text-sm font-semibold text-primary-deep">
               Clear
             </Link>
           ) : null}
@@ -221,8 +227,8 @@ export default async function AdminBooksPage({
               const status = statusDefinition(book.status);
               return (
                 <tr key={book.copyId} className="border-t-2 border-hairline align-top">
-                  <td className="px-4 py-3 font-mono">{book.copyCode}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-2.5 align-top code">{book.copyCode}</td>
+                  <td className="px-3.5 py-2.5 align-top">
                     <span className="flex items-start gap-3">
                       <span className="w-11 shrink-0">
                         <CoverThumbnail
@@ -244,13 +250,13 @@ export default async function AdminBooksPage({
                       </span>
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-ink-soft">{book.categoryName}</td>
-                  <td className="px-4 py-3 text-ink-soft">{ageGroupLabel(book.ageGroup)}</td>
-                  <td className="px-4 py-3 text-ink-soft">{conditionLabel(book.condition)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-2.5 align-top text-ink-soft">{book.categoryName}</td>
+                  <td className="px-3.5 py-2.5 align-top text-ink-soft">{ageGroupLabel(book.ageGroup)}</td>
+                  <td className="px-3.5 py-2.5 align-top text-ink-soft">{conditionLabel(book.condition)}</td>
+                  <td className="px-3.5 py-2.5 align-top">
                     <StatusBadge tone={status.tone}>{status.staffLabel}</StatusBadge>
                   </td>
-                  <td className="px-4 py-3 text-ink-soft">
+                  <td className="px-3.5 py-2.5 align-top text-ink-soft">
                     {book.donorName ? (
                       <>
                         {book.donorName}
@@ -266,7 +272,7 @@ export default async function AdminBooksPage({
                       "—"
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-2.5 align-top">
                     <ArchiveActions
                       copyId={book.copyId}
                       copyCode={book.copyCode}
@@ -300,7 +306,7 @@ export default async function AdminBooksPage({
                 className={
                   number === result.page
                     ? "rounded-lg bg-primary px-4 py-2 font-bold text-white no-underline"
-                    : "rounded-lg border-2 border-control-border px-4 py-2 font-bold text-ink-soft no-underline hover:bg-surface-sunk"
+                    : "rounded-lg border border-control-border px-4 py-2 font-bold text-ink-soft no-underline hover:bg-surface-sunk"
                 }
               >
                 {number}
@@ -328,12 +334,12 @@ function FilterSelect({
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="font-display font-bold text-ink">{label}</span>
+    <label className="flex flex-col gap-1">
+      <span className="text-sm font-semibold text-ink-soft">{label}</span>
       <select
         name={name}
         defaultValue={value}
-        className="min-h-12 w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface px-3 text-base"
+        className="min-h-10 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-2.5 text-base"
       >
         {includeAny ? <option value="">Any</option> : null}
         {children}

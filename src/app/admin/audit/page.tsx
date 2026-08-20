@@ -127,13 +127,13 @@ export default async function AuditPage({
           <DataTable headers={["When", "Who", "What happened", "Record", "Details"]}>
             {result.entries.map((entry) => (
               <tr key={entry.id} className="border-t-2 border-hairline align-top">
-                <td className="px-4 py-3 whitespace-nowrap">
+                <td className="px-3.5 py-2.5 align-top whitespace-nowrap">
                   {formatInTimezone(entry.occurredAt, settings.timezone, "d MMM yyyy HH:mm")}
                 </td>
-                <td className="px-4 py-3">{entry.actorLabel}</td>
-                <td className="px-4 py-3 font-mono text-sm">{entry.action}</td>
-                <td className="px-4 py-3 text-ink-soft">{entry.entityType}</td>
-                <td className="px-4 py-3">
+                <td className="px-3.5 py-2.5 align-top">{entry.actorLabel}</td>
+                <td className="px-3.5 py-2.5 align-top code text-sm">{entry.action}</td>
+                <td className="px-3.5 py-2.5 align-top text-ink-soft">{entry.entityType}</td>
+                <td className="px-3.5 py-2.5 align-top">
                   {entry.details ? (
                     <pre className="max-w-md overflow-x-auto text-sm text-ink-soft">
                       {JSON.stringify(entry.details, null, 1)}

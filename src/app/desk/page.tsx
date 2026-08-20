@@ -67,13 +67,18 @@ export default async function DeskPage() {
         Hello {actor.displayName}. Here is what needs you today.
       </p>
 
-      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {/*
+        Capped, unlike the tables around it. The desk shell is wide because a
+        catalogue row needs the room; six tiles holding a one-digit number do
+        not, and stretched across 1600px they read as a mostly-empty screen.
+      */}
+      <div className="mt-6 grid max-w-[84rem] gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {actor.permissions.has("loan.return") ? (
           <Link href="/desk/loans" className="no-underline">
             <Card tone={loans.overdue > 0 ? "shelf" : "plain"} className="h-full">
               <CardTitle icon={<Icon name="book" />}>Books out</CardTitle>
               <CardBody>
-                <p className="font-display text-5xl font-extrabold text-ink">{loans.active}</p>
+                <p className="font-display text-4xl font-semibold tabular-nums text-ink">{loans.active}</p>
                 <p className="mt-1">
                   {loans.overdue === 0
                     ? loans.active === 0
@@ -93,7 +98,7 @@ export default async function DeskPage() {
             <Card tone={borrowAsks > 0 ? "shelf" : "plain"} className="h-full">
               <CardTitle icon={<Icon name="shelf" />}>Books asked for</CardTitle>
               <CardBody>
-                <p className="font-display text-5xl font-extrabold text-ink">{borrowAsks}</p>
+                <p className="font-display text-4xl font-semibold tabular-nums text-ink">{borrowAsks}</p>
                 <p className="mt-1">
                   {borrowAsks === 0
                     ? "No one is waiting."
@@ -111,7 +116,7 @@ export default async function DeskPage() {
             <Card tone={renewalAsks > 0 ? "shelf" : "plain"} className="h-full">
               <CardTitle icon={<Icon name="renew" />}>Asks to keep</CardTitle>
               <CardBody>
-                <p className="font-display text-5xl font-extrabold text-ink">{renewalAsks}</p>
+                <p className="font-display text-4xl font-semibold tabular-nums text-ink">{renewalAsks}</p>
                 <p className="mt-1">
                   {renewalAsks === 0
                     ? "No one is asking."
@@ -129,7 +134,7 @@ export default async function DeskPage() {
             <Card tone={pending > 0 ? "shelf" : "plain"} className="h-full">
               <CardTitle icon={<Icon name="reader" />}>New members</CardTitle>
               <CardBody>
-                <p className="font-display text-5xl font-extrabold text-ink">{pending}</p>
+                <p className="font-display text-4xl font-semibold tabular-nums text-ink">{pending}</p>
                 <p className="mt-1">
                   {pending === 0
                     ? "Nothing waiting."

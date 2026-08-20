@@ -79,29 +79,62 @@
 
   /* --- Type -------------------------------------------------------------- */
   /*
-   * Quicksand for display, because the wordmark on the library's own mark is a
-   * wide geometric sans with open apertures — the headings and the logo now
-   * rhyme instead of arguing. Nunito Sans stays for reading: it was chosen for
-   * its tall x-height and unambiguous a/g, which is what a six-year-old needs.
+   * Two families, and the split between them is the whole idea.
+   *
+   * Fraunces is the *editorial* voice: headings, and nothing else. It is a soft
+   * serif from the world of children's books, so it carries the warmth the old
+   * rounded sans was there for while reading as something made rather than
+   * something clip-arted.
+   *
+   * Nunito Sans does all the work: body, navigation, buttons, labels, tables.
+   * It was picked for a tall x-height and an unambiguous a/g, which is exactly
+   * what a six-year-old decoding words needs, and none of that changed.
+   *
+   * The old system set navigation and buttons in the display face too. That is
+   * the mistake being corrected: a characterful face sprayed across every
+   * control is what makes an interface look like a poster instead of a place to
+   * work. Reserve it, and it starts to mean something.
    */
-  --font-display: var(--font-quicksand), ui-rounded, "Trebuchet MS", system-ui, sans-serif;
+  --font-display: var(--font-fraunces), "Iowan Old Style", Georgia, serif;
   --font-body: var(--font-nunito), system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Codes and counts. No web font: short strings, and the system stack is
+     already there. `tabular-nums` matters more than the shapes do. */
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", monospace;
 
-  /* Body text starts at 18px, not 16px: these readers are still learning. */
-  --text-base: 1.125rem;
-  --text-base--line-height: 1.65;
-  --text-lg: 1.25rem;
-  --text-lg--line-height: 1.55;
-  --text-xl: 1.5rem;
-  --text-2xl: 1.875rem;
-  --text-3xl: 2.25rem;
-  --text-4xl: 3rem;
-  --text-5xl: 3.75rem;
+  /*
+   * The scale came down by about a third.
+   *
+   * 18px body and a 60px display was a young reader's picture book blown up to
+   * fill a laptop: a librarian could see six table rows, and a heading ate the
+   * top of every screen. 17px still clears the 16px floor these readers need,
+   * and the desk steps down again to 16px (see `.desk-density` below) because
+   * an adult at a keyboard is not the person the 18px was for.
+   */
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9125rem;
+  --text-base: 1.0625rem;
+  --text-base--line-height: 1.6;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.5;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.75rem;
+  --text-4xl: 2.125rem;
+  --text-5xl: 2.625rem;
 
   /* --- Shape ------------------------------------------------------------- */
-  --radius-card: 1.25rem;
-  --radius-button: 999px;
-  --radius-field: 0.875rem;
+  /*
+   * The radii came down too, and the fully round button went.
+   *
+   * A pill is the shape of a toy. Every control on the screen being a lozenge
+   * was, with the rounded face, the other half of why this looked like a game —
+   * and a 999px radius on a wide button bows its sides in a way that reads as
+   * cheap at any size. A generous but finite corner keeps the softness and
+   * stops the interface insisting on how friendly it is.
+   */
+  --radius-card: 0.875rem;
+  --radius-button: 0.7rem;
+  --radius-field: 0.6rem;
 
   /* Soft, warm shadows — as if lit from a window, not a spotlight. */
   --shadow-lift: 0 1px 2px rgb(43 33 24 / 0.04), 0 4px 12px rgb(43 33 24 / 0.06);
@@ -129,7 +162,7 @@
     color: var(--color-ink);
     font-family: var(--font-body);
     font-size: var(--text-base);
-    line-height: 1.65;
+    line-height: 1.6;
     /* A whisper of paper grain, so the ground reads as material not as #FDF8F0. */
     background-image: radial-gradient(
       circle at 1px 1px,
@@ -145,9 +178,29 @@
   h4 {
     font-family: var(--font-display);
     color: var(--color-ink);
-    font-weight: 700;
-    line-height: 1.15;
-    letter-spacing: -0.015em;
+    /*
+     * 600, not 700. Fraunces at 700 on a warm ground is heavier than anything
+     * on these pages needs to be, and weight was doing the job that size should
+     * have been doing.
+     */
+    font-weight: 600;
+    line-height: 1.2;
+    /* A serif needs far less negative tracking than a wide geometric sans did;
+       -0.015em was closing the counters. */
+    letter-spacing: -0.008em;
+    /* Draws a 34px heading and a 20px card title differently, rather than
+       scaling one outline. This is the reason the face is variable. */
+    font-optical-sizing: auto;
+    /* SOFT rounds the terminals just enough to stay kind to a young reader.
+       WONK keeps a little of the hand in the g and the italics. */
+    font-variation-settings: "SOFT" 40, "WONK" 1;
+  }
+
+  /* A number is not prose. Codes, counts and dates line up. */
+  th,
+  td,
+  time {
+    font-variant-numeric: tabular-nums;
   }
 
   /*
@@ -184,6 +237,43 @@
 }
 
 @layer components {
+  /*
+   * THE DESK STEPS DOWN.
+   *
+   * The reader app is set at 17px because a six-year-old is still decoding
+   * words. A librarian is not that person: they are an adult at a keyboard with
+   * a queue in front of them, and what they need is to see the next eight rows
+   * of a table without scrolling. One class on the staff shell takes the whole
+   * of it down a step — nothing on a staff screen has to opt in, and nothing on
+   * a child's screen is touched.
+   *
+   * 16px is the floor and it stays the floor. Density is bought from the
+   * padding and the headings, not from making text small.
+   */
+  .desk-density {
+    --text-base: 1rem;
+    --text-base--line-height: 1.55;
+    --text-lg: 1.0625rem;
+    --text-xl: 1.1875rem;
+    --text-2xl: 1.375rem;
+    --text-3xl: 1.5rem;
+    --text-4xl: 1.875rem;
+    --text-5xl: 2.25rem;
+    font-size: 1rem;
+  }
+
+  /*
+   * A code is not a word. `MJCL-B0004` was breaking across two lines in the
+   * catalogue because the browser was treating the hyphen as a chance to wrap —
+   * this stops that, and lines the digits up while it is there.
+   */
+  .code {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    letter-spacing: -0.01em;
+  }
+
   /*
    * Skip link — the first thing a keyboard user meets. Hidden until focused.
    */

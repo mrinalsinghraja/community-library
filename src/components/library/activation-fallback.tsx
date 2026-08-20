@@ -122,7 +122,7 @@ export function ActivationFallback({
                 readOnly
                 value={url}
                 onFocus={(event) => event.currentTarget.select()}
-                className="w-full rounded-lg border-2 border-control-border bg-surface px-2 py-1 font-mono text-sm text-ink-soft"
+                className="w-full rounded-lg border border-control-border bg-surface px-2 py-1 font-mono text-sm text-ink-soft"
               />
             </>
           ) : null}

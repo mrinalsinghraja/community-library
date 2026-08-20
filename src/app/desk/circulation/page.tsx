@@ -118,7 +118,7 @@ export default async function CirculationDeskPage({
                 <div className="min-w-56 flex-1">
                   <label
                     htmlFor="reader"
-                    className="font-display text-lg font-bold text-ink"
+                    className="text-base font-semibold text-ink"
                   >
                     Reader&rsquo;s name or card number
                   </label>
@@ -129,12 +129,12 @@ export default async function CirculationDeskPage({
                     defaultValue={readerQuery}
                     autoComplete="off"
                     placeholder="e.g. Aarav, or a card number"
-                    className="mt-2 min-h-14 w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface px-4 text-lg"
+                    className="mt-2 min-h-14 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-4 text-lg"
                   />
                 </div>
                 <button
                   type="submit"
-                  className="min-h-14 rounded-full bg-primary px-6 text-lg font-bold text-white hover:bg-primary-deep"
+                  className="min-h-14 rounded-[var(--radius-button)] bg-primary px-6 text-lg font-bold text-white hover:bg-primary-deep"
                 >
                   Find
                 </button>
@@ -150,7 +150,7 @@ export default async function CirculationDeskPage({
                     <li key={reader.memberUserId} className="list-none">
                       <Link
                         href={withParams({ readerId: reader.memberUserId })}
-                        className="flex items-center gap-3 rounded-[var(--radius-field)] border-2 border-hairline bg-surface p-3 no-underline hover:border-primary"
+                        className="flex items-center gap-3 rounded-[var(--radius-field)] border border-hairline bg-surface p-3 no-underline hover:border-primary"
                       >
                         <MemberAvatar
                           avatarKey={reader.avatarKey}
@@ -161,7 +161,7 @@ export default async function CirculationDeskPage({
                           size={44}
                         />
                         <span className="flex flex-1 flex-col">
-                          <span className="font-display font-bold text-ink">
+                          <span className="font-semibold text-ink">
                             {reader.displayName}
                           </span>
                           {/*
@@ -170,7 +170,7 @@ export default async function CirculationDeskPage({
                             no date of birth. This is the minimum needed to pick
                             the right child out of two called Aarav.
                           */}
-                          <span className="font-mono text-base text-ink-soft">
+                          <span className="code text-base text-ink-soft">
                             {reader.memberCode}
                           </span>
                         </span>
@@ -217,7 +217,7 @@ export default async function CirculationDeskPage({
                 {readerQuery ? <input type="hidden" name="reader" value={readerQuery} /> : null}
                 {readerId ? <input type="hidden" name="readerId" value={readerId} /> : null}
                 <div className="min-w-56 flex-1">
-                  <label htmlFor="book" className="font-display text-lg font-bold text-ink">
+                  <label htmlFor="book" className="text-base font-semibold text-ink">
                     Book ID, title or author
                   </label>
                   <input
@@ -227,12 +227,12 @@ export default async function CirculationDeskPage({
                     defaultValue={bookQuery}
                     autoComplete="off"
                     placeholder="e.g. Jungle, Kipling, or a book ID"
-                    className="mt-2 min-h-14 w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface px-4 text-lg"
+                    className="mt-2 min-h-14 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-4 text-lg"
                   />
                 </div>
                 <button
                   type="submit"
-                  className="min-h-14 rounded-full bg-primary px-6 text-lg font-bold text-white hover:bg-primary-deep"
+                  className="min-h-14 rounded-[var(--radius-button)] bg-primary px-6 text-lg font-bold text-white hover:bg-primary-deep"
                 >
                   Find
                 </button>
@@ -263,7 +263,7 @@ export default async function CirculationDeskPage({
                           />
                         </span>
                         <span className="flex flex-1 flex-col">
-                          <span className="font-display font-bold text-ink">{book.title}</span>
+                          <span className="font-semibold text-ink">{book.title}</span>
                           <span className="text-base text-ink-soft">
                             {book.authors.join(", ")}
                           </span>
@@ -272,7 +272,7 @@ export default async function CirculationDeskPage({
                             code, so the code is what distinguishes the rows and
                             it is never abbreviated away.
                           */}
-                          <span className="font-mono text-base text-ink-soft">
+                          <span className="code text-base text-ink-soft">
                             {book.copyCode}
                           </span>
                         </span>
@@ -287,14 +287,14 @@ export default async function CirculationDeskPage({
                           // to be told what the library thinks of it, and the
                           // sentence here is the same one the server would
                           // refuse with.
-                          <div className="flex flex-col gap-2 rounded-[var(--radius-field)] border-2 border-hairline bg-surface-sunk p-3">
+                          <div className="flex flex-col gap-2 rounded-[var(--radius-field)] border border-hairline bg-surface-sunk p-3">
                             <div className="flex items-center gap-3">{row}</div>
                             <p className="text-base text-ink-soft">{book.blockedReason}</p>
                           </div>
                         ) : (
                           <Link
                             href={withParams({ copyId: book.copyId })}
-                            className="flex items-center gap-3 rounded-[var(--radius-field)] border-2 border-hairline bg-surface p-3 no-underline hover:border-primary"
+                            className="flex items-center gap-3 rounded-[var(--radius-field)] border border-hairline bg-surface p-3 no-underline hover:border-primary"
                           >
                             {row}
                           </Link>
@@ -319,27 +319,27 @@ export default async function CirculationDeskPage({
           </CardTitle>
           <CardBody>
             <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-[8rem_1fr]">
-              <dt className="font-display font-bold text-ink">Reader</dt>
+              <dt className="font-semibold text-ink">Reader</dt>
               <dd className="text-ink">
                 {preview.reader.displayName}{" "}
-                <span className="font-mono text-ink-soft">{preview.reader.memberCode}</span>
+                <span className="code text-ink-soft">{preview.reader.memberCode}</span>
               </dd>
 
-              <dt className="font-display font-bold text-ink">Book</dt>
+              <dt className="font-semibold text-ink">Book</dt>
               <dd className="text-ink">
                 {preview.book.title}
                 <br />
                 <span className="text-ink-soft">{preview.book.authors.join(", ")}</span>
               </dd>
 
-              <dt className="font-display font-bold text-ink">Book ID</dt>
-              <dd className="font-mono text-ink">{preview.book.copyCode}</dd>
+              <dt className="font-semibold text-ink">Book ID</dt>
+              <dd className="code text-ink">{preview.book.copyCode}</dd>
 
-              <dt className="font-display font-bold text-ink">Condition</dt>
+              <dt className="font-semibold text-ink">Condition</dt>
               {/* The label, not the enum. "GOOD" is a database value. */}
               <dd className="text-ink-soft">{conditionLabel(preview.book.condition)}</dd>
 
-              <dt className="font-display font-bold text-ink">Due back</dt>
+              <dt className="font-semibold text-ink">Due back</dt>
               {/*
                 Computed by the server from library settings, in the library's
                 own timezone. The browser never calculates this: a laptop with
@@ -347,7 +347,7 @@ export default async function CirculationDeskPage({
                 country, must not be able to produce a different answer from the
                 book on the shelf.
               */}
-              <dd className="font-display text-xl font-bold text-ink">
+              <dd className="text-lg font-semibold text-ink">
                 {formatInTimezone(preview.dueAt, settings.timezone, "EEEE d MMMM yyyy")}{" "}
                 <span className="text-base font-normal text-ink-soft">
                   ({preview.loanPeriodDays} days)
@@ -387,8 +387,8 @@ function ChosenReader({ reader, changeHref }: { reader: ReaderPick; changeHref: 
         size={48}
       />
       <div className="flex-1">
-        <p className="font-display text-lg font-bold text-ink">{reader.displayName}</p>
-        <p className="font-mono text-base text-ink-soft">{reader.memberCode}</p>
+        <p className="text-base font-semibold text-ink">{reader.displayName}</p>
+        <p className="code text-base text-ink-soft">{reader.memberCode}</p>
       </div>
       <Link href={changeHref} className="text-base font-bold text-primary-deep">
         Change
@@ -404,9 +404,9 @@ function ChosenBook({ book, changeHref }: { book: CopyPick; changeHref: string }
         <CoverThumbnail coverMediaId={book.coverMediaId} title={book.title} variant="thumb" sizes="48px" />
       </span>
       <div className="flex-1">
-        <p className="font-display text-lg font-bold text-ink">{book.title}</p>
+        <p className="text-base font-semibold text-ink">{book.title}</p>
         <p className="text-base text-ink-soft">{book.authors.join(", ")}</p>
-        <p className="font-mono text-base text-ink-soft">{book.copyCode}</p>
+        <p className="code text-base text-ink-soft">{book.copyCode}</p>
       </div>
       <Link href={changeHref} className="text-base font-bold text-primary-deep">
         Change

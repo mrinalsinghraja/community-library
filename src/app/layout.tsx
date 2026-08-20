@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Nunito_Sans, Quicksand } from "next/font/google";
+import { Fraunces, Nunito_Sans } from "next/font/google";
 
 import { getBrandingSafe } from "@/server/lib/settings";
 
@@ -11,14 +11,30 @@ import "./globals.css";
  * connect-src can stay 'self'.
  */
 /*
- * Quicksand echoes the geometric, wide-apertured sans on the library's own
- * wordmark, so a heading and the mark beside it read as one piece of design.
+ * Fraunces for display.
+ *
+ * It replaces Quicksand, which was chosen to echo the wordmark and did — but a
+ * wide rounded geometric sans set at 700 weight and 48px reads as a craft-fair
+ * poster, and the library outgrew that. Fraunces is a low-contrast soft serif
+ * drawn from mid-century children's-book and advertising lettering: it keeps
+ * the warmth, and it belongs to books.
+ *
+ * The variable axes are the reason it is this face and not a stock serif.
+ * `SOFT` rounds the terminals just enough to stay friendly for a six-year-old,
+ * `WONK` lets a few letters keep their hand-drawn tilt, and `opsz` means a
+ * 34px heading and a 20px card title are drawn differently rather than being
+ * the same outline scaled.
+ *
+ * Weight stops at 600. The old system reached for 700 and 800 everywhere, and
+ * a heavy face at a large size was half of why the interface looked babyish.
  */
-const quicksand = Quicksand({
+const fraunces = Fraunces({
   subsets: ["latin"],
-  variable: "--font-quicksand",
+  variable: "--font-fraunces",
   display: "swap",
-  weight: ["500", "600", "700"],
+  // No `weight` list: next/font refuses axes unless the family is loaded
+  // variable, and variable is the whole reason for choosing this face.
+  axes: ["SOFT", "WONK", "opsz"],
 });
 
 const nunito = Nunito_Sans({
@@ -55,7 +71,7 @@ export default async function RootLayout({
   const branding = await getBrandingSafe();
 
   return (
-    <html lang="en" className={`${quicksand.variable} ${nunito.variable}`}>
+    <html lang="en" className={`${fraunces.variable} ${nunito.variable}`}>
       <body
         /*
          * Branding arrives as CSS custom properties, so a Super Admin changing

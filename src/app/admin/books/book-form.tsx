@@ -188,7 +188,7 @@ export function BookForm({
       />
 
       <fieldset className="flex flex-col gap-6 rounded-[var(--radius-card)] bg-surface-sunk p-5">
-        <legend className="px-2 font-display text-lg font-bold text-ink">
+        <legend className="px-2 text-base font-semibold text-ink">
           Was it donated?
         </legend>
         <p className="-mt-2 text-base text-ink-soft">
@@ -273,7 +273,7 @@ export function BookForm({
       */}
       {values?.status === "BORROWED" ? (
         <div className="flex flex-col gap-2">
-          <p className="font-display text-lg font-bold text-ink">Where is it now?</p>
+          <p className="text-base font-semibold text-ink">Where is it now?</p>
           <p className="rounded-[var(--radius-field)] bg-surface-sunk px-4 py-3.5 text-ink-soft">
             <Icon name="book" /> Out with a reader.{" "}
             <Link href="/desk/loans" className="font-bold text-primary-deep">
@@ -310,7 +310,7 @@ export function BookForm({
         <SaveButton mode={mode} />
         <Link
           href="/admin/books"
-          className="rounded-full border-2 border-control-border px-6 py-3.5 text-lg font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
+          className="rounded-[var(--radius-button)] border border-control-border px-6 py-3.5 text-lg font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
         >
           Cancel
         </Link>
@@ -420,7 +420,7 @@ function CoverField({
         type="file"
         accept="image/jpeg,image/png,image/webp"
         onChange={handleFile}
-        className="min-h-14 w-full rounded-[var(--radius-field)] border-2 border-control-border bg-surface px-4 py-3 text-base file:me-4 file:rounded-full file:border-0 file:bg-primary file:px-4 file:py-2 file:text-base file:font-bold file:text-white"
+        className="min-h-14 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-4 py-3 text-base file:me-4 file:rounded-full file:border-0 file:bg-primary file:px-4 file:py-2 file:text-base file:font-bold file:text-white"
       />
 
       {chosen ? (

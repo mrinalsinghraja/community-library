@@ -64,7 +64,7 @@ export default async function BrandingPage() {
                   size={72}
                 />
               </div>
-              <p className="mt-4 font-display text-2xl font-extrabold text-ink">
+              <p className="mt-4 font-display text-2xl font-semibold text-ink">
                 {view.libraryName}
               </p>
               <p className="mt-2 text-lg text-ink-soft">

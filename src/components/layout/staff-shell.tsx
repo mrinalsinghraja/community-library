@@ -92,17 +92,17 @@ export function StaffShell({
   const visible = navItems.filter((item) => actor.permissions.has(item.permission));
 
   return (
-    <div className="flex min-h-screen flex-col bg-surface">
+    <div className="desk-density flex min-h-screen flex-col bg-surface">
       <header className="bg-surface">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-3 px-5 py-3 sm:px-8">
+        <div className="mx-auto flex w-full max-w-[104rem] flex-wrap items-center gap-x-5 gap-y-2 px-5 py-2.5 sm:px-7">
           <Link href="/desk" className="flex items-center gap-3 no-underline">
             <LibraryLogo
               logoUrl={branding.logoUrl}
               libraryName={branding.libraryName}
-              size={44}
-              className="w-9"
+              size={40}
+              className="w-8"
             />
-            <span className="font-display text-lg font-extrabold text-ink">Library desk</span>
+            <span className="font-display text-lg font-semibold text-ink">Library desk</span>
           </Link>
 
           <nav aria-label="Desk" className="flex flex-wrap items-center gap-1">
@@ -110,11 +110,11 @@ export function StaffShell({
               <Link
                 key={item.href}
                 href={item.href}
-                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-base font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
+                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold whitespace-nowrap text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
               >
                 {item.label}
                 {item.badge ? (
-                  <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-accent-ink px-1.5 py-0.5 text-sm font-bold text-white">
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-accent-ink px-1.5 py-0.5 text-xs font-bold text-white">
                     {item.badge}
                   </span>
                 ) : null}
@@ -123,11 +123,11 @@ export function StaffShell({
           </nav>
 
           <div className="ms-auto flex items-center gap-3">
-            <span className="text-base text-ink-soft">{actor.displayName}</span>
+            <span className="text-sm text-ink-soft">{actor.displayName}</span>
             <form action={signOutAction}>
               <button
                 type="submit"
-                className="rounded-lg border-2 border-control-border px-3 py-2 text-base font-bold text-ink-soft hover:bg-surface-sunk hover:text-ink"
+                className="rounded-md border border-control-border px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-surface-sunk hover:text-ink"
               >
                 Sign out
               </button>
@@ -146,9 +146,18 @@ export function StaffShell({
         />
       </header>
 
-      <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-5 py-8 sm:px-8">
+      {/*
+        104rem, not 72rem.
+
+        The desk was capped at the same width as a reading page, which on a
+        librarian's laptop left a third of the screen empty while the catalogue
+        wrapped "MJCL-B0004" onto two lines and a donor's name onto five. The
+        reader app stays narrow because a long line is hard to read; a table is
+        not read that way, it is scanned across, and it wants the room.
+      */}
+      <main id="main" className="mx-auto w-full max-w-[104rem] flex-1 px-5 py-6 sm:px-7">
         <h1 className="garden-rule inline-block text-3xl">{title}</h1>
-        <div className="mt-10">{children}</div>
+        <div className="mt-8">{children}</div>
       </main>
     </div>
   );
@@ -165,12 +174,26 @@ export function DataTable({
   className?: string;
 }) {
   return (
-    <div className={cn("overflow-x-auto rounded-xl border-2 border-hairline", className)}>
+    <div
+      className={cn(
+        "overflow-x-auto rounded-[var(--radius-card)] border border-hairline",
+        className,
+      )}
+    >
       <table className="w-full min-w-[46rem] border-collapse text-base">
         <thead>
-          <tr className="bg-surface-sunk text-left">
+          {/*
+            Headers are small caps in the body face, not the display serif.
+            A column heading is a label, not a title — setting it as one was
+            making every table look like eight little headlines in a row.
+          */}
+          <tr className="border-b border-hairline bg-surface-sunk text-left">
             {headers.map((header) => (
-              <th key={header} scope="col" className="px-4 py-3 font-display font-bold text-ink">
+              <th
+                key={header}
+                scope="col"
+                className="px-3.5 py-2.5 text-xs font-bold tracking-[0.06em] whitespace-nowrap text-ink-soft uppercase"
+              >
                 {header}
               </th>
             ))}
