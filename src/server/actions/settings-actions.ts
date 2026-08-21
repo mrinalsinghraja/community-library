@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { isAppError, toFriendlyMessage, ValidationError } from "@/server/lib/errors";
 import {
   removeLibraryLogo,
+  sendEmailDeliveryTest,
   setOverdueReminders,
   updateBranding,
   updateLibraryLogo,
@@ -123,6 +124,26 @@ export async function setRemindersAction(
       status: "success",
       message: enabled ? "Reminders are on." : "Reminders are off. Nothing will be sent.",
     };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+/**
+ * Sends one test message to the signed-in administrator's own address.
+ *
+ * There is no form data on purpose. The recipient is not something a request
+ * can choose — the service reads it off the actor's own account — so a
+ * hand-written POST to this endpoint can only ever mail the person who sent it.
+ */
+export async function sendEmailTestAction(previous: ActionState): Promise<ActionState> {
+  void previous;
+
+  try {
+    const { ok, detail } = await sendEmailDeliveryTest();
+    revalidatePath("/admin/settings");
+
+    return { status: ok ? "success" : "error", message: detail };
   } catch (error) {
     return toState(error);
   }

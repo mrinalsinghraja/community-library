@@ -47,6 +47,16 @@ export const RATE_LIMITS = {
    */
   passwordResetRequestsMax: 5,
   passwordResetWindowMinutes: 60,
+
+  /**
+   * Delivery tests per administrator. Enough to try a fix and check it, and not
+   * enough to matter: every test spends one message out of the same daily
+   * allowance the families' activation links come out of, and a transport that
+   * is misconfigured stays misconfigured however many times the button is
+   * pressed.
+   */
+  emailTestsMax: 5,
+  emailTestWindowMinutes: 60,
 } as const;
 
 export interface ThrottleDecision {

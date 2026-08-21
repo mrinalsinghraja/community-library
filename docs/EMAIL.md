@@ -81,16 +81,67 @@ internet.
 
 ## 5. Production
 
-Choose a provider, verify the sending domain, and set the variables in
-`ENVIRONMENT_VARIABLES.md`.
+The transport is **Brevo, over its HTTP API** (`EMAIL_PROVIDER=brevo`). `smtp`
+and `resend` remain and are tested; nothing about the services above changes if
+the choice changes.
+
+Why HTTP and not a socket: every send happens inside a serverless function. An
+HTTP request either returns or does not. An SMTP send has to open a TCP
+connection, negotiate TLS, authenticate and close cleanly before the function is
+allowed to finish, on a runtime designed to be killed mid-flight — and it puts
+the recipient's address into a command stream, which is the injection surface
+nodemailer keeps publishing advisories about.
+
+Why a free tier is the right tier here, not a compromise: the free allowance is
+a **daily** one, and a building-sized library's mail is bursty but small —
+activation links go out when a set of families is approved together, and there
+is no month in which that reaches the ceiling. There is nothing to outgrow until
+the library is several buildings.
+
+### Setting it up
+
+1. Create the sending account. In the dashboard, take an **SMTP & API key**.
+2. Authorise the sending identity. Either verify a single sender address, which
+   takes one click in that mailbox, or authenticate a domain by publishing the
+   DKIM and SPF records the dashboard gives you. **Prefer the domain.**
+3. Set, in the deployment's production environment:
+   `EMAIL_PROVIDER=brevo`, `BREVO_API_KEY=…`, `EMAIL_FROM=…`, and optionally
+   `EMAIL_REPLY_TO=…`. `EMAIL_FROM` must be the address or domain from step 2 —
+   an unverified sender is refused with `sender_not_valid`, which the settings
+   page will show verbatim.
+4. Redeploy, then press **Send a test to myself** on `/admin/settings`.
 
 **SPF and DKIM are not optional.** Without them, activation links land in spam
 and no family can complete registration — which fails silently, the worst kind
-of failure. Verify with a real send to a real inbox before announcing the
-library to anyone.
+of failure. Sending as a `@gmail.com` address through any relay fails alignment
+by construction, however verified the sender is: use a domain you control.
 
 `EMAIL_FROM` should be a real, monitored address. `EMAIL_REPLY_TO` can point at
 the librarian.
+
+### Finding out whether it works
+
+`/admin/settings` names the transport in force, the last message that actually
+went out, and how many failed in the past week. **Send a test to myself** sends
+one message to the signed-in administrator's own address — the recipient is not
+a parameter anywhere in the chain, so no request can point it at a family — and
+shows the provider's own error text on failure, because "could not send" is not
+something a librarian can act on and `sender_not_valid` is.
+
+It exists because the only other way to test the transport was to issue somebody
+a real activation link and watch, which spends a single-use token to answer a
+question about configuration, and spends it on a family who is waiting for it.
+Five per administrator per hour: a transport that is misconfigured stays
+misconfigured, and each test comes out of the same daily allowance the families'
+links do.
+
+### The failure this deployment actually had
+
+No email variable was ever set in production. `EMAIL_PROVIDER` therefore
+defaulted to `console`, which in production is the refusing transport — so every
+message the library ever tried to send was recorded FAILED and nobody was
+written to. The refusal was correct and is deliberately kept (ADR-047); what was
+missing was any surface that said so, which is what the settings card is for.
 
 ## 6. Circulation reminders
 

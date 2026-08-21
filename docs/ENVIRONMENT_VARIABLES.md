@@ -47,14 +47,32 @@ default — writes to `.mail/` and cannot reach a real address.
 
 | Variable | Notes |
 |---|---|
-| `EMAIL_PROVIDER` | `resend` · `smtp` · `console`. **`console` is development only and is refused in production** — the transport there returns a failure with a reason instead of capturing to a directory nobody reads |
+| `EMAIL_PROVIDER` | `brevo` · `resend` · `smtp` · `console`. **`console` is development only and is refused in production** — the transport there returns a failure with a reason instead of capturing to a directory nobody reads |
+| `BREVO_API_KEY` | Required when provider is `brevo` |
 | `RESEND_API_KEY` | Required when provider is `resend` |
-| `SMTP_HOST` `SMTP_PORT` `SMTP_USER` `SMTP_PASSWORD` `SMTP_SECURE` | Required when provider is `smtp` |
-| `EMAIL_FROM` | Required whenever email is enabled |
+| `SMTP_HOST` `SMTP_PORT` `SMTP_USER` `SMTP_PASSWORD` | Required when provider is `smtp` |
+| `SMTP_SECURE` | Optional, and best left unset. Unset means "work it out from the port": 465 is TLS from the first byte, 587 and 25 are STARTTLS. Setting `true` against 587 does not fail cleanly — the client waits for a TLS hello the port will never send, and the library sees a timeout |
+| `EMAIL_FROM` | Required whenever email is enabled. Both `address` and `Display Name <address>` are accepted |
 | `EMAIL_REPLY_TO` | Optional |
 
-Cross-field validation runs only in production: choosing `resend` without a key,
-or enabling email without `EMAIL_FROM`, fails at boot.
+Cross-field validation runs only in production: choosing `brevo` or `resend`
+without its key, or enabling email without `EMAIL_FROM`, fails at boot.
+
+`brevo` is the transport this deployment uses, and the reason is the runtime
+rather than the vendor. Every send happens inside a serverless function: one
+HTTP request that either returns or does not is a better fit than a socket that
+has to be opened, TLS-negotiated, authenticated and closed before the function
+is allowed to finish, and it keeps the recipient address out of an SMTP command
+stream entirely. `smtp` remains as the escape hatch for any relay with a
+hostname.
+
+**A deployment with no email variables set is not "email off" — it is email
+broken.** `EMAIL_PROVIDER` defaults to `console`, and `console` in production
+refuses every send. That is the correct behaviour and it is also exactly what
+this deployment did for its first weeks: every activation link ever issued was
+recorded FAILED and no family was ever written to. The settings page now states
+the transport in force and offers a delivery test, so the state is visible
+without reading the delivery log.
 
 In development, `EMAIL_PROVIDER=console` writes messages to `.mail/` and opens
 no socket at all — nothing can reach a real family from a laptop. `/dev/mail`

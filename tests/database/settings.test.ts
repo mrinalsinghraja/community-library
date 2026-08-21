@@ -5,8 +5,11 @@ import { createSession } from "@/server/auth/session-store";
 import { env } from "@/server/env";
 import { AUDIT_ACTIONS } from "@/server/lib/audit";
 import { issueBook, renewLoan } from "@/server/services/circulation-service";
+import { __setEmailProviderForTests } from "@/server/lib/email";
+import { RATE_LIMITS } from "@/server/lib/rate-limit";
 import {
   getAdminSettings,
+  sendEmailDeliveryTest,
   setOverdueReminders,
   updateBranding,
   updateLibrarySettings,
@@ -14,6 +17,7 @@ import {
 } from "@/server/services/settings-service";
 import { sendCirculationReminders } from "@/server/services/notification-service";
 
+import { FakeEmailProvider } from "./fake-email";
 import {
   createBookCopy,
   createLibraryFixture,
@@ -447,5 +451,129 @@ describe("the reminder switch", () => {
     (env as { EMAIL_PROVIDER: string }).EMAIL_PROVIDER = "console";
     await setOverdueReminders(false);
     expect((await currentSettings()).overdueRemindersEnabled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("proving the library can send email", () => {
+  const fake = new FakeEmailProvider();
+
+  beforeEach(() => {
+    fake.reset();
+    __setEmailProviderForTests(fake);
+  });
+
+  afterEach(() => {
+    __setEmailProviderForTests(null);
+  });
+
+  it("writes to the administrator's own address and nobody else's", async () => {
+    /*
+     * The property that makes this button safe to exist. The recipient is not a
+     * parameter anywhere in the chain -- not on the form, not on the action, not
+     * on the service -- so no request can point a test message at a guardian or
+     * at a child.
+     */
+    await actingAs(admin.id);
+
+    const result = await sendEmailDeliveryTest();
+
+    expect(result.ok).toBe(true);
+    expect(fake.sent).toHaveLength(1);
+    expect(fake.sent[0].to).toBe(admin.email);
+  });
+
+  it("carries no link and no token", async () => {
+    await actingAs(admin.id);
+    await sendEmailDeliveryTest();
+
+    const message = fake.sent[0];
+    expect(message.text).not.toMatch(/\/activate\/|\/reset\/|\/verify\//);
+    expect(message.html).not.toMatch(/\/activate\/|\/reset\/|\/verify\//);
+  });
+
+  it("refuses a Librarian, who runs the library but does not configure it", async () => {
+    await actingAs(librarian.id);
+
+    await expect(sendEmailDeliveryTest()).rejects.toMatchObject({ code: "NOT_AUTHORIZED" });
+    expect(fake.sent).toHaveLength(0);
+  });
+
+  it("refuses a reader", async () => {
+    await actingAs(reader.id, "MEMBER");
+
+    await expect(sendEmailDeliveryTest()).rejects.toMatchObject({ code: "NOT_AUTHORIZED" });
+    expect(fake.sent).toHaveLength(0);
+  });
+
+  it("refuses a signed-out caller", async () => {
+    __setSessionHandle(null);
+
+    await expect(sendEmailDeliveryTest()).rejects.toMatchObject({ code: "NOT_AUTHENTICATED" });
+    expect(fake.sent).toHaveLength(0);
+  });
+
+  it("records the attempt on the delivery log either way", async () => {
+    await actingAs(admin.id);
+    await sendEmailDeliveryTest();
+
+    fake.failNext = true;
+    const failed = await sendEmailDeliveryTest();
+
+    expect(failed.ok).toBe(false);
+    // The provider's own words reach the administrator, because "could not
+    // send" is not something anybody can act on.
+    expect(failed.detail).toContain("simulated transport failure");
+
+    const events = await db.emailEvent.findMany({
+      where: { template: "delivery_test" },
+      orderBy: { createdAt: "asc" },
+      select: { status: true, error: true },
+    });
+    expect(events.map((event) => event.status)).toEqual(["SENT", "FAILED"]);
+    expect(events[0].error).toBeNull();
+  });
+
+  it("stops after a handful, because every test spends a real allowance", async () => {
+    /*
+     * A transport that is down stays down. Pressing the button forty times only
+     * burns the daily quota that the families' activation links come out of.
+     */
+    await actingAs(admin.id);
+
+    for (let attempt = 0; attempt < RATE_LIMITS.emailTestsMax; attempt += 1) {
+      await sendEmailDeliveryTest();
+    }
+
+    await expect(sendEmailDeliveryTest()).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    expect(fake.sent).toHaveLength(RATE_LIMITS.emailTestsMax);
+  });
+
+  it("says so plainly when the administrator has no address of their own", async () => {
+    await db.appUser.update({ where: { id: admin.id }, data: { email: null } });
+    await actingAs(admin.id);
+
+    await expect(sendEmailDeliveryTest()).rejects.toMatchObject({ code: "RULE_VIOLATION" });
+    expect(fake.sent).toHaveLength(0);
+  });
+
+  it("tells the settings page what the transport is without naming a secret", async () => {
+    await actingAs(admin.id);
+    await sendEmailDeliveryTest();
+
+    const view = await getAdminSettings();
+
+    expect(view.email.testRecipient).toBe(admin.email);
+    expect(view.email.lastSentAt).toBeInstanceOf(Date);
+    expect(JSON.stringify(view.email)).not.toMatch(/key|password|token/i);
+  });
+
+  it("counts recent failures, so the page can say email is broken before it is asked", async () => {
+    await actingAs(admin.id);
+    fake.failNext = true;
+    await sendEmailDeliveryTest();
+
+    expect((await getAdminSettings()).email.recentFailures).toBe(1);
   });
 });

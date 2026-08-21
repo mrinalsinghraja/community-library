@@ -1610,3 +1610,74 @@ derived id of an anonymous family being refused.
 door, no `sort`, no `reduce`, no bare count, the raw donor columns untouched,
 the address read from settings, and the catalogue gate respected on the family
 page.
+
+---
+
+## ADR-047 — The mail transport is an HTTP call, and the deployment says out loud whether it works
+
+**Date:** 2026-08-21 · **Status:** Accepted
+
+For its whole life this deployment had no email variable set at all. That is not
+"email off": `EMAIL_PROVIDER` defaults to `console`, and `console` in production
+is the refusing transport, so **every message the library ever tried to send was
+recorded FAILED and no family was ever written to** — nine attempts, zero sent.
+A librarian pressing "Send link again" saw it fail and had no way to learn why,
+and the only fallback that worked was the copied activation link of ADR-043.
+
+Three decisions came out of fixing it.
+
+**The refusal stays.** It would have been easy to read "email is broken" as an
+argument for letting production fall back to the capture transport. That is the
+worst option on the table: capture returns `ok`, writes SENT to the delivery log,
+and drops the message on an ephemeral filesystem nobody reads — so a family
+waits for a link that was never going anywhere and the log agrees it arrived. A
+deployment that cannot send must say it cannot send. What was missing was never
+the refusal; it was any surface that showed it.
+
+**The transport is HTTP, not a socket.** `EMAIL_PROVIDER=brevo` posts to a
+transactional API. The reason is the runtime rather than the vendor: every send
+here happens inside a serverless function, and an HTTP request either returns or
+does not, while an SMTP send has to open a connection, negotiate TLS,
+authenticate and close cleanly before the function is allowed to finish — on a
+platform that reserves the right to kill it mid-flight. It also keeps the
+recipient's address out of an SMTP command stream, which is the surface
+nodemailer has published six advisories against. `smtp` and `resend` remain,
+tested, as escape hatches; nodemailer went to v9 in the same change, which clears
+all four of the high-severity advisories that were open against it.
+
+One bug was found on the way and is worth recording, because it fails in the
+worst possible manner: `SMTP_SECURE` defaulted to **true**, so anyone
+configuring the documented port 587 got implicit TLS against a STARTTLS port.
+That does not produce an error saying so — the client waits for a TLS hello the
+port will never send, and the operator sees a timeout. It is now tri-state, and
+unset means "derive it from the port".
+
+**A library may prove its own mail works, without spending a child's token.**
+`/admin/settings` now names the transport in force, the last message that
+actually left, and the count of recent failures, and offers one test send. The
+recipient is deliberately **not a parameter** anywhere in the chain — not on the
+form, not on the action, not on the service — it is read off the signed-in
+administrator's own account, so no request can point a test at a guardian or a
+child. It needs `settings.edit`, checked in the service rather than by hiding a
+button, and it is capped at five per administrator per hour because a
+misconfigured transport stays misconfigured and each attempt comes out of the
+same daily allowance the families' activation links do.
+
+The test message carries no link, no token and nothing about any member. On
+failure it returns the provider's own error text, which is the entire point: a
+librarian can do nothing with "could not send", and `sender_not_valid` tells
+them somebody skipped verifying the From address.
+
+**Consequences.** Turning email on is now four environment variables and a
+redeploy, and whether it worked is a question the settings page answers rather
+than something inferred from a family not replying. The copied activation link
+of ADR-043 keeps its place: it is the stronger act for a person standing in
+front of you, and it is what still works on the day the mail service is down.
+
+`tests/unit/email-transport.test.ts` holds the transport: production refuses
+without configuration, 465 is implicit TLS and 587 is not, the From address
+splits both ways, and a rejected payload never carries the message body back
+into an error string. `tests/database/settings.test.ts` holds the test send:
+administrator's own address only, no link in the body, refused for a Librarian, a
+reader and a signed-out caller, recorded on the delivery log either way, and
+throttled.

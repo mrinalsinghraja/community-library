@@ -78,7 +78,47 @@ export const TEMPLATE_IDS = {
   IMPORTANT_NOTIFICATION: "important_notification",
   LOAN_DUE_SOON: "loan_due_soon",
   LOAN_OVERDUE: "loan_overdue",
+  DELIVERY_TEST: "delivery_test",
 } as const;
+
+/**
+ * The only email that exists for the library's own sake.
+ *
+ * Sent by an administrator to their own address to find out whether mail leaves
+ * this deployment at all. It has to exist, because the alternative way to test
+ * the transport is to issue somebody a real activation link and watch — which
+ * spends a single-use token on a question about configuration, and spends it on
+ * a family who is waiting for it.
+ *
+ * It carries no link, no token and nothing about any member.
+ */
+export function deliveryTest(
+  context: EmailContext,
+  params: { requestedBy: string; sentAt: string },
+): RenderedTemplate {
+  const heading = "Email is working";
+  const body =
+    paragraph(`Hello ${params.requestedBy},`) +
+    paragraph(
+      `If you are reading this, ${context.libraryName} can send email. Activation links, password resets and reminders will reach families at the address they gave.`,
+    ) +
+    paragraph(`Sent from the settings page at ${params.sentAt}.`) +
+    paragraph("Nobody else was written to. This message contains no link and no account details.");
+
+  return {
+    subject: `${context.libraryName}: email delivery test`,
+    html: layout(context, heading, body),
+    text: [
+      `Hello ${params.requestedBy},`,
+      "",
+      `If you are reading this, ${context.libraryName} can send email.`,
+      "",
+      `Sent from the settings page at ${params.sentAt}.`,
+      "",
+      "Nobody else was written to. This message contains no link and no account details.",
+    ].join("\n"),
+  };
+}
 
 export function registrationReceived(
   context: EmailContext,

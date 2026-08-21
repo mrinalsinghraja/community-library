@@ -13,6 +13,7 @@ import {
 } from "@/lib/settings-schema";
 import { STRENGTH_LABELS } from "@/lib/guardian-verification";
 import {
+  sendEmailTestAction,
   setRemindersAction,
   updateSettingsAction,
   updateVerificationAction,
@@ -403,6 +404,79 @@ export function ReminderSwitch({
         <p className="mt-5 rounded-lg bg-surface-sunk px-4 py-3 text-base font-bold text-ink">
           Email reminders cannot be enabled until a production email provider is configured. Nothing
           sent from here today would reach a family.
+        </p>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * Whether email leaves the building, and a way to find out for certain.
+ *
+ * The card answers the question a librarian actually has — "did the family get
+ * their link?" — before offering the button, because a page that only offers a
+ * test makes somebody press it to learn something the page already knew.
+ */
+export function EmailDelivery({
+  provider,
+  canSend,
+  testRecipient,
+  recentFailures,
+  lastSent,
+}: {
+  provider: string;
+  canSend: boolean;
+  testRecipient: string | null;
+  recentFailures: number;
+  lastSent: string | null;
+}) {
+  const [state, formAction, pending] = useActionState(sendEmailTestAction, INITIAL);
+
+  return (
+    <Card>
+      <h2 className="text-2xl">Sending email</h2>
+      <p className="mt-2 text-ink-soft">
+        Activation links, password resets and reminders all leave through the same service. If this
+        is not working, a family cannot finish setting up their account.
+      </p>
+
+      <dl className="mt-5 flex flex-col gap-3">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <dt className="text-base font-semibold text-ink">Service</dt>
+          <dd className="text-base text-ink-soft">
+            {canSend ? provider : "none — nothing can be sent from here"}
+          </dd>
+        </div>
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <dt className="text-base font-semibold text-ink">Last message that went out</dt>
+          <dd className="text-base text-ink-soft">{lastSent ?? "none yet"}</dd>
+        </div>
+        {recentFailures > 0 ? (
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <dt className="text-base font-semibold text-ink">Failed in the last week</dt>
+            <dd className="text-base font-bold text-danger">
+              {recentFailures === 1 ? "1 message" : `${recentFailures} messages`}
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+
+      {testRecipient ? (
+        <form action={formAction} className="mt-5 flex flex-col gap-4">
+          <Notice state={state} />
+          <p className="text-base text-ink-soft">
+            The test goes to <span className="font-bold text-ink">{testRecipient}</span> — your own
+            address, and the only one this button can write to.
+          </p>
+          <div>
+            <Button type="submit" size="md" variant="secondary" disabled={pending}>
+              {pending ? "Sending…" : "Send a test to myself"}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <p className="mt-5 rounded-lg bg-surface-sunk px-4 py-3 text-base font-bold text-ink">
+          Your own account has no email address, so there is nowhere to send a test.
         </p>
       )}
     </Card>

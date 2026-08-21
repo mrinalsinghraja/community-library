@@ -35,17 +35,25 @@ const serverEnvSchema = z.object({
    */
   APP_TIMEZONE: z.string().default("Asia/Kolkata"),
 
-  // --- Email (Phase 5; declared here so deployments can be configured early) --
-  EMAIL_PROVIDER: z.enum(["resend", "smtp", "console"]).default("console"),
+  // --- Email ----------------------------------------------------------------
+  EMAIL_PROVIDER: z.enum(["brevo", "resend", "smtp", "console"]).default("console"),
+  BREVO_API_KEY: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
+  /**
+   * Tri-state on purpose. `true` means TLS from the first byte (port 465);
+   * `false` means STARTTLS (ports 587 and 25). Unset means "work it out from
+   * the port", because the old default of `true` silently broke every relay
+   * that publishes 587 — the handshake hangs and the failure reads as a
+   * timeout, not as a misconfiguration.
+   */
   SMTP_SECURE: z
-    .string()
+    .enum(["true", "false"])
     .optional()
-    .transform((v) => v !== "false"),
+    .transform((v) => (v === undefined ? null : v === "true")),
   EMAIL_FROM: z.string().optional(),
   EMAIL_REPLY_TO: z.string().optional(),
 
@@ -90,6 +98,9 @@ function loadEnv(): ServerEnv {
 
   // Cross-field rules the shape alone cannot express.
   if (env.NODE_ENV === "production") {
+    if (env.EMAIL_PROVIDER === "brevo" && !env.BREVO_API_KEY) {
+      throw new Error("EMAIL_PROVIDER=brevo requires BREVO_API_KEY");
+    }
     if (env.EMAIL_PROVIDER === "resend" && !env.RESEND_API_KEY) {
       throw new Error("EMAIL_PROVIDER=resend requires RESEND_API_KEY");
     }

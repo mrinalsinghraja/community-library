@@ -61,7 +61,27 @@ export class CaptureEmailProvider implements EmailProvider {
   }
 }
 
-/** SMTP, via nodemailer. Loaded lazily so the dependency is not pulled in unused. */
+/**
+ * Whether to open the socket in TLS immediately.
+ *
+ * Explicit setting wins. Otherwise 465 is the implicit-TLS port and everything
+ * else (587, 2525, 25) speaks STARTTLS. Getting this wrong does not produce an
+ * error that says so: the client waits for a TLS server hello that a plaintext
+ * port will never send, and the library sees a timeout.
+ */
+export function smtpUsesImplicitTls(secure: boolean | null, port: number): boolean {
+  return secure ?? port === 465;
+}
+
+/**
+ * SMTP, via nodemailer. Loaded lazily so the dependency is not pulled in unused.
+ *
+ * Kept as the escape hatch for any relay with a hostname, but it is not the
+ * transport this deployment reaches for first: a serverless function pays a TCP
+ * handshake, a TLS negotiation and an AUTH round trip on every single message,
+ * and it holds an outbound socket open in an environment designed to be killed
+ * mid-flight. `BrevoEmailProvider` does the same job in one POST.
+ */
 export class SmtpEmailProvider implements EmailProvider {
   readonly name = "smtp";
 
@@ -75,7 +95,7 @@ export class SmtpEmailProvider implements EmailProvider {
     const transport = createTransport({
       host: env.SMTP_HOST,
       port: env.SMTP_PORT,
-      secure: env.SMTP_SECURE,
+      secure: smtpUsesImplicitTls(env.SMTP_SECURE, env.SMTP_PORT),
       auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASSWORD } : undefined,
     });
 
@@ -92,6 +112,91 @@ export class SmtpEmailProvider implements EmailProvider {
     } catch (error) {
       return { ok: false, error: describeError(error) };
     }
+  }
+}
+
+/**
+ * Splits `EMAIL_FROM` into the two fields an HTTP mail API wants.
+ *
+ * Accepts both the bare address and the `Display Name <address>` form, because
+ * the same variable is handed unchanged to nodemailer, which accepts both.
+ */
+export function parseSender(from: string): { email: string; name?: string } {
+  const angled = /^\s*(.*?)\s*<\s*([^<>]+?)\s*>\s*$/.exec(from);
+  if (!angled) return { email: from.trim() };
+
+  const name = angled[1].replace(/^"|"$/g, "").trim();
+  return name ? { email: angled[2], name } : { email: angled[2] };
+}
+
+/**
+ * Brevo, over its transactional HTTP API.
+ *
+ * The default for this deployment, and the reason is the runtime rather than
+ * the vendor. Every send here happens inside a serverless function: one `fetch`
+ * that either returns or does not is a far better fit than a socket that has to
+ * be opened, negotiated, authenticated and closed before the function is
+ * allowed to finish. It also keeps the recipient address away from an SMTP
+ * command stream entirely.
+ *
+ * The free tier is a daily allowance rather than a trial, which is what a
+ * building-sized library needs: activation links arrive in bursts when a set of
+ * families is approved together, and there is no month in which that adds up.
+ */
+export class BrevoEmailProvider implements EmailProvider {
+  readonly name = "brevo";
+
+  async send(message: EmailMessage): Promise<EmailSendResult> {
+    if (!env.BREVO_API_KEY) return { ok: false, error: "BREVO_API_KEY is not configured" };
+    if (!env.EMAIL_FROM) return { ok: false, error: "EMAIL_FROM is not configured" };
+
+    const replyTo = message.replyTo ?? env.EMAIL_REPLY_TO;
+
+    try {
+      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          "api-key": env.BREVO_API_KEY,
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          sender: parseSender(env.EMAIL_FROM),
+          to: [{ email: message.to }],
+          ...(replyTo ? { replyTo: { email: replyTo } } : {}),
+          subject: message.subject,
+          htmlContent: message.html,
+          textContent: message.text,
+        }),
+      });
+
+      if (!response.ok) {
+        /*
+         * Status and the provider's own error code, never the body. A rejected
+         * payload is frequently echoed back in full, and the payload is an
+         * activation link. The code is what makes the failure actionable —
+         * `unauthorized` is a wrong key, `sender_not_valid` is an unverified
+         * From address, and those need different people to fix them.
+         */
+        const code = await readErrorCode(response);
+        return { ok: false, error: `Brevo responded ${response.status}${code}` };
+      }
+
+      const body = (await response.json()) as { messageId?: string };
+      return { ok: true, providerMessageId: body.messageId };
+    } catch (error) {
+      return { ok: false, error: describeError(error) };
+    }
+  }
+}
+
+/** The provider's machine-readable error code, if it sent one. Never the body. */
+async function readErrorCode(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { code?: unknown };
+    return typeof body.code === "string" ? ` (${body.code.slice(0, 60)})` : "";
+  } catch {
+    return "";
   }
 }
 
@@ -178,6 +283,8 @@ export function selectEmailProvider(
   production: boolean,
 ): EmailProvider {
   switch (provider) {
+    case "brevo":
+      return new BrevoEmailProvider();
     case "smtp":
       return new SmtpEmailProvider();
     case "resend":

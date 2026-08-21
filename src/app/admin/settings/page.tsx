@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 
 import {
+  EmailDelivery,
   LibrarySettingsForm,
   ReminderSwitch,
   UnavailableFeatures,
   VerificationForm,
 } from "@/app/admin/settings/settings-forms";
 import { StaffShell } from "@/components/layout/staff-shell";
+import { formatInTimezone } from "@/lib/dates";
 import { requirePermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe } from "@/server/lib/settings";
 import {
@@ -60,6 +62,18 @@ export default async function SettingsPage() {
           current={view.settings.requiredGuardianVerification}
           selectable={SELECTABLE_VERIFICATION_STRENGTHS}
           version={view.consentVersion}
+        />
+
+        <EmailDelivery
+          provider={view.email.provider}
+          canSend={view.email.canSend}
+          testRecipient={view.email.testRecipient}
+          recentFailures={view.email.recentFailures}
+          lastSent={
+            view.email.lastSentAt
+              ? formatInTimezone(view.email.lastSentAt, view.settings.timezone, "d MMM yyyy, h:mm a")
+              : null
+          }
         />
 
         <ReminderSwitch enabled={view.reminders.enabled} canEnable={view.reminders.canEnable} />

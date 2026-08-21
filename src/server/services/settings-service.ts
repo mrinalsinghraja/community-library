@@ -11,11 +11,19 @@ import {
   type BrandingInput,
   type LibrarySettingsInput,
 } from "@/lib/settings-schema";
+import { formatInTimezone } from "@/lib/dates";
 import { requirePermission } from "@/server/authz";
 import { prisma } from "@/server/db";
 import { env } from "@/server/env";
 import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
-import { NotFoundError, RuleViolationError, ValidationError } from "@/server/lib/errors";
+import { activeEmailProviderName, EmailService } from "@/server/lib/email";
+import {
+  NotFoundError,
+  RateLimitedError,
+  RuleViolationError,
+  ValidationError,
+} from "@/server/lib/errors";
+import { checkActionThrottle, RATE_LIMITS, recordAction } from "@/server/lib/rate-limit";
 import { scheduleMediaDeletion, storeBrandingImage } from "@/server/services/media-service";
 
 /**
@@ -101,11 +109,25 @@ async function loadConfig(libraryId: string) {
   return { library, community: library.community, settings: library.settings };
 }
 
+/** What the settings page needs to say about email, without naming a secret. */
+export interface EmailDeliveryView {
+  /** The transport in force: `brevo`, `resend`, `smtp`, or `refusing`. */
+  provider: string;
+  /** False when the deployment is configured to send nothing. */
+  canSend: boolean;
+  /** The signed-in administrator's own address, the only test recipient. */
+  testRecipient: string | null;
+  /** How the last few attempts went — the whole delivery log is not the point. */
+  recentFailures: number;
+  lastSentAt: Date | null;
+}
+
 export interface AdminSettingsView {
   libraryName: string;
   communityName: string;
   settings: LibrarySettings;
   reminders: ReminderCapability;
+  email: EmailDeliveryView;
   /** Read-only: the wording lives in the code and changing it needs a release. */
   consentVersion: string;
   verificationVersion: string;
@@ -120,10 +142,111 @@ export async function getAdminSettings(): Promise<AdminSettingsView> {
     communityName: community.name,
     settings,
     reminders: reminderCapability(settings),
+    email: await emailDeliveryView(actor.libraryId, actor.userId),
     consentVersion: settings.consentVersion,
     verificationVersion: settings.guardianVerificationVersion,
   };
 }
+
+async function emailDeliveryView(libraryId: string, userId: string): Promise<EmailDeliveryView> {
+  const [me, recentFailures, lastSent] = await Promise.all([
+    prisma.appUser.findUnique({ where: { id: userId }, select: { email: true } }),
+    prisma.emailEvent.count({
+      where: { libraryId, status: "FAILED", createdAt: { gte: daysAgo(7) } },
+    }),
+    prisma.emailEvent.findFirst({
+      where: { libraryId, status: "SENT" },
+      orderBy: { sentAt: "desc" },
+      select: { sentAt: true },
+    }),
+  ]);
+
+  return {
+    provider: activeEmailProviderName(),
+    canSend: emailCanReachAnybody(),
+    testRecipient: me?.email ?? null,
+    recentFailures,
+    lastSentAt: lastSent?.sentAt ?? null,
+  };
+}
+
+function daysAgo(days: number): Date {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * Sends one test message to the administrator's own address.
+ *
+ * This exists so that "can this library email anybody?" is a question with a
+ * button rather than an experiment. The alternative was to approve a real
+ * family and watch what happened, which spends a single-use activation token to
+ * answer a question about configuration — and spends it on somebody who is
+ * waiting for it.
+ *
+ * Three things keep it from becoming a way to send mail:
+ *   • the recipient is not a parameter. It is whatever address is on the
+ *     signed-in administrator's own account, so this cannot be pointed at a
+ *     guardian, at a child, or at anybody outside the building.
+ *   • it needs `settings.edit`, the same permission as every other switch on
+ *     that page, and the service checks it rather than the button.
+ *   • it is throttled per administrator, because a transport that is down stays
+ *     down and pressing the button forty times only spends the daily allowance
+ *     the families' activation links need.
+ */
+export async function sendEmailDeliveryTest(): Promise<{ ok: boolean; detail: string }> {
+  const actor = await requirePermission("settings.edit");
+  const { settings } = await loadConfig(actor.libraryId);
+
+  const me = await prisma.appUser.findUnique({
+    where: { id: actor.userId },
+    select: { email: true },
+  });
+
+  if (!me?.email) {
+    throw new RuleViolationError(
+      `User ${actor.userId} has no email address to test with`,
+      "Your own account has no email address, so there is nowhere to send the test. Add one first.",
+    );
+  }
+
+  const throttle = await checkActionThrottle({
+    bucket: EMAIL_TEST_BUCKET,
+    subject: actor.userId,
+    max: RATE_LIMITS.emailTestsMax,
+    windowMinutes: RATE_LIMITS.emailTestWindowMinutes,
+  });
+  if (!throttle.allowed) {
+    throw new RateLimitedError(
+      `Email delivery tests exceeded for ${actor.userId}`,
+      throttle.retryAfterSeconds,
+    );
+  }
+  await recordAction(EMAIL_TEST_BUCKET, actor.userId);
+
+  const result = await EmailService.sendDeliveryTest({
+    to: me.email,
+    requestedBy: actor.displayName,
+    sentAt: formatInTimezone(new Date(), settings.timezone, "d MMM yyyy, h:mm a"),
+  });
+
+  if (result.ok) {
+    return {
+      ok: true,
+      detail: `Sent to ${me.email} through ${result.provider}. If it does not arrive within a few minutes, check the spam folder.`,
+    };
+  }
+
+  // The provider's own words. A librarian cannot act on "could not send", but
+  // "sender_not_valid" is somebody forgetting to verify the From address.
+  return {
+    ok: false,
+    detail: result.error
+      ? `Nothing was sent. The mail service said: ${result.error}`
+      : "Nothing was sent, and the mail service gave no reason.",
+  };
+}
+
+const EMAIL_TEST_BUCKET = "email-delivery-test";
 
 // ---------------------------------------------------------------------------
 // Writing: the ordinary settings

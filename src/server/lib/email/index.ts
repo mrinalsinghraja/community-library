@@ -380,7 +380,48 @@ export const EmailService = {
       { to: params.to, template: TEMPLATE_IDS.IMPORTANT_NOTIFICATION },
     );
   },
+
+  /**
+   * Proves the transport, to the administrator who asked.
+   *
+   * Returns the provider's own reason on failure rather than a boolean, because
+   * this is the one send whose whole purpose is to answer "why not?" — a wrong
+   * key, an unverified sender address and a blocked port are three different
+   * problems with three different fixes, and a librarian staring at "could not
+   * send" can act on none of them. The reason is provider text only; the
+   * dispatcher has already refused to let a message body near a log.
+   */
+  async sendDeliveryTest(params: {
+    to: string;
+    requestedBy: string;
+    sentAt: string;
+  }): Promise<{ ok: boolean; error?: string; provider: string }> {
+    const ctx = await context();
+    const rendered = templates.deliveryTest(ctx, {
+      requestedBy: params.requestedBy,
+      sentAt: params.sentAt,
+    });
+
+    const outcome = await dispatchWithEvent(
+      { to: params.to, template: TEMPLATE_IDS.DELIVERY_TEST, ...rendered },
+      ctx.libraryId,
+      { to: params.to, template: TEMPLATE_IDS.DELIVERY_TEST },
+    );
+
+    if (outcome.ok) return { ok: true, provider: provider().name };
+
+    const event = await prisma.emailEvent.findUnique({
+      where: { id: outcome.eventId },
+      select: { error: true },
+    });
+    return { ok: false, error: event?.error ?? undefined, provider: provider().name };
+  },
 };
+
+/** Which transport this deployment is actually using. Shown on the settings page. */
+export function activeEmailProviderName(): string {
+  return provider().name;
+}
 
 export { TEMPLATE_IDS };
 export type { EmailProvider, EmailMessage } from "@/server/lib/email/types";
