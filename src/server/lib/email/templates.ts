@@ -48,9 +48,17 @@ function escapeHtml(value: string): string {
  *
  * The tag is one line on purpose. Email sanitisers rewrite markup aggressively
  * and a tag broken across lines is a needless thing to hand them.
+ *
+ * The filename is versioned, and `/brand/*` is served `immutable` with a year's
+ * cache by vercel.json. Both are for Gmail's image proxy rather than for
+ * browsers: it fetches the image on the recipient's behalf and caches the
+ * result per URL, it wants a response it is allowed to cache -- Vercel's static
+ * default of `max-age=0, must-revalidate` is not -- and once it has recorded a
+ * failure against a URL it keeps serving that failure. A new filename is the
+ * only way to ask it again.
  */
 function masthead(context: EmailContext): string {
-  const src = `${escapeHtml(context.appUrl)}/brand/library-mark-email.png`;
+  const src = `${escapeHtml(context.appUrl)}/brand/library-mark-email-v2.png`;
   const alt = escapeHtml(context.libraryName);
 
   return `<img src="${src}" width="59" height="64" alt="${alt}" style="display:block;border:0;outline:none;text-decoration:none;margin:0 0 12px;max-width:59px;" />`;

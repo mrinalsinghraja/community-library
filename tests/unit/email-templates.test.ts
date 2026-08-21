@@ -167,7 +167,7 @@ describe("the staff invitation", () => {
 describe("the library's mark on every message", () => {
   it("appears at the head of all of them", () => {
     for (const rendered of ALL) {
-      expect(rendered.html).toContain("/brand/library-mark-email.png");
+      expect(rendered.html).toContain("/brand/library-mark-email-v2.png");
     }
   });
 
@@ -188,7 +188,7 @@ describe("the library's mark on every message", () => {
     const src = ALL[0].html.match(/src="([^"]*library-mark-email[^"]*)"/)?.[1] ?? "";
 
     expect(src).not.toMatch(/[?&]/);
-    expect(src).toBe(`${CONTEXT.appUrl}/brand/library-mark-email.png`);
+    expect(src).toBe(`${CONTEXT.appUrl}/brand/library-mark-email-v2.png`);
   });
 
   it("falls back to the library's name when the image is blocked", () => {
