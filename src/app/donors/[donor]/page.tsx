@@ -2,14 +2,19 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Bookplate } from "@/components/library/bookplate";
+import { BookCover } from "@/components/library/book-cover";
+import { Butterfly } from "@/components/library/library-logo";
 import { PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { formatInTimezone } from "@/lib/dates";
 import { getActor } from "@/server/authz";
 import { isAppError } from "@/server/lib/errors";
-import { catalogueIsPubliclyVisible, getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
+import {
+  catalogueIsPubliclyVisible,
+  getBrandingSafe,
+  getCurrentLibrary,
+} from "@/server/lib/settings";
 import { getDonorGifts } from "@/server/services/donor-service";
 
 export const dynamic = "force-dynamic";
@@ -17,22 +22,24 @@ export const dynamic = "force-dynamic";
 /**
  * One family's shelf of gifts.
  *
- * The payoff for the blank plate on the register: here the same plate is filled
- * in with this family's credit, and under it are the books that carry it.
+ * A heading and a shelf, not a certificate. What somebody following a name off
+ * the register wants to see is the books -- and a shelf of jackets is what
+ * makes the next neighbour want to add to it, which a list of titles in a box
+ * does not.
  *
  * Two things this page deliberately does not do.
  *
- * **It is not a way around the catalogue.** The shelf is member-only by
- * setting, and covers are refused to a signed-out request by the media route on
- * exactly that setting. So a gift is printed as a title, an author and the
- * month it arrived -- no cover, no copy code, no shelf, no condition, and no
- * "on loan to". That is a record of a gift rather than a second catalogue, it
- * looks the same to everybody, and nothing here had to be unlocked to build it.
- * The title becomes a link only for a visitor who could already open it.
+ * **It is not a way around the catalogue.** A gift is printed as a cover, a
+ * title, an author and the month it arrived -- no copy code, no shelf, no
+ * condition, no reading age, and no "on loan to". It is a record of what was
+ * given rather than a live view of the collection, and a title becomes a link
+ * only for a visitor who could already open it. The jackets are readable signed
+ * out because `getAuthorizedMedia` allows a cover whose title carries a
+ * credited donation, and refuses every other cover exactly as it did before.
  *
  * **It has no page for a family who asked to stay out of it.** An anonymous
- * donor is not in the register and their id is not derivable from it; asking
- * for one anyway gets the same 404 as an id that was never real.
+ * donor is not in the register, their id resolves to nothing, and their books'
+ * covers stay refused with everything else the catalogue is hiding.
  */
 
 async function loadDonor(donorId: string) {
@@ -77,12 +84,21 @@ export default async function DonorGiftsPage({
   const canOpenBooks =
     (await catalogueIsPubliclyVisible()) || (actor?.permissions.has("book.view") ?? false);
 
-  const credit = entry.label;
-  const givenMonth = (givenAt: Date) => formatInTimezone(givenAt, settings.timezone, "MMM yyyy");
+  const years =
+    entry.firstYear === entry.lastYear
+      ? String(entry.firstYear)
+      : `${entry.firstYear}–${entry.lastYear}`;
+
+  /*
+   * Flats get rented, so the flat is shown as part of *this* family's line
+   * rather than as their identity, with the years beside it. Two households at
+   * B-208 four years apart are two entries that say so.
+   */
+  const line = [entry.name ? entry.apartment : null, years].filter(Boolean).join(" · ");
 
   return (
     <PublicShell branding={branding} signedIn={Boolean(actor)}>
-      <div className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-14">
+      <div className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
         <Link
           href="/donors"
           className="inline-flex items-center gap-1.5 text-base font-bold text-primary-deep"
@@ -90,63 +106,83 @@ export default async function DonorGiftsPage({
           <span aria-hidden="true">&larr;</span> All our book friends
         </Link>
 
-        <Bookplate
-          className="mt-6"
-          credit={credit}
-          caption={entry.name && entry.apartment ? entry.apartment : undefined}
-        />
+        <header className="relative mt-7">
+          <p className="text-base font-semibold uppercase tracking-[0.14em] text-accent-ink">
+            Thank you
+          </p>
+          <h1 className="garden-rule mt-3 inline-block text-3xl sm:text-4xl">{entry.label}</h1>
+          <Butterfly className="drift absolute -top-2 right-0 w-9 opacity-80 sm:w-12" />
 
-        <p className="mt-9 text-xl text-ink">
-          {gifts.length === 1
-            ? "One book on our shelves carries this plate."
-            : `${gifts.length} books on our shelves carry this plate.`}{" "}
-          Thank you.
-        </p>
+          {line ? <p className="mt-9 text-lg text-ink-soft">{line}</p> : null}
 
-        <section className="mt-10" aria-labelledby="gifts-heading">
+          <p className="mt-3 max-w-2xl text-xl text-ink">
+            {gifts.length === 1
+              ? "One book on our shelves came from this family."
+              : `${gifts.length} books on our shelves came from this family.`}{" "}
+            Every one of them is being read by somebody who did not have it.
+          </p>
+        </header>
+
+        <section className="mt-12" aria-labelledby="gifts-heading">
           <h2 id="gifts-heading" className="sr-only">
-            Books given by {credit}
+            Books given by {entry.label}
           </h2>
 
-          <ul className="rounded-[var(--radius-card)] bg-surface shadow-lift">
-            {gifts.map((gift) => (
-              <li
-                key={gift.code}
-                className="flex flex-col gap-1 border-b border-hairline px-5 py-5 last:border-b-0 sm:flex-row sm:items-baseline sm:gap-6 sm:px-7"
-              >
-                {/*
-                  The month is the left rail, and it is the reason there is no
-                  01 / 02 / 03 down the side: the list is already in the order
-                  the books arrived, and the date says so with real information
-                  instead of decoration.
-                */}
-                <span className="shrink-0 font-mono text-xs uppercase tracking-[0.16em] text-ink-faint sm:w-24 sm:pt-1">
-                  {givenMonth(gift.givenAt)}
-                </span>
-                <span className="min-w-0">
-                  <span className="block font-display text-xl leading-snug text-ink">
-                    {canOpenBooks ? (
-                      <Link href={`/books/${gift.code}`} className="text-primary-deep">
-                        {gift.title}
-                      </Link>
-                    ) : (
-                      gift.title
-                    )}
-                  </span>
-                  {gift.authors.length > 0 ? (
-                    <span className="mt-0.5 block text-base text-ink-soft">
-                      {gift.authors.join(", ")}
-                    </span>
-                  ) : null}
-                </span>
-              </li>
-            ))}
+          {/*
+            The same shelf the catalogue uses -- cover full-bleed to the card's
+            edge, title, author -- with the catalogue's own furniture left off.
+            No status pill, no shelf, no reading age: those describe where a book
+            is now, and this page is about where it came from.
+          */}
+          <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">
+            {gifts.map((gift) => {
+              const card = (
+                <>
+                  <BookCover
+                    coverMediaId={gift.coverMediaId}
+                    title={gift.title}
+                    className="rounded-none"
+                  />
+                  <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-4">
+                    <h3 className="line-clamp-2 font-display text-lg font-bold leading-snug text-ink group-hover:text-accent-ink">
+                      {gift.title}
+                    </h3>
+                    {gift.authors.length > 0 ? (
+                      <p className="line-clamp-1 text-base text-ink-soft">
+                        {gift.authors.join(", ")}
+                      </p>
+                    ) : null}
+                    <p className="mt-auto pt-2 font-mono text-xs uppercase tracking-[0.16em] text-ink-faint">
+                      {formatInTimezone(gift.givenAt, settings.timezone, "MMM yyyy")}
+                    </p>
+                  </div>
+                </>
+              );
+
+              const shell =
+                "group flex h-full flex-col overflow-hidden rounded-[var(--radius-card)] bg-surface shadow-lift";
+
+              return (
+                <li key={gift.code} className="list-none">
+                  {canOpenBooks ? (
+                    <Link
+                      href={`/books/${encodeURIComponent(gift.code)}`}
+                      className={`lift ${shell} no-underline`}
+                    >
+                      {card}
+                    </Link>
+                  ) : (
+                    <div className={shell}>{card}</div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
 
-        <p className="mt-12 text-lg text-ink-soft">
-          Every one of these was carried here from a neighbour&rsquo;s flat, and is being read by
-          someone who did not have it.
+        <p className="mt-14 max-w-2xl text-lg text-ink-soft">
+          Every one of these was carried here from a neighbour&rsquo;s flat, and cost the family who
+          reads it next nothing at all.
         </p>
 
         <p className="mt-6">

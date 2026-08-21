@@ -53,6 +53,9 @@ function readBookInput(formData: FormData): BookInput {
     donorName: String(formData.get("donorName") ?? ""),
     donorFlat: String(formData.get("donorFlat") ?? ""),
     donatedOn: String(formData.get("donatedOn") ?? ""),
+    // Unticked means "publish the name", which is the library's default and the
+    // wording the desk uses. An absent checkbox is unticked.
+    donorAnonymous: formData.get("donorAnonymous") !== null,
   };
 }
 

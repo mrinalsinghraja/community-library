@@ -352,6 +352,23 @@ export async function getAuthorizedMedia(mediaId: string): Promise<AuthorizedMed
   if (media.purpose === UPLOAD_PURPOSES.BOOK_COVER) {
     if (actor) return readBytes(media);
     if (await catalogueIsPubliclyVisible()) return readBytes(media);
+    /*
+     * One narrow exception, and it is not "covers are public now".
+     *
+     * The donor register is readable signed out, and a family's page shows the
+     * books they gave. Their titles and authors are already printed there, so a
+     * jacket adds no fact about the collection that the page did not already
+     * state -- but it is the difference between a list and a shelf, and the
+     * shelf is what makes somebody want to add to it.
+     *
+     * So: a cover is readable signed out **only when its title carries a
+     * donation that is credited on that public page**. A book the library
+     * bought stays refused. A book given anonymously stays refused, because
+     * that family has no page and their books are on nobody's. Everything else
+     * about the gate is unchanged, and the check is a query rather than a flag
+     * so it cannot drift away from what the page actually shows.
+     */
+    if (await coverAppearsOnDonorPage(libraryId, media.bookTitles)) return readBytes(media);
     throw new NotFoundError(`Signed-out request for cover ${mediaId} while catalogue is member-only`);
   }
 
@@ -384,6 +401,31 @@ export async function getAuthorizedMedia(mediaId: string): Promise<AuthorizedMed
   }
 
   return readBytes(media);
+}
+
+/**
+ * Whether this cover belongs to a book on the public donor pages.
+ *
+ * Titles rather than copies: a cover hangs on `book_title`, and a title with
+ * three copies where one was a gift is a title whose jacket that family's page
+ * shows. ANONYMOUS is excluded because an anonymous family has no page at all.
+ */
+async function coverAppearsOnDonorPage(
+  libraryId: string,
+  titles: Array<{ id: string }>,
+): Promise<boolean> {
+  if (titles.length === 0) return false;
+
+  const credited = await prisma.donation.findFirst({
+    where: {
+      libraryId,
+      displayConsent: { not: "ANONYMOUS" },
+      copy: { titleId: { in: titles.map((title) => title.id) } },
+    },
+    select: { id: true },
+  });
+
+  return credited !== null;
 }
 
 async function readBytes(media: {

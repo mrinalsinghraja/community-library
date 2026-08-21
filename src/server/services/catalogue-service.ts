@@ -126,6 +126,15 @@ const bookInputSchema = z.object({
     .optional()
     .default(""),
   donatedOn: z.string().trim().optional().default(""),
+  /**
+   * Ticked when this family asked us not to print their name.
+   *
+   * The default is to say thank you by name -- that is what the donors page is
+   * for, and asking every family to opt in would leave it empty. So this is the
+   * opt OUT, and the wording at the desk has to say that the name goes on a
+   * public page unless somebody says otherwise.
+   */
+  donorAnonymous: z.coerce.boolean().optional().default(false),
   /** Media id of an already-uploaded, still-unclaimed cover. */
   coverMediaId: z.string().trim().optional().default(""),
 });
@@ -754,9 +763,13 @@ export async function createBook(input: BookInput): Promise<CreatedBook> {
           donorName: parsed.donorName,
           donorApartment: parsed.donorFlat || null,
           donatedAt,
-          // The library's configured default. A donor who wants less than this
-          // is a conversation at the desk, not a field on a book form.
-          displayConsent: settings.donorDisplayDefault,
+          // The library's configured default unless the family asked us not to
+          // print their name, which the intake form asks in as many words.
+          displayConsent: resolveDisplayConsent(
+            parsed.donorAnonymous,
+            null,
+            settings.donorDisplayDefault,
+          ),
           recordedById: actor.userId,
         },
       });
@@ -769,7 +782,11 @@ export async function createBook(input: BookInput): Promise<CreatedBook> {
         actorUserId: actor.userId,
         actorLabel: actor.displayName,
         // The name and flat are the donation. No contact details exist to leak.
-        metadata: { donorName: parsed.donorName, donorApartment: parsed.donorFlat || null },
+        metadata: {
+          donorName: parsed.donorName,
+          donorApartment: parsed.donorFlat || null,
+          anonymous: parsed.donorAnonymous,
+        },
       });
     }
 
@@ -808,7 +825,9 @@ export async function updateBook(copyId: string, input: BookInput): Promise<void
       status: true,
       condition: true,
       title: { select: { id: true, title: true, authors: true, ageGroup: true, categoryId: true, coverMediaId: true } },
-      donation: { select: { id: true, donorName: true, donorApartment: true } },
+      donation: {
+        select: { id: true, donorName: true, donorApartment: true, displayConsent: true },
+      },
     },
   });
 
@@ -934,8 +953,10 @@ export async function updateBook(copyId: string, input: BookInput): Promise<void
       existingDonationId: existing.donation?.id ?? null,
       previousDonorName: existing.donation?.donorName ?? null,
       previousDonorApartment: existing.donation?.donorApartment ?? null,
+      previousDisplayConsent: existing.donation?.displayConsent ?? null,
       donorName: parsed.donorName,
       donorFlat: parsed.donorFlat,
+      donorAnonymous: parsed.donorAnonymous,
       donatedAt,
       defaultDisplayConsent: settings.donorDisplayDefault,
     });
@@ -1254,6 +1275,27 @@ function parseDonationDate(value: string, timezone: string): Date {
   return parsed;
 }
 
+/**
+ * What to store in `display_consent` after this save.
+ *
+ * Ticked is unambiguous: ANONYMOUS. Unticked is the part that needs care --
+ * it must NOT mean "reset to the library default", because a family already
+ * recorded as APARTMENT_ONLY would have their name published by a librarian who
+ * opened the form to fix a typo and saved it. Unticked therefore keeps whatever
+ * non-anonymous choice is already on record, and only falls back to the default
+ * when there is nothing to keep. Unticking an anonymous donation is the one way
+ * a name comes back, which is the deliberate act it should be.
+ */
+function resolveDisplayConsent(
+  anonymous: boolean,
+  previous: DonorDisplayConsent | null,
+  fallback: DonorDisplayConsent,
+): DonorDisplayConsent {
+  if (anonymous) return "ANONYMOUS";
+  if (previous && previous !== "ANONYMOUS") return previous;
+  return fallback;
+}
+
 /** Creates, updates or removes the donation attached to one copy. */
 async function upsertDonation(
   tx: Tx,
@@ -1264,17 +1306,27 @@ async function upsertDonation(
     existingDonationId: string | null;
     previousDonorName: string | null;
     previousDonorApartment: string | null;
+    previousDisplayConsent: DonorDisplayConsent | null;
     donorName: string;
     donorFlat: string;
+    donorAnonymous: boolean;
     donatedAt: Date;
     defaultDisplayConsent: DonorDisplayConsent;
   },
 ): Promise<void> {
   const { actor } = params;
   const hasDonor = params.donorName.length > 0;
+  const displayConsent = resolveDisplayConsent(
+    params.donorAnonymous,
+    params.previousDisplayConsent,
+    params.defaultDisplayConsent,
+  );
   const changed =
     params.previousDonorName !== (hasDonor ? params.donorName : null) ||
-    params.previousDonorApartment !== (params.donorFlat || null);
+    params.previousDonorApartment !== (params.donorFlat || null) ||
+    // A family who asks to be taken off the page has changed the donation as
+    // surely as a corrected spelling, and the audit log has to say so.
+    (params.previousDisplayConsent !== null && params.previousDisplayConsent !== displayConsent);
 
   if (!hasDonor) {
     /*
@@ -1311,6 +1363,7 @@ async function upsertDonation(
         donorName: params.donorName,
         donorApartment: params.donorFlat || null,
         donatedAt: params.donatedAt,
+        displayConsent,
       },
     });
   } else {
@@ -1321,7 +1374,7 @@ async function upsertDonation(
         donorName: params.donorName,
         donorApartment: params.donorFlat || null,
         donatedAt: params.donatedAt,
-        displayConsent: params.defaultDisplayConsent,
+        displayConsent,
         recordedById: actor.userId,
       },
     });
@@ -1341,6 +1394,7 @@ async function upsertDonation(
         copyCode: params.copyCode,
         donorName: params.donorName,
         donorApartment: params.donorFlat || null,
+        anonymous: displayConsent === "ANONYMOUS",
       },
     });
   }

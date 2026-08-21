@@ -218,14 +218,25 @@ there by accident.
 `/donors` is a register, and it is **open to visitors who have not signed in** —
 the only reader-facing page that is. It is read by `listDonorRegister()` in
 `src/server/services/donor-service.ts`, which never passes through
-`requireCatalogueAccess()`, and it lists every family once, alphabetically,
-with the flat they live in and how many books they have given. Each name links
-to `/donors/[donor]`, that family's own page, showing the books themselves as a
-title, an author and the month the book arrived.
+`requireCatalogueAccess()`, and it lists every family once, alphabetically, with
+the flat they gave from, **the year they gave**, and how many books. Each name
+links to `/donors/[donor]`, that family's own page, showing the books as a
+shelf: cover, title, author and the month the book arrived.
 
-That page prints **no cover, no copy code, no shelf, no condition and no
+The year is there because **flats are rented**. The same flat number five years
+apart is usually a different household, and a register without a year reads
+those two families as one entry that grew. It is taken from the library's
+timezone, not the server's.
+
+That page prints **no copy code, no shelf, no reading age, no condition and no
 borrower**, and a title becomes a link into the catalogue only for a visitor who
 could already open it. A thank-you is not a second way to read the shelf.
+
+The jackets are the one amendment to the cover gate (ADR-021, amended by
+ADR-046): a signed-out request may read a cover **whose title carries a credited
+donation**, because that jacket is on the public donor page beside a title and
+author already printed there. A bought book's cover stays refused, and so does
+an anonymous family's.
 
 The family is addressed by `sha256(libraryId | consent | name | flat)`, first
 sixteen characters — never a readable slug. The page shows a name because the
@@ -250,6 +261,20 @@ And `displayConsent` still decides every line. A family who asked for the flat
 alone is named by their flat and their name never leaves the service; a family
 who asked to stay out of it has no row, no id and no page, and is thanked in one
 closing line that counts *families* rather than books.
+
+### How the choice is recorded
+
+The book-intake form asks the librarian one question — **"Do not publish this
+name"**, a checkbox, unticked. Publishing is the default: asking every family to
+opt in would leave the thank-you page empty, so the wording at the desk says the
+name goes on a public page unless somebody asks otherwise. The name is stored
+either way, so the librarian always knows who gave the book.
+
+**Unticked does not mean "reset to the library default".** It keeps whatever
+non-anonymous choice is already recorded, so a librarian opening the form to fix
+a spelling cannot republish a name a family asked to keep off — `APARTMENT_ONLY`
+survives a save it was not part of. Unticking an anonymous donation is the one
+way a name comes back.
 
 ## 10. Cover pictures
 

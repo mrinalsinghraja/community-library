@@ -425,6 +425,16 @@ answers a **separate, explicitly written branch** for it: any signed-in member
 may see any cover, and a signed-out visitor may too when
 `catalogue_visibility` is `PUBLIC`.
 
+**Amended 2026-08-21 (ADR-046).** That branch has one further condition, and it
+is narrow on purpose: a signed-out visitor may also read a cover whose title
+carries a **credited** donation, because those jackets are on the public donor
+pages beside a title and author already printed there. A book the library
+bought, and a book given by a family who asked to stay off the page, stay
+refused. The check is a query against `donation` rather than a flag, so it
+cannot drift away from what the page actually shows. This is not "covers are
+public": `catalogue_visibility` still decides the shelf, and the branch for a
+child's photograph is untouched.
+
 **Why private storage.** A book jacket is not sensitive. But the catalogue
 defaults to MEMBER_ONLY, and a public CDN URL is a way around the front door
 that no later permission check can close. Keeping every read behind
@@ -1534,12 +1544,21 @@ so it cannot drift out of step with the register, and a family who later asks
 to be made anonymous silently breaks the link they were given, which is the
 correct behaviour rather than an oversight.
 
-**A family's page is not a way around the catalogue.** It prints a title, an
-author and the month the book arrived. No cover, no copy code, no shelf, no
-condition, no borrower. Book covers are refused to a signed-out request by
-`getAuthorizedMedia` on exactly the setting that gates the shelf, and nothing
-here was unlocked to build the page: it looks the same to everybody, and a title
-becomes a link into the catalogue only for a visitor who could already open it.
+**A family's page is a shelf, not a catalogue.** It prints a cover, a title, an
+author and the month the book arrived — and none of the catalogue's own
+furniture: no copy code, no shelf, no reading age, no condition, no borrower.
+Those describe where a book is now; this page is about where it came from. A
+title becomes a link into the catalogue only for a visitor who could already
+open it.
+
+The jackets needed one amendment to ADR-021, and it is the narrowest one that
+works: a signed-out request may read a cover **whose title carries a credited
+donation**. The title and author are already printed on that family's page, so
+the jacket states no new fact about the collection — but it is the difference
+between a list and a shelf, and the shelf is what makes the next neighbour want
+to add to it. A bought book's cover stays refused. An anonymous family's books
+stay refused with it, because that family has no page and their books are on
+nobody's.
 
 **A flat-only family is called by their flat.** Two rows both reading "a family
 in this building" are two rows a reader cannot tell apart, and they sorted by a
@@ -1551,6 +1570,30 @@ the words on screen.
 on a reader-facing page.** An address typed into the source is one library's
 mailbox hard-coded into a platform built for more than one, and it keeps being
 printed for a year after somebody stops reading it.
+
+**No certificate.** The first build opened both pages with the bookplate from
+inside a donated book, framed, with the family's name written on the line. It
+was the better drawing and the worse page: a framed plate at the top of a
+thank-you reads as an award the library gave itself, and the owner said so. The
+same words set as a heading and a line of display type read as the library
+saying thank you, which is the only thing either page is for.
+
+**The year is a column, because flats are rented.** The same flat number five
+years apart is usually a different household. Without a year, two families who
+happen to share an address read as one entry that grew; with it they are
+visibly two neighbours. The year is taken from the library's own calendar, not
+the server's, so a gift recorded at 11pm belongs to the day it was given.
+
+**Publishing the name is the default, and the opt-out is one tick box.** The
+intake form asks the librarian one question — "Do not publish this name" —
+unticked. Asking every family to opt in would leave the thank-you page empty,
+so the wording at the desk has to say that the name goes on a public page
+unless somebody says otherwise. Two rules keep it honest: the name is still
+stored, so the librarian always knows who gave the book; and **unticked does not
+mean "reset to the library default"** — it keeps whatever non-anonymous choice
+is already recorded, so a librarian opening the form to fix a spelling cannot
+republish a name a family asked to keep off. Unticking an anonymous donation is
+the one way a name comes back, which is the deliberate act it should be.
 
 **What this does not settle.** These families agreed to be credited when the
 page was behind the front door. It is now in front of it. The site is

@@ -178,14 +178,44 @@ describe("one family's page", () => {
 
   it("does not turn a thank-you into a way around the catalogue", () => {
     /*
-     * The shelf is member-only by setting, and book covers are refused to a
-     * signed-out request on that same setting. So this page prints a title, an
-     * author and a month -- and links into the catalogue only for a visitor who
-     * could already open it.
+     * A shelf of jackets is what makes the next neighbour want to add to it, so
+     * the covers are here -- served through the narrow exception in
+     * getAuthorizedMedia that allows a cover carrying a credited donation and
+     * refuses every other one. What stays off is the catalogue's own furniture:
+     * status, shelf, reading age and condition describe where a book is now,
+     * and this page is about where it came from.
      */
+    expect(DONOR_GIFTS).toContain("BookCover");
     expect(DONOR_GIFTS).toContain("canOpenBooks");
     expect(DONOR_GIFTS).toContain("catalogueIsPubliclyVisible");
-    expect(DONOR_GIFTS, "a cover was rendered on a public page").not.toContain("coverMediaId");
+
+    for (const catalogueOnly of [
+      "StatusBadge",
+      "statusDefinition",
+      "ageGroupLabel",
+      "categoryName",
+      "condition",
+    ]) {
+      expect(code(DONOR_GIFTS), `${catalogueOnly} belongs to the catalogue`).not.toContain(
+        catalogueOnly,
+      );
+    }
+  });
+
+  it("prints the year on the register, because flats get rented", () => {
+    // The same flat number five years apart is often a different household. A
+    // register without a year reads those two families as one that grew.
+    expect(DONORS).toContain("Year given");
+    expect(DONORS).toContain("yearsGiven");
+    expect(code(DONORS)).toContain("entry.firstYear");
+    expect(code(DONORS)).toContain("entry.lastYear");
+  });
+
+  it("opens as a page rather than as a certificate", () => {
+    // A framed plate at the top reads as an award the library gave itself.
+    for (const source of [DONORS, DONOR_GIFTS]) {
+      expect(code(source)).not.toContain("Bookplate");
+    }
   });
 
   it("is rendered per request, like the register it is reached from", () => {

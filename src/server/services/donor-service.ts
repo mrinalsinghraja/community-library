@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 
 import type { DonorDisplayConsent } from "@prisma/client";
 
+import { formatInTimezone } from "@/lib/dates";
 import { prisma } from "@/server/db";
 import { NotFoundError } from "@/server/lib/errors";
 import { getCurrentLibrary } from "@/server/lib/settings";
@@ -67,6 +68,17 @@ export interface DonorRegisterEntry {
   apartment: string | null;
   /** Books given, not a score. Rendered with its unit attached. */
   bookCount: number;
+  /**
+   * The years this family gave in, in the library's timezone.
+   *
+   * On the register this is a column, and it is there because **flats are
+   * rented**. The same flat number over five years can be three different
+   * households, and without a year two of them read as one entry that grew.
+   * With it, "B-208 · 2024" and "B-208 · 2026" are visibly two families who
+   * happen to share an address.
+   */
+  firstYear: number;
+  lastYear: number;
 }
 
 export interface DonorRegister {
@@ -80,10 +92,19 @@ export interface DonorRegister {
 }
 
 export interface DonorGift {
-  /** The book's own code. Used as a stable key, and shown to nobody. */
+  /** The book's own code. Used as a stable key, and to link when allowed. */
   code: string;
   title: string;
   authors: string[];
+  /**
+   * The jacket.
+   *
+   * A signed-out visitor can read this one because the book is on this page --
+   * see `getAuthorizedMedia`, which allows a cover whose title carries a
+   * credited donation and refuses every other cover exactly as before. The
+   * catalogue did not open; four jackets did.
+   */
+  coverMediaId: string | null;
   givenAt: Date;
 }
 
@@ -159,11 +180,16 @@ function registerLabel(entry: { name: string | null; apartment: string | null })
  * when a book wears out would be a strange kind of thank-you.
  */
 export async function listDonorRegister(): Promise<DonorRegister> {
-  const { library } = await getCurrentLibrary();
+  const { library, settings } = await getCurrentLibrary();
 
   const donations = await prisma.donation.findMany({
     where: { libraryId: library.id },
-    select: { donorName: true, donorApartment: true, displayConsent: true },
+    select: {
+      donorName: true,
+      donorApartment: true,
+      displayConsent: true,
+      donatedAt: true,
+    },
   });
 
   const byKey = new Map<string, DonorRegisterEntry>();
@@ -177,9 +203,15 @@ export async function listDonorRegister(): Promise<DonorRegister> {
       continue;
     }
 
+    // The library's own calendar, not the server's. A gift recorded at 11pm in
+    // Bengaluru belongs to that day, and to that year.
+    const year = Number(formatInTimezone(donation.donatedAt, settings.timezone, "yyyy"));
+
     const existing = byKey.get(key);
     if (existing) {
       existing.bookCount += 1;
+      existing.firstYear = Math.min(existing.firstYear, year);
+      existing.lastYear = Math.max(existing.lastYear, year);
       continue;
     }
 
@@ -197,6 +229,8 @@ export async function listDonorRegister(): Promise<DonorRegister> {
       name,
       apartment,
       bookCount: 1,
+      firstYear: year,
+      lastYear: year,
     });
   }
 
@@ -220,7 +254,7 @@ export async function listDonorRegister(): Promise<DonorRegister> {
  * more specific would confirm that the hash belongs to somebody.
  */
 export async function getDonorGifts(id: string): Promise<DonorRegisterDetail> {
-  const { library } = await getCurrentLibrary();
+  const { library, settings } = await getCurrentLibrary();
 
   const donations = await prisma.donation.findMany({
     where: { libraryId: library.id },
@@ -232,7 +266,7 @@ export async function getDonorGifts(id: string): Promise<DonorRegisterDetail> {
       copy: {
         select: {
           copyCode: true,
-          title: { select: { title: true, authors: true } },
+          title: { select: { title: true, authors: true, coverMediaId: true } },
         },
       },
     },
@@ -248,17 +282,30 @@ export async function getDonorGifts(id: string): Promise<DonorRegisterDetail> {
     const key = groupKey(donation);
     if (donorId(library.id, key) !== id) continue;
 
+    const year = Number(formatInTimezone(donation.donatedAt, settings.timezone, "yyyy"));
+
     if (!entry) {
       const name = donation.displayConsent === "NAMED" ? donation.donorName.trim() : null;
       const apartment = donation.donorApartment?.trim() || null;
-      entry = { id, label: registerLabel({ name, apartment }), name, apartment, bookCount: 0 };
+      entry = {
+        id,
+        label: registerLabel({ name, apartment }),
+        name,
+        apartment,
+        bookCount: 0,
+        firstYear: year,
+        lastYear: year,
+      };
     }
     entry.bookCount += 1;
+    entry.firstYear = Math.min(entry.firstYear, year);
+    entry.lastYear = Math.max(entry.lastYear, year);
 
     gifts.push({
       code: donation.copy.copyCode,
       title: donation.copy.title.title,
       authors: donation.copy.title.authors,
+      coverMediaId: donation.copy.title.coverMediaId,
       givenAt: donation.donatedAt,
     });
   }

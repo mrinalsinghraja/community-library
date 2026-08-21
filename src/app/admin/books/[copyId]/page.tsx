@@ -95,6 +95,7 @@ export default async function EditBookPage({
               donatedOn: book.donatedAt
                 ? formatInTimezone(book.donatedAt, settings.timezone, "yyyy-MM-dd")
                 : "",
+              donorAnonymous: book.donorDisplayConsent === "ANONYMOUS",
               hasCover: Boolean(book.coverMediaId),
             }}
           />

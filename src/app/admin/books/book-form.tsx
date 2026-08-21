@@ -53,6 +53,8 @@ export interface BookFormValues {
   donorName: string;
   donorFlat: string;
   donatedOn: string;
+  /** True when this family asked us not to print their name. */
+  donorAnonymous: boolean;
   hasCover: boolean;
   copyCode: string;
 }
@@ -233,6 +235,35 @@ export function BookForm({
             invalid={Boolean(errors.donatedOn)}
           />
         </Field>
+
+        {/*
+          The default is to say thank you by name -- that is what the donors
+          page is for, and asking every family to opt in would leave it empty.
+          This is the opt OUT, and it is a tick box rather than a menu because
+          the question the librarian is actually asking at the desk has two
+          answers.
+
+          Unticked is not "we did not ask". If nobody said otherwise the name
+          goes on the page, so the wording at the desk has to say that out loud.
+        */}
+        <div className="rounded-[var(--radius-field)] bg-surface p-4">
+          <label className="flex items-start gap-3 text-base font-bold text-ink">
+            <input
+              type="checkbox"
+              id={field("donorAnonymous")}
+              name="donorAnonymous"
+              value="yes"
+              defaultChecked={values?.donorAnonymous ?? false}
+              className="mt-1 h-6 w-6 shrink-0 accent-[var(--color-primary)]"
+            />
+            <span>Do not publish this name</span>
+          </label>
+          <p className="ml-9 mt-1.5 text-base text-ink-soft">
+            Tick this only if the family asked. We keep the name here so the
+            librarian knows who gave the book; the thank-you page shows no name,
+            no flat and no page for them.
+          </p>
+        </div>
       </fieldset>
 
       <Field

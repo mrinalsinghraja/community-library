@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { Bookplate } from "@/components/library/bookplate";
+import { Butterfly } from "@/components/library/library-logo";
 import { PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { EmptyState } from "@/components/ui/states";
 import { getActor } from "@/server/authz";
 import { getBrandingSafe } from "@/server/lib/settings";
-import { listDonorRegister } from "@/server/services/donor-service";
+import { listDonorRegister, type DonorRegisterEntry } from "@/server/services/donor-service";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +18,16 @@ export const metadata: Metadata = {
     "The neighbours who have given books to the library, and how to give one yourself.",
 };
 
+const HEAD = "px-5 py-4 text-xs font-bold uppercase tracking-[0.14em] text-ink-soft sm:px-6";
+const CELL = "px-5 py-4 text-lg sm:px-6";
+
+/** One year, or the span between the first gift and the latest. */
+function yearsGiven(entry: DonorRegisterEntry): string {
+  return entry.firstYear === entry.lastYear
+    ? String(entry.firstYear)
+    : `${entry.firstYear}–${entry.lastYear}`;
+}
+
 /**
  * Thank You, Book Friends.
  *
@@ -26,21 +36,25 @@ export const metadata: Metadata = {
  * is the front door. Somebody deciding whether to carry a box of outgrown books
  * downstairs is exactly who it is written for, and they do not have an account.
  *
+ * It opens as a page, not as a certificate. A framed plate at the top reads as
+ * an award the library gave itself; the same words set plainly read as the
+ * library saying thank you, which is the only thing this page is for.
+ *
  * WHAT CHANGED, AND WHAT DID NOT (see ADR-046).
  *
  * This page used to print one thank-you per family and nothing else -- no name,
  * no flat, no number. The owner asked for the register the community can
- * actually read: who gave, which flat, how many books, and a page per family
- * showing the books themselves. That is a product decision and it has been
- * made.
+ * actually read: who gave, which flat, which year, how many books, and a page
+ * per family showing the books themselves. That is a product decision and it
+ * has been made.
  *
  * What did not change is whose decision each line is:
  *
  *   * A family is named here only if they said they wanted to be named. A
  *     family who asked for the flat alone gets the flat alone. A family who
  *     asked to stay out of it is not a row at all, has no page, and is thanked
- *     in one closing line that identifies nobody. That is `displayConsent`, and
- *     it is the donor's field, not the library's.
+ *     in one closing line that identifies nobody. That is the donor's field,
+ *     not the library's.
  *   * The list is alphabetical. With a count on the page, the ordering is the
  *     only thing standing between a register and a league table, so the count
  *     is written with its unit attached ("3 books", never a bare "3"), it is
@@ -65,27 +79,26 @@ export default async function DonorsPage() {
   return (
     <PublicShell branding={branding} signedIn={Boolean(actor)}>
       <div className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8 sm:py-16">
-        {/*
-          THE PLATE, BLANK.
+        <header className="relative">
+          <h1 className="garden-rule inline-block text-3xl sm:text-4xl">
+            Thank you, book friends
+          </h1>
+          <Butterfly className="drift absolute -top-1 right-0 w-9 opacity-80 sm:w-12" />
 
-          The inscription every donated book in this library carries, with the
-          name line empty -- the plate a book that has not been given yet would
-          have. Following any name below fills the same plate in.
-        */}
-        <Bookplate caption="Every name on this page. And, one day, yours.">
-          <p className="font-display text-3xl italic leading-tight text-ink sm:text-4xl">
+          <p className="mt-11 max-w-2xl font-display text-3xl italic leading-tight text-ink sm:text-4xl">
             A book leaves one home and does not stop.
           </p>
-          <p className="mx-auto mt-5 max-w-lg text-lg text-ink-soft">
+          <p className="mt-6 max-w-2xl text-lg text-ink-soft">
             It goes to a child on the fourth floor, then to one who was waiting for it, then to a
-            family who have not moved in yet.
+            family who have not moved in yet. Every neighbour on this page put a book into the
+            hands of children they will never meet.
           </p>
-        </Bookplate>
+        </header>
 
         <div className="mt-10 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-xl">
             <p className="text-xl text-ink">
-              Thank you. You did not give a book away — you gave it to everyone.
+              You did not give a book away — you gave it to everyone.
             </p>
             <p className="mt-4 text-lg text-ink-soft">
               Every book on our shelves was carried here from a neighbour&rsquo;s flat. Joining the
@@ -129,26 +142,20 @@ export default async function DonorsPage() {
                 <table className="w-full border-collapse text-left">
                   <caption className="sr-only">
                     Every family who has given a book, in alphabetical order, with the flat they
-                    live in and how many books they have given.
+                    gave from, the year they gave, and how many books.
                   </caption>
                   <thead>
                     <tr className="border-b-2 border-hairline">
-                      <th
-                        scope="col"
-                        className="px-5 py-4 text-xs font-bold uppercase tracking-[0.14em] text-ink-soft sm:px-6"
-                      >
+                      <th scope="col" className={HEAD}>
                         Book friend
                       </th>
-                      <th
-                        scope="col"
-                        className="hidden px-5 py-4 text-xs font-bold uppercase tracking-[0.14em] text-ink-soft sm:table-cell sm:px-6"
-                      >
+                      <th scope="col" className={`${HEAD} hidden sm:table-cell`}>
                         Flat
                       </th>
-                      <th
-                        scope="col"
-                        className="px-5 py-4 text-xs font-bold uppercase tracking-[0.14em] text-ink-soft sm:px-6"
-                      >
+                      <th scope="col" className={`${HEAD} hidden sm:table-cell`}>
+                        Year given
+                      </th>
+                      <th scope="col" className={HEAD}>
                         Books given
                       </th>
                     </tr>
@@ -170,30 +177,39 @@ export default async function DonorsPage() {
                             className="-mx-2 block rounded-[var(--radius-field)] px-2 py-3 text-lg font-semibold text-primary-deep no-underline hover:underline"
                           >
                             {entry.label}
-                            {entry.name && entry.apartment ? (
-                              /*
-                                The flat column is not there on a phone, so it
-                                rides under the name instead of pushing the
-                                table into a horizontal scroll. Only under a
-                                name: a family who chose the flat alone is
-                                already called by it, and printing it twice on a
-                                375px screen wastes the row.
-                              */
-                              <span className="block text-sm font-normal text-ink-soft sm:hidden">
-                                {entry.apartment}
-                              </span>
-                            ) : null}
+                            {/*
+                              Two of the columns are not there on a phone, so
+                              the flat and the year ride under the name instead
+                              of pushing the table into a horizontal scroll. The
+                              flat is left out for a family already called by it.
+                            */}
+                            <span className="block text-sm font-normal text-ink-soft sm:hidden">
+                              {[entry.name ? entry.apartment : null, yearsGiven(entry)]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
                           </Link>
                         </th>
-                        <td className="hidden px-5 py-4 text-lg text-ink-soft sm:table-cell sm:px-6">
+                        <td className={`${CELL} hidden text-ink-soft sm:table-cell`}>
                           {entry.apartment ?? "—"}
+                        </td>
+                        {/*
+                          Flats get rented. The same flat number five years apart
+                          is often a different household altogether, and without
+                          the year those two families read as one entry that grew
+                          rather than as two neighbours who share an address.
+                        */}
+                        <td
+                          className={`${CELL} hidden whitespace-nowrap text-ink-soft sm:table-cell`}
+                        >
+                          {yearsGiven(entry)}
                         </td>
                         {/*
                           Left-aligned, with the word attached. A bare number
                           right-aligned down a column is a chart with the bars
                           taken off, and the eye reads it as a score.
                         */}
-                        <td className="whitespace-nowrap px-5 py-4 text-lg text-ink sm:px-6">
+                        <td className={`${CELL} whitespace-nowrap text-ink`}>
                           {entry.bookCount === 1 ? "1 book" : `${entry.bookCount} books`}
                         </td>
                       </tr>
@@ -254,12 +270,12 @@ export default async function DonorsPage() {
                 body: "Hand it in at the library, or write to us and we will come and collect it.",
               },
               {
-                title: "We write the plate",
-                body: "A thank-you goes inside the front cover, and the book goes on the shelf.",
+                title: "We write the thank-you",
+                body: "It goes inside the front cover, and the book goes on the shelf.",
               },
               {
                 title: "You choose the credit",
-                body: "Your name and flat, your flat alone, or nothing at all. It is your choice, and we keep to it.",
+                body: "We print your name here unless you tell us not to. Say the word at the desk and we will thank you without it.",
               },
             ].map((step) => (
               <li key={step.title}>

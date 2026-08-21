@@ -2,9 +2,17 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 
 import { __setSessionHandle } from "../stubs/auth-stub";
 import { createSession } from "@/server/auth/session-store";
-import { archiveBook, createBook, type BookInput } from "@/server/services/catalogue-service";
+import { __setStorageDriverForTests } from "@/server/lib/storage";
+import {
+  archiveBook,
+  createBook,
+  updateBook,
+  type BookInput,
+} from "@/server/services/catalogue-service";
+import { getAuthorizedMedia, storeBookCover } from "@/server/services/media-service";
 import { getDonorGifts, listDonorRegister } from "@/server/services/donor-service";
 
+import { FakeStorageDriver, pngBytes } from "./fake-storage";
 import {
   createLibraryFixture,
   createStaff,
@@ -37,6 +45,7 @@ import {
 let fixture: Fixture;
 let librarian: Awaited<ReturnType<typeof createStaff>>;
 let categoryId: string;
+const storageDriver = new FakeStorageDriver();
 
 async function actingAsLibrarian() {
   __setSessionHandle(await createSession(librarian.id, "STAFF"));
@@ -76,12 +85,18 @@ beforeAll(async () => {
   fixture = await createLibraryFixture();
   librarian = await createStaff(fixture.libraryId, "LIBRARIAN");
   categoryId = (await defaultCategory(fixture.libraryId)).id;
+  __setStorageDriverForTests(storageDriver);
 });
 
 beforeEach(async () => {
+  storageDriver.reset();
   await db.donation.deleteMany({});
   await db.bookCopy.deleteMany({});
   await db.bookTitle.deleteMany({});
+  await db.mediaObject.deleteMany({});
+  // Each block starts with an empty log, so "the audit row for this donation"
+  // means this one rather than whichever test ran first.
+  await db.auditLog.deleteMany({});
   await db.codeSequence.updateMany({
     where: { libraryId: fixture.libraryId, kind: "BOOK_COPY" },
     data: { nextValue: 1 },
@@ -93,6 +108,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
+  __setStorageDriverForTests(null);
   await db.$disconnect();
 });
 
@@ -320,5 +336,231 @@ describe("one family's page", () => {
     // Nothing stores this id, so a bookmark only keeps working if it is derived
     // the same way on every request.
     expect(after).toBe(before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("the year a family gave", () => {
+  it("carries one year, and a span when there is more than one", async () => {
+    const first = await addBook({ title: "One" });
+    const second = await addBook({ title: "Two" });
+
+    await db.donation.update({
+      where: { copyId: first.copyId },
+      data: { donatedAt: new Date("2024-06-01T06:00:00Z") },
+    });
+    await db.donation.update({
+      where: { copyId: second.copyId },
+      data: { donatedAt: new Date("2026-02-01T06:00:00Z") },
+    });
+
+    const { entries } = await listDonorRegister();
+    expect(entries[0].firstYear).toBe(2024);
+    expect(entries[0].lastYear).toBe(2026);
+  });
+
+  it("separates two households who lived in the same flat", async () => {
+    /*
+     * The reason the column exists. Flats get rented, so B704 in 2023 and B704
+     * in 2026 are usually two different families -- and a register that shows
+     * only the flat reads them as one entry that grew.
+     */
+    const older = await addBook({ title: "Old", donorName: "Ravi Menon", donorFlat: "B704" });
+    const newer = await addBook({ title: "New", donorName: "Farida Sheikh", donorFlat: "B704" });
+
+    await db.donation.update({
+      where: { copyId: older.copyId },
+      data: { donatedAt: new Date("2023-04-01T06:00:00Z") },
+    });
+    await db.donation.update({
+      where: { copyId: newer.copyId },
+      data: { donatedAt: new Date("2026-04-01T06:00:00Z") },
+    });
+
+    const { entries } = await listDonorRegister();
+
+    expect(entries).toHaveLength(2);
+    expect(entries.map((entry) => [entry.apartment, entry.firstYear])).toEqual([
+      ["B704", 2026],
+      ["B704", 2023],
+    ]);
+  });
+
+  it("reads the year off the library's calendar, not the server's", async () => {
+    const created = await addBook();
+    // 31 December 2025, 20:00 UTC — already 1 January 2026 in Asia/Kolkata.
+    await db.donation.update({
+      where: { copyId: created.copyId },
+      data: { donatedAt: new Date("2025-12-31T20:00:00Z") },
+    });
+
+    const { entries } = await listDonorRegister();
+    expect(entries[0].firstYear).toBe(2026);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("covers on a public donor page", () => {
+  /** Uploads a cover and hangs it on the title this copy belongs to. */
+  async function giveCoverTo(copyId: string): Promise<string> {
+    const stored = await storeBookCover({ libraryId: fixture.libraryId, bytes: pngBytes() });
+    const copy = await db.bookCopy.findUniqueOrThrow({
+      where: { id: copyId },
+      select: { titleId: true },
+    });
+    await db.mediaObject.update({
+      where: { id: stored.mediaId },
+      data: { pendingDeletionAt: null },
+    });
+    await db.bookTitle.update({
+      where: { id: copy.titleId },
+      data: { coverMediaId: stored.mediaId },
+    });
+    return stored.mediaId;
+  }
+
+  it("shows the jacket of a book that is credited on the register", async () => {
+    const created = await addBook();
+    const coverId = await giveCoverTo(created.copyId);
+
+    // Signed out, with the catalogue still member-only. The title and author
+    // are already printed on that family's page; the jacket adds no fact about
+    // the collection that the page did not already state.
+    await expect(getAuthorizedMedia(coverId)).resolves.toMatchObject({ mimeType: "image/png" });
+  });
+
+  it("still refuses the jacket of a book nobody gave", async () => {
+    const bought = await addBook({ title: "Bought", donorName: "" });
+    const coverId = await giveCoverTo(bought.copyId);
+
+    // The catalogue did not open. A book the library bought has no donor page
+    // to appear on, so a signed-out request for its cover is refused exactly as
+    // it was before.
+    await expect(getAuthorizedMedia(coverId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("refuses the jacket of a book given anonymously", async () => {
+    const created = await addBook();
+    await setConsent(created.copyId, "ANONYMOUS");
+    const coverId = await giveCoverTo(created.copyId);
+
+    // An anonymous family has no page, so their books are on nobody's, so their
+    // covers stay behind the front door with the rest of the shelf.
+    await expect(getAuthorizedMedia(coverId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("lets a signed-in member read any cover, as before", async () => {
+    const bought = await addBook({ title: "Bought", donorName: "" });
+    const coverId = await giveCoverTo(bought.copyId);
+
+    __setSessionHandle(await createSession(librarian.id, "STAFF"));
+    await expect(getAuthorizedMedia(coverId)).resolves.toMatchObject({ mimeType: "image/png" });
+  });
+
+  it("hands the cover id to the family's page", async () => {
+    const created = await addBook();
+    const coverId = await giveCoverTo(created.copyId);
+
+    const { entries } = await listDonorRegister();
+    const { gifts } = await getDonorGifts(entries[0].id);
+
+    expect(gifts[0].coverMediaId).toBe(coverId);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("the do-not-publish tick box", () => {
+  it("publishes the name when nobody ticked it", async () => {
+    // The default, and the wording at the desk says so. Asking every family to
+    // opt in would leave the thank-you page empty.
+    await addBook({ donorName: "Anita Sharma", donorFlat: "B704" });
+
+    const { entries } = await listDonorRegister();
+    expect(entries[0].name).toBe("Anita Sharma");
+  });
+
+  it("keeps the name off the page when it is ticked", async () => {
+    await addBook({ donorName: "Anita Sharma", donorFlat: "B704", donorAnonymous: true });
+
+    const register = await listDonorRegister();
+
+    expect(register.entries).toEqual([]);
+    expect(register.anonymousDonors).toBe(1);
+    // The librarian still knows who gave the book. The page does not.
+    const donation = await db.donation.findFirstOrThrow({ select: { donorName: true } });
+    expect(donation.donorName).toBe("Anita Sharma");
+  });
+
+  it("takes a family off the page when the box is ticked later", async () => {
+    const created = await addBook({ donorName: "Anita Sharma", donorFlat: "B704" });
+
+    __setSessionHandle(await createSession(librarian.id, "STAFF"));
+    await updateBook(created.copyId, {
+      title: "The Jungle Book",
+      author: "Rudyard Kipling",
+      categoryId,
+      ageGroup: "AGE_8_10",
+      condition: "GOOD",
+      status: "AVAILABLE",
+      donorName: "Anita Sharma",
+      donorFlat: "B704",
+      donatedOn: "",
+      coverMediaId: "",
+      donorAnonymous: true,
+    });
+    signOut();
+
+    const register = await listDonorRegister();
+    expect(register.entries).toEqual([]);
+    expect(register.anonymousDonors).toBe(1);
+  });
+
+  it("does not un-hide a flat-only family when the form is saved untouched", async () => {
+    /*
+     * The trap this closes. APARTMENT_ONLY is not offered by the tick box, so a
+     * librarian opening the form to fix a spelling leaves the box unticked --
+     * and if unticked meant "reset to the library default", that save would
+     * publish a name the family asked to keep off the page.
+     */
+    const created = await addBook({ donorName: "Anita Sharma", donorFlat: "B704" });
+    await setConsent(created.copyId, "APARTMENT_ONLY");
+
+    __setSessionHandle(await createSession(librarian.id, "STAFF"));
+    await updateBook(created.copyId, {
+      title: "The Jungle Book",
+      author: "Rudyard Kipling",
+      categoryId,
+      ageGroup: "AGE_8_10",
+      condition: "GOOD",
+      status: "AVAILABLE",
+      donorName: "Anita Sharma",
+      donorFlat: "B704",
+      donatedOn: "",
+      coverMediaId: "",
+      donorAnonymous: false,
+    });
+    signOut();
+
+    const { entries } = await listDonorRegister();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].name).toBeNull();
+    expect(entries[0].apartment).toBe("B704");
+  });
+
+  it("never writes the raw name into the audit metadata as published", async () => {
+    await addBook({ donorName: "Anita Sharma", donorFlat: "B704", donorAnonymous: true });
+
+    const audit = await db.auditLog.findFirstOrThrow({
+      where: { action: "donation.recorded" },
+      select: { metadata: true },
+    });
+
+    // The librarian's record still names the donor — that is what it is for —
+    // and it also records that the family asked to stay off the page.
+    expect(JSON.stringify(audit.metadata)).toContain("Anita Sharma");
+    expect(audit.metadata).toMatchObject({ anonymous: true });
   });
 });

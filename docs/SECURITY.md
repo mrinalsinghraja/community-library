@@ -273,8 +273,11 @@ Password policy differs by audience by design — see ADR-006.
   that is. It prints an adult donor's name and flat only where that family chose
   `NAMED`; a flat-only family's name never leaves the service, and an anonymous
   family has no row, no derivable page and no count of their own. Family pages
-  are addressed by a hash, not by a name in the URL, and print no cover, copy
-  code, shelf, condition or borrower.
+  are addressed by a hash, not by a name in the URL, and print no copy code,
+  shelf, reading age, condition or borrower. Their jackets are readable signed
+  out through one narrow amendment to the cover gate: a cover whose title
+  carries a **credited** donation. A bought book's cover and an anonymous
+  family's stay refused, and the branch for a child's photograph is untouched.
 - **A lock-out fixed on the way through.** The proxy bounced any request carrying
   a session cookie away from `/login`, but the edge can only see that a cookie
   *exists*. A session that had gone idle therefore bounced `/account` → `/login`
