@@ -209,19 +209,21 @@ export async function sendEmailDeliveryTest(): Promise<{ ok: boolean; detail: st
     );
   }
 
-  const throttle = await checkActionThrottle({
-    bucket: EMAIL_TEST_BUCKET,
-    subject: actor.userId,
-    max: RATE_LIMITS.emailTestsMax,
-    windowMinutes: RATE_LIMITS.emailTestWindowMinutes,
+  /*
+   * Two limits, because a refused send and a delivered one cost different
+   * things. Delivered tests come out of the same daily allowance as the
+   * families' activation links, so those stay tightly capped. Presses come out
+   * of nothing, and somebody configuring the transport for the first time needs
+   * to press repeatedly -- change a key, read the reason, change something
+   * else -- which is precisely when a tight cap does the most harm.
+   */
+  await enforceTestThrottle(actor.userId, EMAIL_TEST_ATTEMPT_BUCKET, {
+    max: RATE_LIMITS.emailTestAttemptsMax,
   });
-  if (!throttle.allowed) {
-    throw new RateLimitedError(
-      `Email delivery tests exceeded for ${actor.userId}`,
-      throttle.retryAfterSeconds,
-    );
-  }
-  await recordAction(EMAIL_TEST_BUCKET, actor.userId);
+  await enforceTestThrottle(actor.userId, EMAIL_TEST_BUCKET, {
+    max: RATE_LIMITS.emailTestsMax,
+  });
+  await recordAction(EMAIL_TEST_ATTEMPT_BUCKET, actor.userId);
 
   const result = await EmailService.sendDeliveryTest({
     to: me.email,
@@ -230,6 +232,9 @@ export async function sendEmailDeliveryTest(): Promise<{ ok: boolean; detail: st
   });
 
   if (result.ok) {
+    // Counted only now. Nothing left the building on the unhappy path.
+    await recordAction(EMAIL_TEST_BUCKET, actor.userId);
+
     return {
       ok: true,
       detail: `Sent to ${me.email} through ${result.provider}. If it does not arrive within a few minutes, check the spam folder.`,
@@ -247,6 +252,27 @@ export async function sendEmailDeliveryTest(): Promise<{ ok: boolean; detail: st
 }
 
 const EMAIL_TEST_BUCKET = "email-delivery-test";
+const EMAIL_TEST_ATTEMPT_BUCKET = "email-delivery-test-attempt";
+
+async function enforceTestThrottle(
+  userId: string,
+  bucket: string,
+  limits: { max: number },
+): Promise<void> {
+  const throttle = await checkActionThrottle({
+    bucket,
+    subject: userId,
+    max: limits.max,
+    windowMinutes: RATE_LIMITS.emailTestWindowMinutes,
+  });
+
+  if (!throttle.allowed) {
+    throw new RateLimitedError(
+      `Email delivery tests exceeded for ${userId} (${bucket})`,
+      throttle.retryAfterSeconds,
+    );
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Writing: the ordinary settings

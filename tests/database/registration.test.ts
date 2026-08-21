@@ -444,3 +444,122 @@ describe("who may decide a registration", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe("a flat is an address, not an account", () => {
+  /*
+   * 140 flats, and families that change. Every question this building has asked
+   * about registration turns out to be the same one -- "must the flat number be
+   * unique?" -- and the answer is no. The only thing refused is a child already
+   * sitting in the queue, and only while they are still in it.
+   *
+   * Pinned because the rule is a partial unique index written in raw SQL three
+   * files from the service. An edit that dropped `child_name` from it would
+   * lock every second child in the building out of the library without failing
+   * a single other test in this suite.
+   *
+   * Each test uses its own flat: `resetDatabase` runs once for the file, so
+   * counting rows globally would count the rest of the suite's work too.
+   */
+
+  it("takes two children living in the same flat", async () => {
+    for (const childName of ["Sibling One", "Sibling Two"]) {
+      await submitRegistration({
+        ...BASE_INPUT,
+        childName,
+        apartment: "T101",
+        childDateOfBirth: dateOfBirthForAge(9),
+      });
+    }
+
+    const queued = await db.registrationRequest.findMany({
+      where: { apartment: "T101" },
+      select: { childName: true },
+      orderBy: { childName: "asc" },
+    });
+
+    expect(queued.map((request) => request.childName)).toEqual(["Sibling One", "Sibling Two"]);
+  });
+
+  it("gives four siblings on one parent's email four separate cards", async () => {
+    const siblings = ["Quad One", "Quad Two", "Quad Three", "Quad Four"];
+
+    for (const childName of siblings) {
+      await approveFresh(childName, "T102");
+    }
+
+    const members = await db.memberProfile.findMany({
+      where: { apartment: "T102" },
+      select: { memberCode: true },
+    });
+
+    expect(members).toHaveLength(siblings.length);
+    // Four distinct cards, not one card shared by a flat.
+    expect(new Set(members.map((member) => member.memberCode)).size).toBe(siblings.length);
+
+    // One guardian row, reused across all four -- the parent is one person
+    // however many children they register.
+    expect(await db.guardian.count({ where: { email: "t102@example.invalid" } })).toBe(1);
+  });
+
+  it("takes a new tenant in a flat the last family used", async () => {
+    // The previous tenant's child, registered and approved.
+    await approveFresh("Old Tenant Child", "T103");
+
+    // A different family rents T103 later. Different child, different parent,
+    // same door number -- and the old registration is not in the way.
+    await submitRegistration({
+      ...BASE_INPUT,
+      childName: "New Tenant Child",
+      apartment: "T103",
+      childDateOfBirth: dateOfBirthForAge(7),
+      guardianName: "A New Tenant",
+      guardianEmail: "new-tenant@example.invalid",
+    });
+
+    const queued = await db.registrationRequest.findFirstOrThrow({
+      where: { childName: "New Tenant Child" },
+      select: { apartment: true, status: true },
+    });
+
+    expect(queued.apartment).toBe("T103");
+    expect(queued.status).toBe("PENDING");
+    expect(await db.registrationRequest.count({ where: { apartment: "T103" } })).toBe(2);
+  });
+
+  it("still refuses the same child twice while they are waiting", async () => {
+    // The one thing the flat does constrain, and only inside the queue.
+    await submitRegistration({
+      ...BASE_INPUT,
+      childName: "Twice Sent",
+      apartment: "T104",
+      childDateOfBirth: dateOfBirthForAge(9),
+    });
+
+    // Case and stray whitespace must not defeat it either.
+    await submitRegistration({
+      ...BASE_INPUT,
+      childName: "  twice sent ",
+      apartment: "t104",
+      childDateOfBirth: dateOfBirthForAge(9),
+    });
+
+    expect(await db.registrationRequest.count({ where: { apartment: "T104" } })).toBe(1);
+  });
+
+  it("takes the same child name in two different flats", async () => {
+    // Two children called the same thing is not a collision; it is a building.
+    for (const apartment of ["T105", "T106"]) {
+      await submitRegistration({
+        ...BASE_INPUT,
+        childName: "Same Name",
+        apartment,
+        childDateOfBirth: dateOfBirthForAge(9),
+        guardianEmail: `${apartment.toLowerCase()}@example.invalid`,
+      });
+    }
+
+    expect(await db.registrationRequest.count({ where: { childName: "Same Name" } })).toBe(2);
+  });
+});

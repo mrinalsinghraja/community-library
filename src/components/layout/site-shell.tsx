@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { Butterfly, LibraryLogo } from "@/components/library/library-logo";
 import { StoryCharacters } from "@/components/library/story-characters";
+import { JOIN_HELP_MESSAGE, whatsAppLink } from "@/lib/whatsapp";
 import { getActor } from "@/server/authz";
 import type { Branding } from "@/server/lib/settings";
 
@@ -24,6 +25,30 @@ import type { Branding } from "@/server/lib/settings";
 const NAV_LINK =
   "rounded-[var(--radius-button)] px-2.5 py-2 text-base font-semibold text-ink-soft no-underline " +
   "transition-colors hover:bg-accent-wash hover:text-accent-ink sm:px-3.5";
+
+/**
+ * The doors, written once.
+ *
+ * The masthead and the foot of the page offer the same places, and they used to
+ * be two hand-maintained lists — which is how the donors page ended up reachable
+ * from the footer and the home page but not from the masthead, and how a new
+ * page gets added to one of them and forgotten in the other.
+ *
+ * `readersOnly` entries appear only once somebody is signed in, because the
+ * catalogue defaults to members-only and offering a door that answers "sign in
+ * first" is worse than not showing one.
+ */
+const DESTINATIONS: { href: string; label: string; readersOnly?: boolean }[] = [
+  { href: "/books", label: "Books", readersOnly: true },
+  { href: "/my-books", label: "My books", readersOnly: true },
+  { href: "/how-to-join", label: "How to join" },
+  { href: "/rules", label: "Our rules" },
+  { href: "/donors", label: "Book friends" },
+];
+
+function destinationsFor(signedIn: boolean) {
+  return DESTINATIONS.filter((item) => !item.readersOnly || signedIn);
+}
 
 export async function SiteHeader({
   branding,
@@ -74,50 +99,24 @@ export async function SiteHeader({
         </Link>
 
         {/*
-          Wraps, and does not shrink-0.
+          The top row holds only the two controls that are about *you* — the way
+          in, and the way to the desk. The places to read about live in the band
+          below.
 
-          There is no hamburger menu here on purpose — every door stays visible
-          — so the navigation has to be able to take a second row rather than
-          push the page sideways. Four doors is the ceiling: adding "My books"
-          in Phase 3 made a fourth item, which is what took it past 375px and
-          produced a horizontally scrolling page on the smallest phone in the
-          building. The donors page is reached from the home page and the foot
-          of every page instead of becoming a fifth.
+          This is what replaced the old four-door ceiling. Every content page
+          used to compete for room beside the library's name, and the fifth one
+          pushed the smallest phone in the building into a horizontal scroll —
+          which is why the donors page was reachable from the footer and the
+          home page but never from the masthead. Splitting the two kinds of
+          destination means adding a page no longer costs the layout anything.
         */}
         <nav
-          aria-label="Main"
+          aria-label="Your account"
           className="ms-auto flex flex-wrap items-center justify-end gap-x-1 gap-y-2 sm:gap-2"
         >
           {/*
-            Only for signed-in readers, because the catalogue defaults to
-            MEMBER_ONLY. Offering a door that answers "sign in first" is worse
-            than not showing it, and the setting that decides this is read on
-            the page itself.
-          */}
-          {signedIn ? (
-            <>
-              <Link href="/books" className={NAV_LINK}>
-                Books
-              </Link>
-              {/*
-                No permission check here, deliberately. This shell renders for
-                staff as well as readers, and /my-books redirects a librarian to
-                the desk rather than showing them an empty shelf. The page
-                itself decides; the masthead only offers the door.
-              */}
-              <Link href="/my-books" className={NAV_LINK}>
-                My books
-              </Link>
-            </>
-          ) : null}
-          <Link href="/rules" className={NAV_LINK}>
-            Our rules
-          </Link>
-          {/*
-            The fifth door, and the only one that breaks the ceiling above.
-            It is shown to whoever holds `user.manage_staff` — one person in
-            this library, on an adult's phone or a laptop — and never to a
-            reader, whose 375px screen the four-door rule was written for.
+            Shown to whoever holds `user.manage_staff` — one person in this
+            library, on an adult's phone or a laptop — and never to a reader.
 
             Without it the administrator's only way to the desk was to type a
             URL: /account renders this shell, not the staff one, so somebody
@@ -125,7 +124,7 @@ export async function SiteHeader({
           */}
           {canManageStaff ? (
             <Link href="/admin/staff" className={NAV_LINK}>
-              Staff
+              Library desk
             </Link>
           ) : null}
           <Link
@@ -134,6 +133,32 @@ export async function SiteHeader({
           >
             {signedIn ? "My library" : "Sign in"}
           </Link>
+        </nav>
+      </div>
+
+      {/*
+        The doors, in a band of their own.
+
+        It scrolls sideways rather than wrapping on a narrow screen. Wrapping
+        would push the page content down by a whole row on exactly the phones
+        that have the least room, and a row of destinations is the one thing a
+        reader can be trusted to swipe: the first two are always visible, so it
+        never looks like the end of the list.
+      */}
+      <div className="border-t border-hairline bg-ground/60">
+        <nav
+          aria-label="Main"
+          className="mx-auto max-w-6xl overflow-x-auto px-5 [scrollbar-width:none] sm:px-8 [&::-webkit-scrollbar]:hidden"
+        >
+          <ul className="flex items-center gap-1 py-1.5 sm:gap-2">
+            {destinationsFor(signedIn).map((item) => (
+              <li key={item.href} className="list-none">
+                <Link href={item.href} className={`${NAV_LINK} whitespace-nowrap`}>
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </nav>
       </div>
 
@@ -149,38 +174,114 @@ export async function SiteHeader({
   );
 }
 
-export function SiteFooter({ branding }: { branding: Branding }) {
+/**
+ * The foot of every reader-facing page.
+ *
+ * Three columns on a wide screen, stacked on a phone, and the middle one is the
+ * same `DESTINATIONS` list the masthead renders — a reader who has scrolled to
+ * the bottom should not have to scroll back up to find a door, and the two
+ * lists must not be able to disagree about what exists.
+ *
+ * The green rule from the masthead is repeated at the very bottom, closing the
+ * page the same way the header opens it.
+ */
+export function SiteFooter({
+  branding,
+  signedIn = false,
+}: {
+  branding: Branding;
+  signedIn?: boolean;
+}) {
+  const whatsapp = whatsAppLink(branding.contactPhone, JOIN_HELP_MESSAGE);
+
   return (
     <footer className="mt-16 border-t border-hairline bg-surface">
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-9 text-base text-ink-soft sm:px-8">
-        <div className="flex items-center gap-3">
-          <LibraryLogo
-            logoUrl={branding.logoUrl}
-            libraryName={branding.libraryName}
-            size={40}
-            priority={false}
-            className="w-9 shrink-0"
-          />
-          <p className="font-display text-lg font-semibold text-ink">{branding.libraryName}</p>
+      <div className="mx-auto grid max-w-6xl gap-9 px-5 py-11 text-base text-ink-soft sm:px-8 md:grid-cols-[1.4fr_1fr_1fr] md:gap-12">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <LibraryLogo
+              logoUrl={branding.logoUrl}
+              libraryName={branding.libraryName}
+              size={40}
+              priority={false}
+              className="w-9 shrink-0"
+            />
+            <p className="font-display text-lg font-semibold text-ink">{branding.libraryName}</p>
+          </div>
+          <p className="max-w-md">
+            A free library run by and for the {branding.communityName} community. Books are shared,
+            never sold. Joining costs nothing, and donating a book is never a condition of
+            membership.
+          </p>
         </div>
-        <p className="max-w-2xl">
-          A free library run by and for the {branding.communityName} community. Books are shared,
-          never sold. Joining costs nothing, and donating a book is never a condition of membership.
-        </p>
-        <p className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <Link href="/rules" className="font-bold text-primary-deep">
-            How our library works
-          </Link>
-          <Link href="/donors" className="font-bold text-primary-deep">
-            Book friends
-          </Link>
-          {branding.contactEmail ? (
-            <a href={`mailto:${branding.contactEmail}`} className="font-bold text-primary-deep">
-              {branding.contactEmail}
-            </a>
-          ) : null}
-        </p>
+
+        <nav aria-label="Pages">
+          <h2 className="font-display text-base font-bold uppercase tracking-[0.12em] text-ink">
+            Find your way
+          </h2>
+          <ul className="mt-4 flex flex-col gap-2.5">
+            {destinationsFor(signedIn).map((item) => (
+              <li key={item.href} className="list-none">
+                <Link href={item.href} className="font-bold text-primary-deep no-underline">
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+            <li className="list-none">
+              <Link
+                href={signedIn ? "/account" : "/login"}
+                className="font-bold text-primary-deep no-underline"
+              >
+                {signedIn ? "My library" : "Sign in"}
+              </Link>
+            </li>
+          </ul>
+        </nav>
+
+        <div>
+          <h2 className="font-display text-base font-bold uppercase tracking-[0.12em] text-ink">
+            Ask a person
+          </h2>
+          <ul className="mt-4 flex flex-col gap-2.5">
+            {whatsapp ? (
+              <li className="list-none">
+                {/*
+                  Same prefilled message as the help block on the home page and
+                  the joining guide, from the same helper — a parent who reaches
+                  the foot of the page still stuck gets the identical door.
+                */}
+                <a
+                  href={whatsapp}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold text-primary-deep no-underline"
+                >
+                  Message us on WhatsApp
+                </a>
+              </li>
+            ) : null}
+            {branding.contactEmail ? (
+              <li className="list-none">
+                <a
+                  href={`mailto:${branding.contactEmail}`}
+                  className="font-bold text-primary-deep no-underline"
+                >
+                  {branding.contactEmail}
+                </a>
+              </li>
+            ) : null}
+            <li className="list-none pt-1 text-base">
+              A neighbour replies, not a robot — please allow a little time.
+            </li>
+          </ul>
+        </div>
       </div>
+
+      {/* The masthead's rule again, closing the page the way it was opened. */}
+      <div
+        aria-hidden="true"
+        className="h-1 w-full bg-[linear-gradient(to_right,var(--color-accent),var(--color-primary)_65%,var(--color-leaf))]"
+      />
     </footer>
   );
 }
@@ -202,7 +303,7 @@ export function PublicShell({
       <main id="main" className="flex-1">
         {children}
       </main>
-      <SiteFooter branding={branding} />
+      <SiteFooter branding={branding} signedIn={signedIn} />
     </div>
   );
 }

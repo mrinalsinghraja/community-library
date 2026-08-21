@@ -223,3 +223,135 @@ describe("one family's page", () => {
     expect(DONOR_GIFTS).toContain('export const dynamic = "force-dynamic"');
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe("the joining guide", () => {
+  const GUIDE = read("how-to-join/page.tsx");
+
+  it("answers the flat question this building actually asks", () => {
+    /*
+     * 140 flats, siblings in most of them, and tenants who change. The
+     * behaviour is proved against a real database in
+     * `tests/database/registration.test.ts`; what this holds is that the page a
+     * parent reads says so, because a parent who believes one card per flat is
+     * a parent who never registers their second child.
+     */
+    const prose = flattened(GUIDE);
+
+    expect(prose).toMatch(/once for each child/i);
+    expect(prose).toMatch(/same flat number and the same email/i);
+    expect(prose).toMatch(/A flat number is an address, not an account/i);
+  });
+
+  it("says which steps are the library's turn, not the parent's", () => {
+    // A page that hides the waiting makes a normal delay look like a fault.
+    expect(flattened(GUIDE)).toMatch(/This one is our turn/i);
+  });
+
+  it("reads the ages from settings rather than printing them", () => {
+    // Same rule as the rules page: no second copy of a number that an
+    // administrator can change.
+    const source = code(GUIDE);
+
+    expect(source).toContain("settings.ageMin");
+    expect(source).toContain("settings.ageMax");
+    expect(source).not.toMatch(/aged \d+ to \d+/);
+  });
+
+  it("never promises an email step the library has not switched on", () => {
+    // Guardian verification is a setting. Telling every parent to wait for a
+    // confirmation email when the library does not send one is an instruction
+    // to wait forever.
+    expect(code(GUIDE)).toContain("requiredGuardianVerification");
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("asking a person for help", () => {
+  const readSrc = (...parts: string[]) =>
+    readFileSync(join(process.cwd(), "src", ...parts), "utf8");
+
+  const HELP = readSrc("components", "library", "whatsapp-help.tsx");
+  const SHELL = readSrc("components", "layout", "site-shell.tsx");
+  const HOME = read("page.tsx");
+
+  it("takes the number from settings, never from a literal", () => {
+    /*
+     * It is a volunteer's personal phone. It belongs in the library's own
+     * configuration, where it can be changed without a release and where it is
+     * not sitting in a public repository.
+     */
+    expect(code(HELP)).not.toMatch(/\d{10}/);
+    expect(code(SHELL)).not.toMatch(/\d{10}/);
+    expect(code(HOME)).toContain("branding.contactPhone");
+  });
+
+  it("renders nothing at all when no number is set", () => {
+    // A button that opens WhatsApp addressed to nobody is worse than no button.
+    expect(code(HELP)).toContain("if (!link) return null");
+  });
+
+  it("warns that a person answers, and may take a while", () => {
+    // The honest thing to put beside a neighbour's phone number. A chat window
+    // sets an expectation of an instant reply and this is a volunteer.
+    expect(flattened(HELP)).toMatch(/not a robot/i);
+    expect(flattened(HELP)).toMatch(/give us a little time/i);
+  });
+
+  it("opens the chat with the message already written", () => {
+    // A parent embarrassed to be stuck has nothing to compose.
+    expect(code(HELP)).toContain("JOIN_HELP_MESSAGE");
+    expect(code(HELP)).toContain("whatsAppLink");
+  });
+
+  it("opens in a new tab without handing the opener away", () => {
+    expect(code(HELP)).toContain('rel="noopener noreferrer"');
+    expect(code(SHELL)).toContain('rel="noopener noreferrer"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("the doors, top and bottom", () => {
+  const SHELL = readFileSync(
+    join(process.cwd(), "src", "components", "layout", "site-shell.tsx"),
+    "utf8",
+  );
+
+  it("keeps one list, so the masthead and the footer cannot disagree", () => {
+    /*
+     * They were two hand-written lists, which is how the donors page came to be
+     * reachable from the foot of the page and the home page but never from the
+     * masthead.
+     */
+    const source = code(SHELL);
+
+    expect(source).toContain("const DESTINATIONS");
+    // Both navigations read the same filtered list.
+    expect(source.match(/destinationsFor\(signedIn\)/g)?.length).toBe(2);
+  });
+
+  it("offers the joining guide and the donors page from both", () => {
+    const source = code(SHELL);
+
+    expect(source).toContain('href: "/how-to-join"');
+    expect(source).toContain('href: "/donors"');
+  });
+
+  it("hides the catalogue doors from somebody who is not signed in", () => {
+    // The catalogue defaults to members-only, and a door that answers "sign in
+    // first" is worse than no door.
+    const source = code(SHELL);
+
+    expect(source).toMatch(/href: "\/books", label: "Books", readersOnly: true/);
+    expect(source).toMatch(/href: "\/my-books", label: "My books", readersOnly: true/);
+  });
+
+  it("scrolls the band rather than wrapping it on a small screen", () => {
+    // Wrapping pushes the page down by a whole row on exactly the phones with
+    // the least room. This is what replaced the old four-door ceiling.
+    expect(code(SHELL)).toContain("overflow-x-auto");
+  });
+});

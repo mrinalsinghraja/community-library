@@ -1681,3 +1681,72 @@ into an error string. `tests/database/settings.test.ts` holds the test send:
 administrator's own address only, no link in the body, refused for a Librarian, a
 reader and a signed-out caller, recorded on the delivery log either way, and
 throttled.
+
+---
+
+## ADR-048 — A flat is an address, the doors are one list, and help is where people already are
+
+**Date:** 2026-08-21 · **Status:** Accepted
+
+Four changes from one week of watching a real building try to use this.
+
+**A flat number was never an identity, and now the software says so.** The
+question came in as "please allow multiple accounts against the same flat", and
+the answer turned out to be that it already does: the only uniqueness rule is a
+partial index on `(library_id, lower(child_name), lower(apartment))` limited to
+`PENDING` and `UNDER_REVIEW`. Siblings differ by name. A tenant who leaves takes
+nothing with them. Nothing needed changing in the schema.
+
+What did need changing is that **nobody could tell**. A parent who believes the
+library allows one card per flat is a parent who never registers their second
+child, and no amount of correct behaviour reaches them. So the rule is now
+stated on a page they read, and pinned by five database tests — because the
+constraint is raw SQL three files from the service, and an edit that dropped
+`child_name` from it would lock every second child in a 140-flat building out of
+the library without failing a single other test in the suite.
+
+**The joining form does not explain itself, so a page now does.** `/join` asks
+six questions and goes quiet. What happens next, how long it takes, why an email
+has not arrived, and whether a second child needs a second form were all left to
+be guessed at, and guessing wrong looks from the outside like the library
+ignoring you. The guide is written in the order a parent lives it, takes its ages
+and its verification step from settings rather than repeating them, and names the
+steps that are the library's turn — a page that hides the waiting makes a normal
+delay look like a fault.
+
+**Help is a WhatsApp message, because that is what is already open.** The only
+route to a human was an email address answered whenever somebody next opened
+that inbox. The link carries a prefilled message, so a parent who is embarrassed
+to be stuck, or not confident writing in English, has nothing to compose. It says
+in advance that a neighbour answers and may take a while, which is the honest
+thing to put beside a volunteer's phone number and the difference between a wait
+and a let-down.
+
+The number is the library's own `contactPhone` setting, never a literal: it is
+somebody's personal phone, it should not sit in a public repository, and it must
+be changeable without a release. With no number set the block renders nothing at
+all — an affordance that opens WhatsApp addressed to nobody is worse than no
+affordance. The button uses this library's green rather than WhatsApp's, because
+white on WhatsApp green measures under 2:1 and nothing here fails a contrast
+check to match somebody else's palette; the recognisable part is the glyph.
+
+**The doors are one list, rendered twice.** The masthead and the footer were two
+hand-maintained lists, which is how the donors page came to be reachable from the
+foot of the page and the home page but never from the top of it. They now read
+the same `DESTINATIONS` array.
+
+That also retires the four-door ceiling. Content pages used to compete for room
+beside the library's name, and the fifth one pushed a 375px phone into a
+horizontal scroll. The masthead's top row now holds only the two controls that
+are about *you* — the way in and, for one person, the way to the desk — and the
+places to read about live in a band below it that scrolls sideways rather than
+wrapping. Wrapping would push content down by a whole row on exactly the phones
+with the least room. Verified at 375px: `scrollWidth === clientWidth`, no
+overflowing element.
+
+`tests/database/registration.test.ts` holds the flat rule: two children in one
+flat, four siblings on one parent's email getting four distinct cards and one
+guardian row, a new tenant in a flat the last family used, the same child still
+refused twice inside the queue, and the same name accepted in two flats.
+`tests/unit/whatsapp.test.ts` holds the link. `tests/unit/public-pages.test.ts`
+holds the guide, the help block and the single list of doors.

@@ -535,10 +535,10 @@ describe("proving the library can send email", () => {
     expect(events[0].error).toBeNull();
   });
 
-  it("stops after a handful, because every test spends a real allowance", async () => {
+  it("stops after a handful of tests that actually left", async () => {
     /*
-     * A transport that is down stays down. Pressing the button forty times only
-     * burns the daily quota that the families' activation links come out of.
+     * A delivered test spends a message out of the same daily allowance the
+     * families' activation links come out of, so those stay tightly capped.
      */
     await actingAs(admin.id);
 
@@ -548,6 +548,38 @@ describe("proving the library can send email", () => {
 
     await expect(sendEmailDeliveryTest()).rejects.toMatchObject({ code: "RATE_LIMITED" });
     expect(fake.sent).toHaveLength(RATE_LIMITS.emailTestsMax);
+  });
+
+  it("does not count a refused send against the allowance, because it spent none", async () => {
+    /*
+     * The failure this closes. Somebody configuring the transport for the first
+     * time presses this repeatedly on purpose -- change a key, read the reason,
+     * change something else -- and every one of those presses was refused by the
+     * provider, so none of them cost the library a message. Locking them out
+     * mid-diagnosis is the software obstructing the one job this button has.
+     */
+    await actingAs(admin.id);
+
+    for (let attempt = 0; attempt < RATE_LIMITS.emailTestsMax + 3; attempt += 1) {
+      fake.failNext = true;
+      const result = await sendEmailDeliveryTest();
+      expect(result.ok).toBe(false);
+    }
+
+    // Still allowed, and the successful one still goes.
+    await expect(sendEmailDeliveryTest()).resolves.toMatchObject({ ok: true });
+  });
+
+  it("still stops somebody hammering the button", async () => {
+    // Presses cost nothing, but they are not free forever either.
+    await actingAs(admin.id);
+
+    for (let attempt = 0; attempt < RATE_LIMITS.emailTestAttemptsMax; attempt += 1) {
+      fake.failNext = true;
+      await sendEmailDeliveryTest();
+    }
+
+    await expect(sendEmailDeliveryTest()).rejects.toMatchObject({ code: "RATE_LIMITED" });
   });
 
   it("says so plainly when the administrator has no address of their own", async () => {

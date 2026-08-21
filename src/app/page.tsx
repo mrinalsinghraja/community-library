@@ -1,8 +1,11 @@
+import Link from "next/link";
+
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Callout } from "@/components/ui/states";
 import { Butterfly, LeafSprig, LibraryLogo, ShelfIllustration } from "@/components/library/library-logo";
 import { PublicShell } from "@/components/layout/site-shell";
+import { WhatsAppHelp } from "@/components/library/whatsapp-help";
 import { getActor } from "@/server/authz";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { Icon } from "@/components/ui/icon";
@@ -108,7 +111,13 @@ export default async function HomePage() {
               </ButtonLink>
             </div>
 
-            <p className="mt-5 text-base text-ink-soft">Joining is free. It always will be.</p>
+            <p className="mt-5 text-base text-ink-soft">
+              Joining is free. It always will be.{" "}
+              <Link href="/how-to-join" className="font-bold text-primary-deep">
+                See what happens after you send the form
+              </Link>
+              .
+            </p>
           </div>
 
           <div className="rounded-[var(--radius-card)] bg-surface p-7 shadow-raise">
@@ -178,6 +187,19 @@ export default async function HomePage() {
             </p>
           </div>
         </Card>
+      </section>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Help — a person, reachable where people already are               */}
+      {/* ---------------------------------------------------------------- */}
+      {/*
+        Placed after the explanation and before the end of the page, because a
+        parent who is going to need this reaches for it having already read what
+        they were meant to do and found it did not work. Renders nothing at all
+        until the library sets a contact phone.
+      */}
+      <section className="mx-auto max-w-5xl px-5 pb-16 sm:px-8">
+        <WhatsAppHelp phone={branding.contactPhone} />
       </section>
     </PublicShell>
   );

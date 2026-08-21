@@ -49,13 +49,22 @@ export const RATE_LIMITS = {
   passwordResetWindowMinutes: 60,
 
   /**
-   * Delivery tests per administrator. Enough to try a fix and check it, and not
-   * enough to matter: every test spends one message out of the same daily
-   * allowance the families' activation links come out of, and a transport that
-   * is misconfigured stays misconfigured however many times the button is
-   * pressed.
+   * Delivery tests per administrator, counted two ways.
+   *
+   * `emailTestsMax` counts only the tests that **actually left**, because those
+   * are the ones that spend a message out of the same daily allowance the
+   * families' activation links come out of.
+   *
+   * `emailTestAttemptsMax` counts every press, and exists only to stop a script
+   * hammering the button. It is deliberately far looser: a refused send costs
+   * the allowance nothing, and the moment somebody is setting the transport up
+   * for the first time is exactly when they need to press this repeatedly —
+   * change a key, press, read the reason, change something else, press again.
+   * Locking them out mid-diagnosis with "that was a lot of tries" is the
+   * software getting in the way of the one job this button has.
    */
   emailTestsMax: 5,
+  emailTestAttemptsMax: 30,
   emailTestWindowMinutes: 60,
 } as const;
 
