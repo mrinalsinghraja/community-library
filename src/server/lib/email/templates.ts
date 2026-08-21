@@ -25,11 +25,38 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/**
+ * The library's mark, at the head of every message.
+ *
+ * Three constraints shape how it is done.
+ *
+ * **It is a static file, not the branding upload.** `settings.logoUrl` points at
+ * `/api/media/[id]`, which is authorization-gated per request — an inbox cannot
+ * authenticate, so that image would be a permanent broken box. This is the same
+ * drawn mark the site shows, served from `public/` with no token in the URL, so
+ * fetching it says nothing about who opened the message.
+ *
+ * **The email must be whole without it.** Many clients block images by default,
+ * so the library's name is still printed as text underneath and nothing here
+ * carries meaning the words do not. The mark is decorative and `alt` is empty
+ * on purpose: a screen reader announcing the library's name twice is worse than
+ * one that skips a picture.
+ *
+ * **It is a 16KB copy, not the 160KB one.** These go to parents on phones, on
+ * mobile data, in bursts.
+ */
+function masthead(context: EmailContext): string {
+  return `<img src="${escapeHtml(context.appUrl)}/brand/library-mark-email.png"
+      width="59" height="64" alt=""
+      style="display:block;border:0;outline:none;text-decoration:none;margin:0 0 12px;" />`;
+}
+
 function layout(context: EmailContext, heading: string, bodyHtml: string): string {
   return `<!doctype html>
 <html lang="en">
 <body style="margin:0;padding:24px;background:#FDF8F0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2B2118;line-height:1.6;">
   <div style="max-width:560px;margin:0 auto;background:#FFFFFF;border-radius:16px;padding:32px;">
+    ${masthead(context)}
     <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#1F6F5C;letter-spacing:0.02em;">
       ${escapeHtml(context.libraryName)}
     </p>

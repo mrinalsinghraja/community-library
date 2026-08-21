@@ -161,3 +161,47 @@ describe("the staff invitation", () => {
     expect(rendered.text.toLowerCase()).toContain("children's personal information");
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe("the library's mark on every message", () => {
+  it("appears at the head of all of them", () => {
+    for (const rendered of ALL) {
+      expect(rendered.html).toContain("/brand/library-mark-email.png");
+    }
+  });
+
+  it("is a static file, not the authorization-gated branding upload", () => {
+    /*
+     * `settings.logoUrl` points at /api/media/[id], which checks permissions on
+     * every request. An inbox cannot authenticate, so that image would be a
+     * permanent broken box in every email the library ever sends.
+     */
+    for (const rendered of ALL) {
+      expect(rendered.html).not.toContain("/api/media/");
+    }
+  });
+
+  it("carries no token, so opening an email reports nothing about who did", () => {
+    // A per-recipient image URL is a read receipt. This one is the same file
+    // for everybody.
+    const src = ALL[0].html.match(/src="([^"]*library-mark-email[^"]*)"/)?.[1] ?? "";
+
+    expect(src).not.toMatch(/[?&]/);
+    expect(src).toBe(`${CONTEXT.appUrl}/brand/library-mark-email.png`);
+  });
+
+  it("is decorative, because the library's name is already there in words", () => {
+    // A screen reader announcing the name twice is worse than one that skips a
+    // picture — and the email must read correctly with images switched off,
+    // which most clients do by default.
+    for (const rendered of ALL) {
+      expect(rendered.html).toContain('alt=""');
+      // The name is HTML-escaped in the markup, so compare like for like.
+      const escapedName = CONTEXT.libraryName.replace(/'/g, "&#39;");
+      expect(rendered.html).toContain(escapedName);
+      // The words alone still carry the whole message.
+      expect(rendered.text).not.toContain("library-mark");
+    }
+  });
+});
