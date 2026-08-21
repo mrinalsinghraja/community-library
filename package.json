@@ -49,6 +49,9 @@
     "server-only": "^0.0.1",
     "zod": "^4.4.3"
   },
+  "overrides": {
+    "nodemailer": "^9.0.5"
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
