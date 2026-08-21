@@ -6,7 +6,6 @@ import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { Callout } from "@/components/ui/states";
-import { getActor } from "@/server/authz";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 
 export const metadata: Metadata = { title: "How to join" };
@@ -41,7 +40,6 @@ export const dynamic = "force-dynamic";
  */
 export default async function HowToJoinPage() {
   const branding = await getBrandingSafe();
-  const actor = await getActor();
 
   let settings: Awaited<ReturnType<typeof getCurrentLibrary>>["settings"] | null = null;
   try {
@@ -89,7 +87,7 @@ export default async function HowToJoinPage() {
   ];
 
   return (
-    <PublicShell branding={branding} signedIn={Boolean(actor)}>
+    <PublicShell branding={branding}>
       <div className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8 sm:py-14">
         <PageHeading title="How to join">
           Every child in the building can have a card, and it costs nothing. Here is exactly what

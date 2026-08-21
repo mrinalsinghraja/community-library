@@ -8,7 +8,6 @@ import { PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
 import { AGE_GROUPS, PAGE_SIZES, isAgeGroup } from "@/lib/catalogue";
-import { getActor } from "@/server/authz";
 import { isAppError } from "@/server/lib/errors";
 import { getBrandingSafe } from "@/server/lib/settings";
 import { browseCatalogue, listCategories } from "@/server/services/catalogue-service";
@@ -43,7 +42,6 @@ export default async function BooksPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const branding = await getBrandingSafe();
-  const actor = await getActor();
   const params = await searchParams;
 
   const read = (key: string): string => {
@@ -98,7 +96,7 @@ export default async function BooksPage({
   const chipOn = "border-accent bg-accent-wash text-accent-ink";
 
   return (
-    <PublicShell branding={branding} signedIn={Boolean(actor)}>
+    <PublicShell branding={branding}>
       <div className="relative mx-auto w-full max-w-6xl px-5 py-10 sm:px-8 sm:py-14">
         <Butterfly className="drift pointer-events-none absolute right-4 top-6 w-10 opacity-70 sm:w-14" />
 

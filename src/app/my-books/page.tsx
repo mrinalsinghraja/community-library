@@ -62,7 +62,7 @@ export default async function MyBooksPage() {
   const asked = await listOwnBorrowRequests();
 
   return (
-    <PublicShell branding={branding} signedIn>
+    <PublicShell branding={branding}>
       <div className="relative mx-auto w-full max-w-5xl px-5 py-12 sm:px-8">
         <Butterfly className="drift pointer-events-none absolute right-4 top-8 w-10 opacity-70 sm:w-12" />
         <h1 className="garden-rule inline-block text-4xl">My books</h1>

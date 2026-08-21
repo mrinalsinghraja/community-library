@@ -42,7 +42,7 @@ export default async function AccountPage() {
   const permissions = [...actor.permissions].sort();
 
   return (
-    <PublicShell branding={branding} signedIn>
+    <PublicShell branding={branding}>
       <div className="mx-auto w-full max-w-4xl px-5 py-14 sm:px-8">
         <div className="flex items-center gap-4">
           {/*

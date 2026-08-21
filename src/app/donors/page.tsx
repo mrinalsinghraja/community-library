@@ -6,7 +6,6 @@ import { PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { EmptyState } from "@/components/ui/states";
-import { getActor } from "@/server/authz";
 import { getBrandingSafe } from "@/server/lib/settings";
 import { listDonorRegister, type DonorRegisterEntry } from "@/server/services/donor-service";
 
@@ -66,7 +65,6 @@ function yearsGiven(entry: DonorRegisterEntry): string {
  */
 export default async function DonorsPage() {
   const branding = await getBrandingSafe();
-  const actor = await getActor();
 
   /*
    * No try/catch and no redirect. Unlike the catalogue there is no gate to be
@@ -77,7 +75,7 @@ export default async function DonorsPage() {
   const hasGifts = entries.length > 0 || anonymousDonors > 0;
 
   return (
-    <PublicShell branding={branding} signedIn={Boolean(actor)}>
+    <PublicShell branding={branding}>
       <div className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8 sm:py-16">
         <header className="relative">
           <h1 className="garden-rule inline-block text-3xl sm:text-4xl">

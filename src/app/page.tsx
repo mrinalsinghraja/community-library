@@ -6,7 +6,6 @@ import { Callout } from "@/components/ui/states";
 import { Butterfly, LeafSprig, LibraryLogo, ShelfIllustration } from "@/components/library/library-logo";
 import { PublicShell } from "@/components/layout/site-shell";
 import { WhatsAppHelp } from "@/components/library/whatsapp-help";
-import { getActor } from "@/server/authz";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { Icon } from "@/components/ui/icon";
 
@@ -24,7 +23,6 @@ import { Icon } from "@/components/ui/icon";
 
 export default async function HomePage() {
   const branding = await getBrandingSafe();
-  const actor = await getActor();
 
   // Rules come from settings; if the library is not configured yet the page
   // still renders and says so plainly rather than crashing.
@@ -43,7 +41,7 @@ export default async function HomePage() {
   }
 
   return (
-    <PublicShell branding={branding} signedIn={Boolean(actor)}>
+    <PublicShell branding={branding}>
       {!branding.configured ? (
         <div className="mx-auto max-w-5xl px-5 pt-6 sm:px-8">
           <Callout tone="warn" title="This library is not set up yet">

@@ -97,7 +97,7 @@ export default async function DonorGiftsPage({
   const line = [entry.name ? entry.apartment : null, years].filter(Boolean).join(" · ");
 
   return (
-    <PublicShell branding={branding} signedIn={Boolean(actor)}>
+    <PublicShell branding={branding}>
       <div className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
         <Link
           href="/donors"

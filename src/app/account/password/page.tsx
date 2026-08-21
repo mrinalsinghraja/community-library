@@ -22,7 +22,7 @@ export default async function ChangePasswordPage() {
   const policy = isStaff ? PASSWORD_POLICY.staff : PASSWORD_POLICY.member;
 
   return (
-    <PublicShell branding={branding} signedIn>
+    <PublicShell branding={branding}>
       <div className="mx-auto w-full max-w-xl px-5 py-14 sm:px-8">
         <h1 className="text-4xl">
           {isStaff ? "Change your password" : "Change your secret word"}

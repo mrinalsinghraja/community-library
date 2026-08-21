@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { Butterfly, LibraryLogo } from "@/components/library/library-logo";
 import { StoryCharacters } from "@/components/library/story-characters";
+import { canReachDesk } from "@/lib/desk-nav";
 import { JOIN_HELP_MESSAGE, whatsAppLink } from "@/lib/whatsapp";
 import { getActor } from "@/server/authz";
 import type { Branding } from "@/server/lib/settings";
@@ -50,25 +51,26 @@ function destinationsFor(signedIn: boolean) {
   return DESTINATIONS.filter((item) => !item.readersOnly || signedIn);
 }
 
-export async function SiteHeader({
-  branding,
-  signedIn = false,
-}: {
-  branding: Branding;
-  signedIn?: boolean;
-}) {
+export async function SiteHeader({ branding }: { branding: Branding }) {
   /*
-   * Read rather than passed down, because otherwise every page that renders
-   * this shell would have to remember to hand it a flag, and the one that
-   * forgot would be the one where an administrator could not find their way
-   * back. `getActor` is cached for the request, so on a page that already asked
-   * who is signed in this costs nothing at all.
+   * Everything here is read from the session. Nothing is passed in.
    *
-   * The permission decides, not the role name — same key that guards the page
-   * itself. A librarian and a reader do not hold it and see nothing.
+   * It used to be half and half, and the halves disagreed. Whether to show
+   * "Sign in" or "My library" came from a `signedIn` prop, while whether to show
+   * the way to the desk was read from `getActor()` -- so any page that forgot
+   * the prop rendered a signed-in administrator "Sign in" and a link to the
+   * library desk at the same time, and hid Books and My books from somebody
+   * holding a valid session. Seven pages had forgotten it, including the rules
+   * page and the login page.
+   *
+   * A flag that every page must remember is a flag some page will forget. The
+   * session is the only thing that knows the answer, so it is the only thing
+   * asked. `getActor` is cached per request, so this costs nothing on a page
+   * that already asked.
    */
   const actor = await getActor();
-  const canManageStaff = actor?.permissions.has("user.manage_staff") ?? false;
+  const signedIn = Boolean(actor);
+  const deskIsOpen = actor ? canReachDesk(actor.permissions) : false;
 
   return (
     <header className="relative bg-surface">
@@ -115,15 +117,18 @@ export async function SiteHeader({
           className="ms-auto flex flex-wrap items-center justify-end gap-x-1 gap-y-2 sm:gap-2"
         >
           {/*
-            Shown to whoever holds `user.manage_staff` — one person in this
-            library, on an adult's phone or a laptop — and never to a reader.
+            Shown to anybody with at least one desk screen they can open, and to
+            no reader.
 
-            Without it the administrator's only way to the desk was to type a
-            URL: /account renders this shell, not the staff one, so somebody
-            signing in as the owner landed on a page with no door out.
+            It used to ask for `user.manage_staff`, which only the Super Admin
+            holds — so a Librarian who opened their own account page arrived
+            somewhere with no route back to the library they run, and had to
+            type the URL. The question is "do you work here", not "do you
+            administer the staff list", and `canReachDesk` answers the first one
+            from the same list the desk itself renders.
           */}
-          {canManageStaff ? (
-            <Link href="/admin/staff" className={NAV_LINK}>
+          {deskIsOpen ? (
+            <Link href="/desk" className={NAV_LINK}>
               Library desk
             </Link>
           ) : null}
@@ -286,20 +291,25 @@ export function SiteFooter({
   );
 }
 
-export function PublicShell({
+export async function PublicShell({
   branding,
-  signedIn,
   children,
 }: {
   branding: Branding;
-  signedIn?: boolean;
   children: ReactNode;
 }) {
+  /*
+   * Asked once, here, and handed to both ends of the page. There is deliberately
+   * no `signedIn` prop any more: it was a flag every page had to remember, seven
+   * of them did not, and the masthead contradicted itself on those seven.
+   */
+  const signedIn = Boolean(await getActor());
+
   return (
     <div className="flex min-h-screen flex-col">
       {/* Behind everything on the reader side, and never on the desk. */}
       <StoryCharacters />
-      <SiteHeader branding={branding} signedIn={signedIn} />
+      <SiteHeader branding={branding} />
       <main id="main" className="flex-1">
         {children}
       </main>

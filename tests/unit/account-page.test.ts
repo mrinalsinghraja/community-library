@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -113,5 +113,72 @@ describe("role labels", () => {
     for (const key of ["SUPER_ADMIN", "LIBRARIAN", "MEMBER", "GUARDIAN"]) {
       expect(roleDescription(key)).toBeTruthy();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("the masthead says the same thing on every page", () => {
+  const SHELL = read("components", "layout", "site-shell.tsx");
+  const STAFF = read("components", "layout", "staff-shell.tsx");
+  const DESK_NAV = read("lib", "desk-nav.ts");
+
+  it("asks the session, and takes no flag a page could forget", () => {
+    /*
+     * The bug this closes. "Sign in" versus "My library" came from a `signedIn`
+     * prop while the desk link was read from `getActor()`, so the two halves
+     * disagreed: seven pages had omitted the prop, and on those a signed-in
+     * administrator was shown "Sign in" AND a link to the library desk at the
+     * same time, with Books and My books hidden from somebody holding a valid
+     * session.
+     *
+     * A flag every page must remember is a flag some page will forget. The
+     * shell now derives it, and there is no prop left to omit.
+     */
+    expect(SHELL).toContain("const signedIn = Boolean(actor)");
+    // The header takes branding and nothing else -- there is no flag left to omit.
+    expect(SHELL).toContain("export async function SiteHeader({ branding }: { branding: Branding })");
+    // The shell itself no longer accepts one either.
+    expect(SHELL).not.toMatch(/branding: Branding;\s*signedIn\?: boolean;\s*children: ReactNode/);
+  });
+
+  it("leaves no page able to pass one", () => {
+    const pages = readdirSync(join(process.cwd(), "src", "app"), { recursive: true })
+      .map(String)
+      .filter((name) => name.endsWith("page.tsx"));
+
+    for (const page of pages) {
+      const source = readFileSync(join(process.cwd(), "src", "app", page), "utf8");
+      expect(source, page).not.toMatch(/<PublicShell[^>]*signedIn/);
+    }
+  });
+
+  it("opens the desk for anybody who works there, not only the Super Admin", () => {
+    /*
+     * It asked for `user.manage_staff`, which only the Super Admin holds — so a
+     * Librarian opening their own account page landed somewhere with no route
+     * back to the library they run.
+     */
+    expect(SHELL).toContain("canReachDesk(actor.permissions)");
+    expect(SHELL).not.toContain('permissions.has("user.manage_staff")');
+  });
+
+  it("sends them to the desk itself, not to one page on it", () => {
+    // /admin/staff is a door a Librarian may not open.
+    expect(SHELL).toContain('href="/desk"');
+    expect(SHELL).not.toContain('href="/admin/staff"');
+  });
+
+  it("keeps one list of desk doors, so the two shells cannot disagree", () => {
+    expect(STAFF).toContain("deskDestinationsFor(actor.permissions)");
+    expect(DESK_NAV).toContain("export const DESK_DESTINATIONS");
+    // The staff shell no longer keeps a second copy.
+    expect(STAFF).not.toContain('label: "Issue", permission');
+  });
+
+  it("still hides every desk door from a reader", () => {
+    // canReachDesk is a filter over permissions, so a reader holding none of
+    // them gets an empty list and no link.
+    expect(DESK_NAV).toContain("deskDestinationsFor(permissions).length > 0");
   });
 });

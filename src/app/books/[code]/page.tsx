@@ -65,7 +65,7 @@ export default async function BookDetailPage({
   const borrow = await getOwnBorrowStateForCode(decodeURIComponent(code));
 
   return (
-    <PublicShell branding={branding} signedIn={Boolean(actor)}>
+    <PublicShell branding={branding}>
       <div className="relative mx-auto w-full max-w-4xl px-5 py-10 sm:px-8 sm:py-14">
         <Butterfly className="drift pointer-events-none absolute right-4 top-6 w-9 opacity-60 sm:w-12" />
 

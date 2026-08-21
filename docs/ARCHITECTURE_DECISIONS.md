@@ -1802,3 +1802,53 @@ child and to their own address for staff, the fallback, and that the guardian
 still wins when both exist. It also holds the summary service — session-scoped
 with no id to tamper with, refused when signed out, and never returning a hash or
 a token. `tests/unit/account-page.test.ts` holds the doors.
+
+---
+
+## ADR-050 — The masthead asks the session, and the desk is a place rather than one page on it
+
+**Date:** 2026-08-21 · **Status:** Accepted
+
+ADR-048 made the reader's destinations one list. It did not fix the two things
+that made the masthead say different things to the same person on different
+pages, and both were visible in production.
+
+**The header was half prop, half session, and the halves disagreed.** Whether to
+show "Sign in" or "My library" came from a `signedIn` prop that each page passed
+in. Whether to show the way to the desk was read from `getActor()` inside the
+header. Seven pages had never passed the prop — `/rules`, `/login`, `/forgot`,
+`/join`, `/activate`, `/reset`, `/verify` — so on those a signed-in
+administrator was shown **"Sign in" and a link to the library desk at the same
+time**, with Books and My books hidden from somebody holding a valid session.
+
+A flag that every page must remember is a flag some page will forget, and the
+page that forgets is the one nobody looks at. The prop is gone. `PublicShell`
+asks `getActor()` once and hands the answer to both ends of the page, and
+`SiteHeader` takes branding and nothing else, so there is no longer anything to
+omit. `getActor` is cached per request, so this costs nothing.
+
+**The desk door asked the wrong question.** It was gated on
+`user.manage_staff`, which only the Super Admin holds — so a Librarian who
+opened their own account page arrived somewhere with **no route back to the
+library they run**, and had to type a URL. The question is "do you work here",
+not "do you administer the staff list".
+
+`canReachDesk` answers the first one, from the same `DESK_DESTINATIONS` list the
+staff shell renders: true when there is at least one desk screen this person can
+actually open. The link now goes to `/desk` rather than `/admin/staff`, because
+`/admin/staff` is a door a Librarian may not open and a link that answers "you
+may not be here" is worse than none.
+
+The desk list itself moved out of the staff shell into `src/lib/desk-nav.ts`, so
+the two shells cannot disagree about who works at this library. Badges stay in
+the shell, layered on by href, because they belong to the page that counted them.
+
+**Consequences.** Adding a reader page cannot desynchronise the masthead, and
+adding a desk screen cannot leave the reader-side link behind. Verified in a
+browser for all three roles across six pages: a Super Admin, a Librarian and a
+reader each see one identical masthead everywhere, the reader sees no desk door
+at all, and `/desk` still refuses them.
+
+`tests/unit/account-page.test.ts` walks **every** `page.tsx` under `src/app` and
+fails if any of them passes `signedIn` to `PublicShell` — the specific mistake
+that caused this, made impossible to repeat rather than merely corrected.
