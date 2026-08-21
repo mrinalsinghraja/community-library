@@ -207,6 +207,40 @@ describe("the HTTP transport", () => {
     expect(result.error).not.toContain("activate");
   });
 
+  it("names the cause of an auth failure, because unauthorized covers three of them", async () => {
+    /*
+     * Brevo answers `unauthorized` to a revoked key, to a real key sent from an
+     * IP the account has not allowlisted, and to an account not yet validated
+     * for transactional sending. The code alone cannot tell a librarian which,
+     * and the three have different fixes.
+     *
+     * Safe to include here and nowhere else: a 401 is rejected before the
+     * payload is read, so its message cannot carry the payload back.
+     */
+    stubFetch({
+      ok: false,
+      status: 401,
+      json: async () => ({ code: "unauthorized", message: "Key not found" }),
+    });
+
+    const result = await new BrevoEmailProvider().send(MESSAGE);
+
+    expect(result.error).toBe("Brevo responded 401 (unauthorized: Key not found)");
+  });
+
+  it("keeps a validation error code-only, where the message may echo the payload", async () => {
+    stubFetch({
+      ok: false,
+      status: 400,
+      json: async () => ({ code: "invalid_parameter", message: `Rejected: ${MESSAGE.text}` }),
+    });
+
+    const result = await new BrevoEmailProvider().send(MESSAGE);
+
+    expect(result.error).toBe("Brevo responded 400 (invalid_parameter)");
+    expect(result.error).not.toContain("SECRETTOKEN");
+  });
+
   it("still says something useful when the provider sends no code", async () => {
     stubFetch({
       ok: false,

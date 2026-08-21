@@ -178,8 +178,8 @@ export class BrevoEmailProvider implements EmailProvider {
          * `unauthorized` is a wrong key, `sender_not_valid` is an unverified
          * From address, and those need different people to fix them.
          */
-        const code = await readErrorCode(response);
-        return { ok: false, error: `Brevo responded ${response.status}${code}` };
+        const detail = await readErrorDetail(response);
+        return { ok: false, error: `Brevo responded ${response.status}${detail}` };
       }
 
       const body = (await response.json()) as { messageId?: string };
@@ -190,11 +190,32 @@ export class BrevoEmailProvider implements EmailProvider {
   }
 }
 
-/** The provider's machine-readable error code, if it sent one. Never the body. */
-async function readErrorCode(response: Response): Promise<string> {
+/**
+ * What went wrong, in the provider's own words, without the body.
+ *
+ * The code alone is not enough for an authentication failure: Brevo answers
+ * `unauthorized` to a revoked key, to a key that is real but sent from an IP the
+ * account has not allowlisted, and to an account that has not been validated for
+ * transactional sending. Three different people fix those three things, and the
+ * `message` field is the only thing that separates them.
+ *
+ * The message is included **only for 401 and 403**. An authentication failure is
+ * rejected before the payload is looked at, so its message cannot contain the
+ * payload — whereas a 400 validation error very often echoes the offending
+ * field, and the payload here holds an activation link. Everything else stays
+ * code-only, and the message is capped.
+ */
+async function readErrorDetail(response: Response): Promise<string> {
   try {
-    const body = (await response.json()) as { code?: unknown };
-    return typeof body.code === "string" ? ` (${body.code.slice(0, 60)})` : "";
+    const body = (await response.json()) as { code?: unknown; message?: unknown };
+    const code = typeof body.code === "string" ? body.code.slice(0, 60) : "";
+
+    const authFailure = response.status === 401 || response.status === 403;
+    const message =
+      authFailure && typeof body.message === "string" ? body.message.slice(0, 200) : "";
+
+    const parts = [code, message].filter(Boolean);
+    return parts.length ? ` (${parts.join(": ")})` : "";
   } catch {
     return "";
   }
