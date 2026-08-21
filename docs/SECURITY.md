@@ -269,6 +269,12 @@ Password policy differs by audience by design — see ADR-006.
 - Nothing reader-facing carries a database id, a storage path, a condition, an
   audit field, or any child's name — verified across the browse grid, a detail
   page and `/donors`.
+- **`/donors` is public by design (ADR-046)** and is the only reader-facing page
+  that is. It prints an adult donor's name and flat only where that family chose
+  `NAMED`; a flat-only family's name never leaves the service, and an anonymous
+  family has no row, no derivable page and no count of their own. Family pages
+  are addressed by a hash, not by a name in the URL, and print no cover, copy
+  code, shelf, condition or borrower.
 - **A lock-out fixed on the way through.** The proxy bounced any request carrying
   a session cookie away from `/login`, but the edge can only see that a cookie
   *exists*. A session that had gone idle therefore bounced `/account` → `/login`

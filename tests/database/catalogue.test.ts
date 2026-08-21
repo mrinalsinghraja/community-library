@@ -13,7 +13,6 @@ import {
   getBookByCode,
   getBookForStaff,
   listBooksForStaff,
-  listDonorCredits,
   removeBookCover,
   restoreBook,
   updateBook,
@@ -682,39 +681,6 @@ describe("donors", () => {
     const browse = await browseCatalogue();
     expect(Object.keys(browse.items[0])).not.toContain("donorName");
     expect(JSON.stringify(browse.items[0])).not.toContain("Mrinal");
-  });
-
-  it("thanks each family once, and counts nothing", async () => {
-    await addBook({ title: "One" });
-    await addBook({ title: "Two" });
-    await addBook({ title: "Three", donorName: "The Iyer family", donorFlat: "B204" });
-
-    await actingAs(reader.id, "MEMBER");
-    const credits = await listDonorCredits();
-
-    // Three books, two families, two thank-yous. A family who gave two books
-    // appears exactly as a family who gave one.
-    expect(credits).toHaveLength(2);
-
-    /*
-     * And there is nothing to rank them by. Each credit carries exactly one
-     * field — the sentence to render — so no template can accidentally print a
-     * total, and no "sort by generosity" can be added without first adding a
-     * number that deliberately does not exist. Gratitude, not competition.
-     */
-    for (const credit of credits) {
-      expect(Object.keys(credit)).toEqual(["acknowledgement"]);
-    }
-  });
-
-  it("keeps thanking a donor whose book has been archived", async () => {
-    const created = await addBook();
-    await actingAs(librarian.id);
-    await archiveBook(created.copyId, "fell apart");
-
-    await actingAs(reader.id, "MEMBER");
-    // The book is gone from the shelf. The gift still happened.
-    expect(await listDonorCredits()).toHaveLength(1);
   });
 });
 

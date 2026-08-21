@@ -1480,3 +1480,90 @@ XML, because "it produced four kilobytes" would have passed every version of
 this code that Excel refused to open.
 `tests/unit/report-export-wiring.test.ts` holds the eight screens, the
 permission gate, and the rule that the registry never touches the database.
+
+## ADR-046 — The thank-you page becomes a register, and the donor still holds the pen
+
+**Status:** accepted · **Date:** 2026-08-21
+
+The donor page was built to count nothing. One thank-you per family, in the
+words that family chose, alphabetically, and no name, no flat and no number
+beyond that. The reasoning is still written in the schema: gratitude, not
+competition, and a family who cannot afford to give must be able to open the
+page without being shown where they rank.
+
+The owner asked for the other thing: the register the community can actually
+read. Who gave, which flat, how many books, and a page for each family showing
+the books themselves — open to visitors who have not signed in, so that
+somebody deciding whether to carry a box of outgrown books downstairs can read
+it first. That is the decision, and it is theirs to make.
+
+What follows is what changed, and what was held.
+
+**The page left the catalogue's gate, and this is the only page that has.** The
+shelf sits behind `catalogue_visibility` because the owner put it there. The
+thank-you page is now in front of it, served by its own service that never
+calls `requireCatalogueAccess`. A front door you have to unlock before you can
+read the thank-you note on it is not a front door. `tests/database/
+donor-register.test.ts` reads every one of its assertions with no session at
+all, so a `requireActor` added anywhere in that path fails the suite.
+
+**The count is written with its unit, and the ordering is what stops it.** With
+a number on the page, alphabetical order is the only thing between a register
+and a league table, so it is the service that sorts and the type carries no
+other key to sort by. The cell says "3 books", never a bare "3", and it is
+left-aligned: a bare number right-aligned down a column is a chart with the
+bars taken off, and the eye reads it as a score. There is no total anywhere.
+
+**`displayConsent` was not the owner's to override, and was not overridden.**
+NAMED prints the name and the flat. APARTMENT_ONLY prints the flat, and the
+name never leaves the service — it is not passed to the page and hidden there,
+so no template, export or serialisation can put it back. ANONYMOUS is not a row
+at all: no name, no flat, no id, no page, and a single closing line counting
+*families* rather than books, because "4" would say more about one household
+than the page is allowed to. The choice belongs to the gift and not to the
+household, so a family who gave one book named and one anonymously appears once
+and is counted once, which is what they asked for on each occasion.
+
+**A family is identified by a hash, not by a slug.** The link is
+`sha256(libraryId | consent | name | flat)`, first sixteen hex characters. The
+page prints a name because the family agreed to that; the address bar was never
+part of the agreement, and a name and flat number in a URL end up in server
+logs, in `Referer` headers, and in the history of a shared family laptop.
+Nothing stores the id — it is rebuilt from the same grouping on every request —
+so it cannot drift out of step with the register, and a family who later asks
+to be made anonymous silently breaks the link they were given, which is the
+correct behaviour rather than an oversight.
+
+**A family's page is not a way around the catalogue.** It prints a title, an
+author and the month the book arrived. No cover, no copy code, no shelf, no
+condition, no borrower. Book covers are refused to a signed-out request by
+`getAuthorizedMedia` on exactly the setting that gates the shelf, and nothing
+here was unlocked to build the page: it looks the same to everybody, and a title
+becomes a link into the catalogue only for a visitor who could already open it.
+
+**A flat-only family is called by their flat.** Two rows both reading "a family
+in this building" are two rows a reader cannot tell apart, and they sorted by a
+flat number nobody could see, so the list looked out of order. The label is
+built in the service and is the sort key, so the order on screen is the order of
+the words on screen.
+
+**The donation address comes from `library_settings`, like every other number
+on a reader-facing page.** An address typed into the source is one library's
+mailbox hard-coded into a platform built for more than one, and it keeps being
+printed for a year after somebody stops reading it.
+
+**What this does not settle.** These families agreed to be credited when the
+page was behind the front door. It is now in front of it. The site is
+`noindex, nofollow` at the root layout so no search engine holds a copy, but a
+neighbour who agreed to be thanked inside the library has not necessarily agreed
+to be thanked outside it, and the wording shown at intake should say which it is
+before the register grows.
+
+**Held by test.** `tests/database/donor-register.test.ts` — signed-out reads,
+the count and the alphabetical ordering, one family written two ways, an
+archived book still counted, and every branch of the consent field including the
+derived id of an anonymous family being refused.
+`tests/unit/public-pages.test.ts` holds the page: no redirect and no sign-in
+door, no `sort`, no `reduce`, no bare count, the raw donor columns untouched,
+the address read from settings, and the catalogue gate respected on the family
+page.

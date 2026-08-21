@@ -213,20 +213,43 @@ properly — **not** on every browse card, which would stamp a name on every til
 `ReaderBookCard` has no donor field at all, so no template change can put one
 there by accident.
 
-### What does not exist
+### The register
 
-No count. No total. No ranking. No "top donor", no "most generous family", no
-badge, no score, no per-person grouping of how much anybody gave.
+`/donors` is a register, and it is **open to visitors who have not signed in** —
+the only reader-facing page that is. It is read by `listDonorRegister()` in
+`src/server/services/donor-service.ts`, which never passes through
+`requireCatalogueAccess()`, and it lists every family once, alphabetically,
+with the flat they live in and how many books they have given. Each name links
+to `/donors/[donor]`, that family's own page, showing the books themselves as a
+title, an author and the month the book arrived.
 
-`/donors` lists every donor once, alphabetically, in the words they chose. A
-family who gave thirty books and a family who gave one appear identically.
+That page prints **no cover, no copy code, no shelf, no condition and no
+borrower**, and a title becomes a link into the catalogue only for a visitor who
+could already open it. A thank-you is not a second way to read the shelf.
 
-This is a product decision, not an unfinished feature. A leaderboard would turn
-a gift into a scoreboard, and a family who cannot afford to donate would feel it
-every time they opened the page. The schema has **no counter column to hang one
-on**, and a test asserts that each returned credit carries exactly one field —
-the sentence to render — so "sort by generosity" would require first adding a
-number that deliberately does not exist.
+The family is addressed by `sha256(libraryId | consent | name | flat)`, first
+sixteen characters — never a readable slug. The page shows a name because the
+family agreed to that; a URL is copied, logged and kept, and was not part of the
+agreement. Nothing stores the id, so a family who later asks to be anonymous
+breaks the link they were given, which is correct.
+
+### What still does not exist
+
+No total. No ranking. No "top donor", no "most generous family", no badge, no
+score, no bar.
+
+The count arrived in ADR-046 because the owner asked for it. Alphabetical order
+is now the only thing between a register and a league table, so the sorting is
+done in the service, the type carries no other key to sort by, and the cell
+reads "3 books" rather than a bare "3" — a number without its unit, right
+aligned down a column, is a chart with the bars taken off. The schema still has
+no counter column, and the count is derived per request from the rows
+themselves.
+
+And `displayConsent` still decides every line. A family who asked for the flat
+alone is named by their flat and their name never leaves the service; a family
+who asked to stay out of it has no row, no id and no page, and is thanked in one
+closing line that counts *families* rather than books.
 
 ## 10. Cover pictures
 
@@ -321,8 +344,12 @@ unchanged from Phase 0. Only signed-in members browse the shelf.
 
 Read in exactly one place, `requireCatalogueAccess()`, so opening the catalogue
 to the public later is one switch in the database rather than a hunt through
-every page. `/books`, `/books/[code]` and `/donors` all pass through it, and so
-does every book cover.
+every page. `/books` and `/books/[code]` pass through it, and so does every book
+cover.
+
+`/donors` deliberately does not — see ADR-046. It is served by its own service
+and is readable signed out whatever this setting says, which is why the family
+pages it links to print no covers and no catalogue detail.
 
 ## 14. What a child's screen never contains
 

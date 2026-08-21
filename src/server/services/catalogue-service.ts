@@ -611,56 +611,6 @@ export async function getBookByCode(code: string): Promise<ReaderBookDetail> {
 }
 
 // ---------------------------------------------------------------------------
-// The thank-you page
-// ---------------------------------------------------------------------------
-
-export interface DonorCredit {
-  /** Already rendered according to the donor's own choice. */
-  acknowledgement: string;
-}
-
-/**
- * Everyone who has given a book, acknowledged as they chose to be.
- *
- * Deliberately returns no counts, no totals, no ordering by generosity and no
- * per-person grouping of how much anybody gave. A family who donated thirty
- * books and a family who donated one appear the same way, once each, in
- * alphabetical order.
- *
- * That is not an oversight to be optimised later. A leaderboard would turn a
- * gift into a scoreboard and make a family who cannot afford to donate feel it
- * every time they opened the page.
- */
-export async function listDonorCredits(): Promise<DonorCredit[]> {
-  const { libraryId } = await requireCatalogueAccess();
-
-  const donations = await prisma.donation.findMany({
-    where: {
-      libraryId,
-      // A donation whose copy has left the library is still a gift that was
-      // given, so archived copies are not excluded here.
-    },
-    select: { donorName: true, donorApartment: true, displayConsent: true },
-    orderBy: [{ donorName: "asc" }],
-  });
-
-  // Deduplicated on the rendered credit, which is the only thing shown. Two
-  // books from the same family produce one thank-you, not two — and, crucially,
-  // not a "2".
-  const seen = new Set<string>();
-  const credits: DonorCredit[] = [];
-
-  for (const donation of donations) {
-    const acknowledgement = donorAcknowledgement(donation);
-    if (!acknowledgement || seen.has(acknowledgement)) continue;
-    seen.add(acknowledgement);
-    credits.push({ acknowledgement });
-  }
-
-  return credits;
-}
-
-// ---------------------------------------------------------------------------
 // Writing
 // ---------------------------------------------------------------------------
 

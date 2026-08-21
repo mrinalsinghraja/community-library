@@ -182,6 +182,29 @@ library, give it the rule.
 
 ---
 
+## 4b. The bookplate — the donor pages, and only those
+
+`Bookplate` (`src/components/library/bookplate.tsx`) draws the label pasted
+inside the front cover of a donated book: a double berry rule at printed
+opacities on the sunk paper, one butterfly, the line **"this book was given to
+the library by"** set in the system mono at wide tracking — the only words in
+the application in that face, because that line is the part of a plate that was
+printed rather than written — and a writing rule under it.
+
+It is drawn once and used twice, and the difference is the whole device:
+
+- On `/donors` the writing rule is **blank**. It is the plate a book that has
+  not been given yet would carry.
+- On `/donors/[donor]` the same plate is **filled in** with that family's
+  credit. Following a name from the register is watching it appear.
+
+The rule keeps its height either way, so the two are one object rather than two
+layouts. This is the exception to "do not invent a second signature": it is
+confined to the two donor pages, and it belongs to the donor rather than to the
+reader, which is what the garden rule cannot say.
+
+---
+
 ## 5. Icons
 
 **One family, drawn in `src/components/ui/icon.tsx`.** 36 glyphs, no dependency.
