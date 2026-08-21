@@ -56,9 +56,12 @@ async function actingAs(userId: string, kind: "STAFF" | "MEMBER" = "STAFF") {
   __setSessionHandle(await createSession(userId, kind));
 }
 
-function dateOfBirthForAge(age: number): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear() - age, now.getUTCMonth(), now.getUTCDate() - 1));
+/**
+ * A birth year for a child who is `age` this year. Year only -- the library asks
+ * for nothing more (ADR-051).
+ */
+function birthYearForAge(age: number): number {
+  return new Date().getUTCFullYear() - age;
 }
 
 let childCounter = 0;
@@ -71,7 +74,7 @@ async function approvedReader(options: { emailWorks: boolean }) {
   __setSessionHandle(null);
   await submitRegistration({
     childName,
-    childDateOfBirth: dateOfBirthForAge(9),
+    childBirthYear: birthYearForAge(9),
     apartment: `P-${10 + childCounter}`,
     guardianName: "A Guardian",
     guardianEmail: `guardian${childCounter}@example.invalid`,

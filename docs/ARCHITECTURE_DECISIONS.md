@@ -1852,3 +1852,64 @@ at all, and `/desk` still refuses them.
 `tests/unit/account-page.test.ts` walks **every** `page.tsx` under `src/app` and
 fails if any of them passes `signedIn` to `PublicShell` — the specific mistake
 that caused this, made impossible to repeat rather than merely corrected.
+
+---
+
+## ADR-051 — The library asks for a year of birth, not a date
+
+**Date:** 2026-08-21 · **Status:** Accepted
+
+The joining form asked a parent to type their child's full date of birth into a
+public form. It was used for exactly one thing: deciding whether the child is
+roughly the right age to be a member.
+
+A date of birth is not that. It is one of the three or four facts that identify
+a person for life — the field asked for by every bank, every school, every
+government form and every person attempting to impersonate somebody. It was the
+most sensitive thing this software held about a child, it was collected on a
+page anyone in the building could open, and **the year answers the question just
+as well**.
+
+So the library stops asking. `member_profile.date_of_birth` and
+`registration_request.child_dob` are gone, replaced by an integer year.
+
+**The migration is deliberately destructive.** It copies the year out and then
+drops the date column, so the birthdays already collected stop existing rather
+than sitting unused in a table — keeping data you have decided you do not need
+is the position this ADR exists to reject. It cannot be undone, and that is the
+point.
+
+**What it costs, and how that is handled honestly.** An exact age is no longer
+knowable: a child born in 2016 is, on some day in 2026, either 9 or 10, and
+which one depends on a birthday the library has chosen not to know.
+`src/lib/birth-year.ts` reasons about **both** possibilities rather than picking
+one and pretending:
+
+  * eligibility accepts a year when **either** age fits the library's range.
+    A child born in 2011 with a range ending at 14 is 14 until their birthday
+    and 15 after it, and refusing them in January because of a birthday in
+    November would turn a child away on the strength of a fact the library
+    deliberately did not collect. The librarian meets the family anyway and a
+    person approves every registration; this check exists to catch an obviously
+    wrong year, not to be the gate.
+  * every screen says **"turns 9 in 2026"**, never "9 years old". The second is
+    a claim the library cannot make, and a librarian seeing a precise age would
+    reasonably assume somebody had recorded a birthday.
+  * the exports say "Year of birth" and carry a year.
+
+**The form offers a dropdown**, built on the server from the library's own
+`ageMin`/`ageMax` and its own timezone. Not a typed year: it cannot be
+mistyped, it shows a parent at a glance which years the library accepts, and it
+never asks anybody to fight a date format on a phone. Not computed in the
+browser either — a browser clock can be wrong or in another country, and the
+years offered must match the year the server checks against.
+
+**Consequences.** Guardian verification, consent and the activation flow are
+untouched; this changes what is asked, not who decides. A future feature wanting
+a birthday — a birthday list, an age-banded shelf — does not get one, and should
+be built from the year or not at all.
+
+`tests/unit/birth-year.test.ts` holds the arithmetic, including both edges of
+the range and that the dropdown can never offer a year the server will reject.
+The database suites carry the year end to end: submitted on a form, checked
+again at approval, and written to the member's card.

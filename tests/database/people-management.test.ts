@@ -59,9 +59,12 @@ async function actingAs(userId: string, kind: "STAFF" | "MEMBER" = "STAFF") {
   __setSessionHandle(await createSession(userId, kind));
 }
 
-function dateOfBirthForAge(age: number): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear() - age, now.getUTCMonth(), now.getUTCDate() - 1));
+/**
+ * A birth year for a child who is `age` this year. Year only -- the library asks
+ * for nothing more (ADR-051).
+ */
+function birthYearForAge(age: number): number {
+  return new Date().getUTCFullYear() - age;
 }
 
 const BASE_INPUT = {
@@ -82,7 +85,7 @@ async function submitFresh(overrides: Partial<typeof BASE_INPUT> = {}) {
   const input = {
     ...BASE_INPUT,
     ...overrides,
-    childDateOfBirth: dateOfBirthForAge(9),
+    childBirthYear: birthYearForAge(9),
   };
   await submitRegistration(input);
   return db.registrationRequest.findFirstOrThrow({
@@ -354,7 +357,7 @@ describe("the flat number, enforced server-side", () => {
           ...BASE_INPUT,
           childName: "Should Not Exist",
           apartment,
-          childDateOfBirth: dateOfBirthForAge(9),
+          childBirthYear: birthYearForAge(9),
         }),
       ).rejects.toMatchObject({
         code: "VALIDATION",
@@ -393,7 +396,7 @@ describe("what each role sees of one reader", () => {
     expect(detail.displayName).toBe("Full Record");
     expect(detail.apartment).toBe("D-4");
     expect(detail.memberCode).toMatch(/^TST-R/);
-    expect(detail.dateOfBirth).toBeInstanceOf(Date);
+    expect(detail.birthYear).toBe(birthYearForAge(9));
     expect(detail.guardians[0]?.fullName).toBe("A Guardian");
     expect(detail.guardians[0]?.email).toBe("d-4@example.invalid");
     expect(detail.guardians[0]?.phone).toBe("+919000000000");

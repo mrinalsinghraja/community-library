@@ -563,7 +563,9 @@ model MemberProfile {
   libraryId String @map("library_id")
 
   memberCode   String   @map("member_code")
-  dateOfBirth  DateTime @map("date_of_birth") @db.Date
+  /// Year only. A full date of birth identifies a child for life and the
+  /// library needs nothing beyond "roughly the right age" — see ADR-051.
+  birthYear    Int      @map("birth_year")
   apartment    String
   avatarKey    String?  @map("avatar_key")
   photoMediaId String?  @unique @map("photo_media_id")
@@ -628,7 +630,8 @@ model RegistrationRequest {
   status    RegistrationStatus @default(PENDING)
 
   childName     String   @map("child_name")
-  childDob      DateTime @map("child_dob") @db.Date
+  /// Year only, for the same reason as member_profile.birth_year (ADR-051).
+  childBirthYear Int     @map("child_birth_year")
   apartment     String
   guardianName  String   @map("guardian_name")
   guardianEmail String   @map("guardian_email")

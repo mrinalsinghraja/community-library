@@ -209,7 +209,8 @@ async function loadReaders(actor: Actor, filter: ReportFilter) {
     { header: "Card number", value: (row) => text(row.memberProfile?.memberCode) },
     { header: "Name", value: (row) => row.displayName, weight: 1.6 },
     { header: "Flat", value: (row) => text(row.memberProfile?.apartment) },
-    { header: "Date of birth", value: (row) => row.memberProfile?.dateOfBirth, dateOnly: true },
+    // Year only. The library does not hold a birthday to export.
+    { header: "Year of birth", value: (row) => row.memberProfile?.birthYear },
     { header: "Status", value: (row) => statusLabel(USER_STATUS_LABELS, row.status) },
     {
       header: "Account",
@@ -358,7 +359,7 @@ async function loadRegistrations(filter: ReportFilter) {
     { header: "Sent in", value: (row) => row.submittedAt },
     { header: "Status", value: (row) => statusLabel(REGISTRATION_STATUS_LABELS, row.status) },
     { header: "Child", value: (row) => row.childName, weight: 1.6 },
-    { header: "Date of birth", value: (row) => row.childDob, dateOnly: true },
+    { header: "Year of birth", value: (row) => row.childBirthYear },
     { header: "Flat", value: (row) => row.apartment },
     { header: "Parent or guardian", value: (row) => row.guardianName, weight: 1.6 },
     { header: "Guardian email", value: (row) => text(row.guardianEmail), weight: 2 },

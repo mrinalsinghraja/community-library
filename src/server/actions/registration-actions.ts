@@ -7,6 +7,7 @@ import { z } from "zod";
 import { CURRENT_CONSENT_TYPES, REQUIRED_CONSENT_TYPES, type ConsentTypeKey } from "@/lib/consent";
 import { APARTMENT_ERROR, APARTMENT_MAX_LENGTH, isValidApartment } from "@/lib/apartment";
 import { isAvatarKey } from "@/lib/avatars";
+import { isPlausibleBirthYear } from "@/lib/birth-year";
 import { toFriendlyMessage, ValidationError, isAppError } from "@/server/lib/errors";
 import { getCurrentLibrary } from "@/server/lib/settings";
 import { storeChildPhoto } from "@/server/services/media-service";
@@ -28,11 +29,22 @@ import {
 
 const registrationSchema = z.object({
   childName: z.string().trim().min(1, "Please tell us your child's name.").max(80),
-  childDateOfBirth: z
+  /*
+   * The year, and nothing else. A full date of birth identifies a child for
+   * life, was being typed into a public form by a parent, and answered a
+   * question -- "roughly old enough?" -- that a year answers just as well.
+   * See ADR-051.
+   */
+  childBirthYear: z
     .string()
-    .min(1, "Please give your child's date of birth.")
-    .refine((value) => !Number.isNaN(Date.parse(value)), "That date does not look right.")
-    .transform((value) => new Date(`${value}T00:00:00Z`)),
+    .trim()
+    .min(1, "Please give the year your child was born.")
+    .refine((value) => /^\d{4}$/.test(value), "Please give a four-digit year, like 2016.")
+    .transform(Number)
+    .refine(
+      (value) => isPlausibleBirthYear(value, new Date().getUTCFullYear() + 1),
+      "That year does not look right.",
+    ),
   // One rule, one message. `refine` rather than three chained checks, so a
   // blank, an over-long value and `<P-15>` all come back saying the same thing —
   // a family should not have to work out which part of a door number was wrong.
@@ -80,7 +92,7 @@ export async function submitRegistrationAction(
 ): Promise<RegistrationFormState> {
   const parsed = registrationSchema.safeParse({
     childName: formData.get("childName"),
-    childDateOfBirth: formData.get("childDateOfBirth"),
+    childBirthYear: formData.get("childBirthYear"),
     apartment: formData.get("apartment"),
     guardianName: formData.get("guardianName"),
     guardianEmail: formData.get("guardianEmail"),
@@ -166,7 +178,7 @@ export async function submitRegistrationAction(
   try {
     await submitRegistration({
       childName: parsed.data.childName,
-      childDateOfBirth: parsed.data.childDateOfBirth,
+      childBirthYear: parsed.data.childBirthYear,
       apartment: parsed.data.apartment,
       guardianName: parsed.data.guardianName,
       guardianEmail: parsed.data.guardianEmail,

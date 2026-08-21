@@ -5,7 +5,7 @@ import { useActionState, useState } from "react";
 import { PhotoPicker } from "@/components/library/photo-picker";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Field, TextInput } from "@/components/ui/field";
+import { Field, Select, TextInput } from "@/components/ui/field";
 import { DEFAULT_AVATAR_KEY } from "@/lib/avatars";
 import { CONSENT_LABELS, CONSENT_TEXTS, REQUIRED_CONSENT_TYPES, type ConsentTypeKey } from "@/lib/consent";
 import {
@@ -32,10 +32,18 @@ const INITIAL: RegistrationFormState = { status: "idle" };
 export function JoinForm({
   ageMin,
   ageMax,
+  birthYears,
   libraryName,
 }: {
   ageMin: number;
   ageMax: number;
+  /**
+   * The years this library accepts, newest first, worked out on the server from
+   * the library's own timezone. Not computed here: a browser clock can be wrong
+   * or in another country, and the year offered must match the year the server
+   * will check against.
+   */
+  birthYears: number[];
   libraryName: string;
 }) {
   const [state, formAction, pending] = useActionState(submitRegistrationAction, INITIAL);
@@ -92,20 +100,39 @@ export function JoinForm({
             />
           </Field>
 
+          {/*
+            The year, and deliberately not the date.
+
+            A full date of birth is one of the few facts that identifies a person
+            for life, and the library needed it only to answer "roughly the right
+            age?" — which a year answers just as well. A dropdown rather than a
+            typed year because it cannot be mistyped, it shows a parent at a
+            glance which years the library accepts, and it never asks anybody to
+            work out a date format on a phone. See ADR-051.
+          */}
           <Field
-            id="childDateOfBirth"
-            label="Their date of birth"
-            hint={`Our library is for readers aged ${ageMin} to ${ageMax}.`}
-            error={fieldError("childDateOfBirth")}
+            id="childBirthYear"
+            label="The year they were born"
+            hint={`Our library is for readers aged ${ageMin} to ${ageMax}. We do not need their full date of birth.`}
+            error={fieldError("childBirthYear")}
             required
           >
-            <TextInput
-              id="childDateOfBirth"
-              name="childDateOfBirth"
-              type="date"
+            <Select
+              id="childBirthYear"
+              name="childBirthYear"
               required
-              invalid={Boolean(fieldError("childDateOfBirth"))}
-            />
+              defaultValue=""
+              invalid={Boolean(fieldError("childBirthYear"))}
+            >
+              <option value="" disabled>
+                Choose a year
+              </option>
+              {birthYears.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </Select>
           </Field>
 
           <Field

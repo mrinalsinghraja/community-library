@@ -164,7 +164,7 @@ describe("unique identifiers", () => {
             create: {
               libraryId: fixture.libraryId,
               memberCode: "TST-R9999",
-              dateOfBirth: new Date("2016-01-01"),
+              birthYear: 2016,
               apartment: "Z1",
             },
           },
@@ -179,7 +179,7 @@ describe("unique identifiers", () => {
   it("refuses two open registrations for the same child in the same flat", async () => {
     const base = {
       libraryId: fixture.libraryId,
-      childDob: new Date("2017-05-05"),
+      childBirthYear: 2017,
       guardianName: "A Guardian",
       guardianEmail: "guardian@example.invalid",
       guardianPhone: "+910000000000",
@@ -200,7 +200,7 @@ describe("unique identifiers", () => {
   it("lets the same child register again once the first request is resolved", async () => {
     const base = {
       libraryId: fixture.libraryId,
-      childDob: new Date("2017-05-05"),
+      childBirthYear: 2017,
       guardianName: "A Guardian",
       guardianEmail: "guardian2@example.invalid",
       guardianPhone: "+910000000000",

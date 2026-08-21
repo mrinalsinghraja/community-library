@@ -158,7 +158,7 @@ export async function createMember(
           // "H" for helper: fixture members must not collide with the codes
           // the real allocator issues during approval tests.
           memberCode: `TST-H${suffix}`,
-          dateOfBirth: new Date("2016-01-01"),
+          birthYear: 2016,
           apartment: `A${suffix}`,
         },
       },

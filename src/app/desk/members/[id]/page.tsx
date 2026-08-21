@@ -9,7 +9,8 @@ import { StaffShell } from "@/components/layout/staff-shell";
 import { Card, CardTitle } from "@/components/ui/card";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { Icon } from "@/components/ui/icon";
-import { ageInYears, formatInTimezone } from "@/lib/dates";
+import { describeAge } from "@/lib/birth-year";
+import { formatInTimezone } from "@/lib/dates";
 import { CONSENT_LABELS, type ConsentTypeKey } from "@/lib/consent";
 import { METHOD_LABELS, STRENGTH_LABELS } from "@/lib/guardian-verification";
 import { NotFoundError } from "@/server/lib/errors";
@@ -90,6 +91,7 @@ export default async function MemberDetailPage({
   const { id } = await params;
   const branding = await getBrandingSafe();
   const { settings } = await getCurrentLibrary();
+  const thisYear = Number(formatInTimezone(new Date(), settings.timezone, "yyyy"));
 
   // A reader id that belongs to another library, to a staff account, or to
   // nobody all arrive here the same way: as a 404. The service refuses; this
@@ -161,10 +163,8 @@ export default async function MemberDetailPage({
                 <StatusBadge tone={STATUS_TONE[member.status] ?? "neutral"}>
                   {STATUS_LABEL[member.status] ?? member.status}
                 </StatusBadge>
-                {member.dateOfBirth ? (
-                  <StatusBadge tone="neutral">
-                    {ageInYears(member.dateOfBirth, settings.timezone)} years old
-                  </StatusBadge>
+                {member.birthYear ? (
+                  <StatusBadge tone="neutral">{describeAge(member.birthYear, thisYear)}</StatusBadge>
                 ) : null}
               </div>
 

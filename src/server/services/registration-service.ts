@@ -33,7 +33,8 @@ import {
   beginVerificationForRegistration,
   verificationStateForRequest,
 } from "@/server/services/guardian-verification-service";
-import { ageInYears } from "@/lib/dates";
+import { isEligibleBirthYear } from "@/lib/birth-year";
+import { formatInTimezone } from "@/lib/dates";
 import { CONSENT_TEXTS, CURRENT_CONSENT_TYPES, REQUIRED_CONSENT_TYPES } from "@/lib/consent";
 import { APARTMENT_ERROR, isValidApartment, normaliseApartment } from "@/lib/apartment";
 import {
@@ -52,7 +53,7 @@ import {
 
 export interface SubmitRegistrationInput {
   childName: string;
-  childDateOfBirth: Date;
+  childBirthYear: number;
   apartment: string;
   guardianName: string;
   guardianEmail: string;
@@ -77,14 +78,20 @@ export async function submitRegistration(input: SubmitRegistrationInput): Promis
   const { library, settings } = await getCurrentLibrary();
 
   // --- Age, from configuration, never a literal ------------------------------
-  const age = ageInYears(input.childDateOfBirth, settings.timezone);
+  /*
+   * The library knows the year, not the birthday, so a child is one of two ages
+   * on any given day. `isEligibleBirthYear` accepts the year when either of
+   * them fits -- see src/lib/birth-year.ts for why that generosity is the
+   * point rather than a compromise.
+   */
+  const thisYear = Number(formatInTimezone(new Date(), settings.timezone, "yyyy"));
 
-  if (age < settings.ageMin || age > settings.ageMax) {
+  if (!isEligibleBirthYear(input.childBirthYear, settings.ageMin, settings.ageMax, thisYear)) {
     // This one IS told to the parent: it is about their own child's age, it
     // reveals nothing about anyone else, and silently swallowing it would leave
     // a family waiting for an approval that is never coming.
     throw new RuleViolationError(
-      `Child age ${age} outside configured range ${settings.ageMin}-${settings.ageMax}`,
+      `Birth year ${input.childBirthYear} outside configured range ${settings.ageMin}-${settings.ageMax}`,
       `Our library is for readers aged ${settings.ageMin} to ${settings.ageMax}. ` +
         `We would still love to see you — do come and talk to the librarian.`,
     );
@@ -132,7 +139,7 @@ export async function submitRegistration(input: SubmitRegistrationInput): Promis
           libraryId: library.id,
           status: "PENDING",
           childName: input.childName.trim(),
-          childDob: input.childDateOfBirth,
+          childBirthYear: input.childBirthYear,
           apartment: normaliseApartment(input.apartment),
           guardianName: input.guardianName.trim(),
           guardianEmail,
@@ -285,7 +292,7 @@ export async function listRegistrations(statuses: RegistrationStatus[] = ["PENDI
       id: true,
       status: true,
       childName: true,
-      childDob: true,
+      childBirthYear: true,
       apartment: true,
       guardianName: true,
       guardianEmail: true,
@@ -402,11 +409,12 @@ export async function approveRegistration(registrationId: string): Promise<Appro
 
   // Re-check the age at approval time: a request can sit in the queue, and the
   // configured range can change while it does.
-  const age = ageInYears(request.childDob, settings.timezone);
-  if (age < settings.ageMin || age > settings.ageMax) {
+  const thisYear = Number(formatInTimezone(new Date(), settings.timezone, "yyyy"));
+  if (!isEligibleBirthYear(request.childBirthYear, settings.ageMin, settings.ageMax, thisYear)) {
+    const turns = thisYear - request.childBirthYear;
     throw new RuleViolationError(
-      `Child age ${age} outside range at approval time`,
-      `This reader is ${age}, and the library is currently for ages ${settings.ageMin} to ${settings.ageMax}.`,
+      `Birth year ${request.childBirthYear} outside range at approval time`,
+      `This reader turns ${turns} this year, and the library is currently for ages ${settings.ageMin} to ${settings.ageMax}.`,
     );
   }
 
@@ -444,7 +452,7 @@ export async function approveRegistration(registrationId: string): Promise<Appro
           create: {
             libraryId: actor.libraryId,
             memberCode,
-            dateOfBirth: request.childDob,
+            birthYear: request.childBirthYear,
             apartment: request.apartment,
             avatarKey: request.avatarKey,
             photoMediaId: request.photoMediaId,

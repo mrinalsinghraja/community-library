@@ -7,7 +7,8 @@ import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-pan
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { ageInYears, formatInTimezone } from "@/lib/dates";
+import { describeAge, isEligibleBirthYear } from "@/lib/birth-year";
+import { formatInTimezone } from "@/lib/dates";
 import {
   DEVELOPMENT_VERIFICATION_WARNING,
   METHOD_LABELS,
@@ -52,6 +53,7 @@ export default async function RegistrationsPage() {
   });
   const branding = await getBrandingSafe();
   const { settings } = await getCurrentLibrary();
+  const thisYear = Number(formatInTimezone(new Date(), settings.timezone, "yyyy"));
   const requests = await listRegistrations();
   // `registration.view` opens this page; `registration.review` is a separate
   // key that only the Super Admin holds. See ADR-037.
@@ -84,8 +86,13 @@ export default async function RegistrationsPage() {
             canExport={actor.permissions.has("report.view")} ids={requests.map((request) => request.id)}>
         <div className="flex flex-col gap-5">
           {requests.map((request) => {
-            const age = ageInYears(request.childDob, settings.timezone);
-            const inRange = age >= settings.ageMin && age <= settings.ageMax;
+            const age = describeAge(request.childBirthYear, thisYear);
+            const inRange = isEligibleBirthYear(
+              request.childBirthYear,
+              settings.ageMin,
+              settings.ageMax,
+              thisYear,
+            );
 
             // Photo consent is only a question when a photograph was actually
             // uploaded. Listing it as "missing" for the families who chose an
@@ -120,7 +127,7 @@ export default async function RegistrationsPage() {
                         {request.status === "PENDING" ? "New" : "Being reviewed"}
                       </StatusBadge>
                       <StatusBadge tone={inRange ? "available" : "late"}>
-                        {age} years old
+                        {age}
                       </StatusBadge>
                     </div>
 

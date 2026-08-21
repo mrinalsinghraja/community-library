@@ -4,6 +4,8 @@ import { JoinForm } from "@/app/join/join-form";
 import { PublicShell } from "@/components/layout/site-shell";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Callout } from "@/components/ui/states";
+import { eligibleBirthYears } from "@/lib/birth-year";
+import { formatInTimezone } from "@/lib/dates";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { Icon } from "@/components/ui/icon";
 import { Butterfly } from "@/components/library/library-logo";
@@ -23,10 +25,17 @@ export const dynamic = "force-dynamic";
 export default async function JoinPage() {
   const branding = await getBrandingSafe();
 
-  let ages: { ageMin: number; ageMax: number } | null = null;
+  let ages: { ageMin: number; ageMax: number; birthYears: number[] } | null = null;
   try {
     const { settings } = await getCurrentLibrary();
-    ages = { ageMin: settings.ageMin, ageMax: settings.ageMax };
+    // The library's own year, not the browser's — the same clock the server
+    // checks the answer against.
+    const thisYear = Number(formatInTimezone(new Date(), settings.timezone, "yyyy"));
+    ages = {
+      ageMin: settings.ageMin,
+      ageMax: settings.ageMax,
+      birthYears: eligibleBirthYears(settings.ageMin, settings.ageMax, thisYear),
+    };
   } catch {
     ages = null;
   }
@@ -47,6 +56,7 @@ export default async function JoinPage() {
             <JoinForm
               ageMin={ages.ageMin}
               ageMax={ages.ageMax}
+              birthYears={ages.birthYears}
               libraryName={branding.libraryName}
             />
           </div>

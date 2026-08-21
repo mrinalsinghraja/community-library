@@ -63,9 +63,12 @@ async function requireStrength(
   });
 }
 
-function dateOfBirthForAge(age: number): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear() - age, now.getUTCMonth(), now.getUTCDate() - 1));
+/**
+ * A birth year for a child who is `age` this year. Year only -- the library asks
+ * for nothing more (ADR-051).
+ */
+function birthYearForAge(age: number): number {
+  return new Date().getUTCFullYear() - age;
 }
 
 let apartmentCounter = 0;
@@ -77,7 +80,7 @@ async function submitFresh(childName: string) {
 
   await submitRegistration({
     childName,
-    childDateOfBirth: dateOfBirthForAge(9),
+    childBirthYear: birthYearForAge(9),
     apartment,
     guardianName: "A Guardian",
     guardianEmail: `${apartment.toLowerCase()}@example.invalid`,
@@ -215,7 +218,7 @@ describe("the librarian's queue", () => {
     apartmentCounter += 1;
     await submitRegistration({
       childName: "No Email Consent",
-      childDateOfBirth: dateOfBirthForAge(9),
+      childBirthYear: birthYearForAge(9),
       apartment: `V${apartmentCounter}`,
       guardianName: "A Guardian",
       guardianEmail: "partial@example.invalid",

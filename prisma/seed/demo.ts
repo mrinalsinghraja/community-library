@@ -123,7 +123,7 @@ async function seedDemoUsers(prisma: PrismaClient, libraryId: string): Promise<v
           create: {
             libraryId,
             memberCode: formatCode(settings.memberCodePrefix, 1, settings.memberCodePadding),
-            dateOfBirth: new Date("2016-04-12"),
+            birthYear: 2016,
             apartment: "A101",
             avatarKey: "fox",
           },

@@ -955,6 +955,7 @@ describe("finding people and books at the desk", () => {
     expect(serialised).not.toContain("guardian");
     expect(serialised).not.toContain("apartment");
     expect(serialised).not.toContain("dateOfBirth");
+    expect(serialised).not.toContain("birthYear");
   });
 
   it("finds a book by code, title or author, and says why one cannot go out", async () => {

@@ -52,7 +52,7 @@ async function approveFresh(childName: string, apartment: string) {
     ...BASE_INPUT,
     childName,
     apartment,
-    childDateOfBirth: dateOfBirthForAge(9),
+    childBirthYear: birthYearForAge(9),
     guardianEmail: `${apartment.toLowerCase()}@example.invalid`,
   });
 
@@ -64,9 +64,15 @@ async function approveFresh(childName: string, apartment: string) {
   return { ...result, rawToken: mail.tokenFrom(TEMPLATE_IDS.ACTIVATION) };
 }
 
-function dateOfBirthForAge(age: number): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear() - age, now.getUTCMonth(), now.getUTCDate() - 1));
+/**
+ * A birth year for a child who is `age` this year.
+ *
+ * Year only -- the library asks for nothing more (ADR-051) -- so this is exact
+ * arithmetic rather than a date pinned to an arbitrary day, and it cannot drift
+ * across a birthday while the suite runs.
+ */
+function birthYearForAge(age: number): number {
+  return new Date().getUTCFullYear() - age;
 }
 
 const BASE_INPUT = {
@@ -107,7 +113,7 @@ describe("submitting a registration", () => {
     await submitRegistration({
       ...BASE_INPUT,
       childName: "Aarav",
-      childDateOfBirth: dateOfBirthForAge(9),
+      childBirthYear: birthYearForAge(9),
     });
 
     const request = await db.registrationRequest.findFirstOrThrow({
@@ -126,7 +132,7 @@ describe("submitting a registration", () => {
     await submitRegistration({
       ...BASE_INPUT,
       childName: "Consent Child",
-      childDateOfBirth: dateOfBirthForAge(8),
+      childBirthYear: birthYearForAge(8),
       guardianEmail: "consent@example.invalid",
     });
 
@@ -151,7 +157,7 @@ describe("submitting a registration", () => {
       submitRegistration({
         ...BASE_INPUT,
         childName: "Too Young",
-        childDateOfBirth: dateOfBirthForAge(3),
+        childBirthYear: birthYearForAge(3),
       }),
     ).rejects.toMatchObject({ code: "RULE_VIOLATION" });
 
@@ -163,7 +169,7 @@ describe("submitting a registration", () => {
       submitRegistration({
         ...BASE_INPUT,
         childName: "Too Old",
-        childDateOfBirth: dateOfBirthForAge(17),
+        childBirthYear: birthYearForAge(17),
       }),
     ).rejects.toMatchObject({ code: "RULE_VIOLATION" });
   });
@@ -178,7 +184,7 @@ describe("submitting a registration", () => {
       submitRegistration({
         ...BASE_INPUT,
         childName: "Now Allowed",
-        childDateOfBirth: dateOfBirthForAge(17),
+        childBirthYear: birthYearForAge(17),
         guardianEmail: "wider@example.invalid",
       }),
     ).resolves.toBeUndefined();
@@ -194,7 +200,7 @@ describe("submitting a registration", () => {
       submitRegistration({
         ...BASE_INPUT,
         childName: "No Consent",
-        childDateOfBirth: dateOfBirthForAge(9),
+        childBirthYear: birthYearForAge(9),
         consentTypes: ["GUARDIAN_EMAIL_NOTIFICATIONS"],
       }),
     ).rejects.toMatchObject({ code: "VALIDATION" });
@@ -204,7 +210,7 @@ describe("submitting a registration", () => {
     const input = {
       ...BASE_INPUT,
       childName: "Duplicate Child",
-      childDateOfBirth: dateOfBirthForAge(10),
+      childBirthYear: birthYearForAge(10),
       apartment: "D42",
       guardianEmail: "dup@example.invalid",
     };
@@ -230,7 +236,7 @@ describe("approving a registration", () => {
     await submitRegistration({
       ...BASE_INPUT,
       childName: "Approve Me",
-      childDateOfBirth: dateOfBirthForAge(7),
+      childBirthYear: birthYearForAge(7),
       guardianEmail: "approve@example.invalid",
     });
 
@@ -302,7 +308,7 @@ describe("approving a registration", () => {
     await submitRegistration({
       ...BASE_INPUT,
       childName: "Aged Out",
-      childDateOfBirth: dateOfBirthForAge(14),
+      childBirthYear: birthYearForAge(14),
       apartment: "E11",
       guardianEmail: "agedout@example.invalid",
     });
@@ -332,7 +338,7 @@ describe("rejecting a registration", () => {
     await submitRegistration({
       ...BASE_INPUT,
       childName: "Reject Me",
-      childDateOfBirth: dateOfBirthForAge(11),
+      childBirthYear: birthYearForAge(11),
       apartment: "F12",
       guardianEmail: "reject@example.invalid",
     });
@@ -396,7 +402,7 @@ describe("who may decide a registration", () => {
     await submitRegistration({
       ...BASE_INPUT,
       childName,
-      childDateOfBirth: dateOfBirthForAge(9),
+      childBirthYear: birthYearForAge(9),
     });
     return db.registrationRequest.findFirstOrThrow({ where: { childName } });
   }
@@ -469,7 +475,7 @@ describe("a flat is an address, not an account", () => {
         ...BASE_INPUT,
         childName,
         apartment: "T101",
-        childDateOfBirth: dateOfBirthForAge(9),
+        childBirthYear: birthYearForAge(9),
       });
     }
 
@@ -513,7 +519,7 @@ describe("a flat is an address, not an account", () => {
       ...BASE_INPUT,
       childName: "New Tenant Child",
       apartment: "T103",
-      childDateOfBirth: dateOfBirthForAge(7),
+      childBirthYear: birthYearForAge(7),
       guardianName: "A New Tenant",
       guardianEmail: "new-tenant@example.invalid",
     });
@@ -534,7 +540,7 @@ describe("a flat is an address, not an account", () => {
       ...BASE_INPUT,
       childName: "Twice Sent",
       apartment: "T104",
-      childDateOfBirth: dateOfBirthForAge(9),
+      childBirthYear: birthYearForAge(9),
     });
 
     // Case and stray whitespace must not defeat it either.
@@ -542,7 +548,7 @@ describe("a flat is an address, not an account", () => {
       ...BASE_INPUT,
       childName: "  twice sent ",
       apartment: "t104",
-      childDateOfBirth: dateOfBirthForAge(9),
+      childBirthYear: birthYearForAge(9),
     });
 
     expect(await db.registrationRequest.count({ where: { apartment: "T104" } })).toBe(1);
@@ -555,7 +561,7 @@ describe("a flat is an address, not an account", () => {
         ...BASE_INPUT,
         childName: "Same Name",
         apartment,
-        childDateOfBirth: dateOfBirthForAge(9),
+        childBirthYear: birthYearForAge(9),
         guardianEmail: `${apartment.toLowerCase()}@example.invalid`,
       });
     }

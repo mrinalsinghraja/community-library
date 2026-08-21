@@ -538,7 +538,7 @@ export async function listMembers(options: { search?: string } = {}) {
           memberCode: true,
           apartment: true,
           avatarKey: true,
-          dateOfBirth: true,
+          birthYear: true,
           // The id only. The bytes come from /api/media/[id], which makes its
           // own authorization decision for the person actually looking.
           photoMediaId: true,
@@ -642,7 +642,7 @@ export interface MemberDetail {
   createdAt: Date;
   memberCode: string | null;
   apartment: string | null;
-  dateOfBirth: Date | null;
+  birthYear: number | null;
   avatarKey: string | null;
   photoMediaId: string | null;
   /**
@@ -688,7 +688,7 @@ export async function getMemberDetail(memberUserId: string): Promise<MemberDetai
         select: {
           memberCode: true,
           apartment: true,
-          dateOfBirth: true,
+          birthYear: true,
           avatarKey: true,
           // The id only. The bytes come from /api/media/[id], which makes its
           // own authorization decision for the person actually looking.
@@ -755,7 +755,7 @@ export async function getMemberDetail(memberUserId: string): Promise<MemberDetai
     createdAt: user.createdAt,
     memberCode: user.memberProfile?.memberCode ?? null,
     apartment: user.memberProfile?.apartment ?? null,
-    dateOfBirth: user.memberProfile?.dateOfBirth ?? null,
+    birthYear: user.memberProfile?.birthYear ?? null,
     avatarKey: user.memberProfile?.avatarKey ?? null,
     photoMediaId: user.memberProfile?.photoMediaId ?? null,
     // Stripped at the service boundary, not in the template. A component that

@@ -10,7 +10,8 @@ import { EmptyState } from "@/components/ui/states";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { Field, TextInput } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
-import { ageInYears, formatInTimezone } from "@/lib/dates";
+import { describeAge } from "@/lib/birth-year";
+import { formatInTimezone } from "@/lib/dates";
 import { requirePermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { listMembers } from "@/server/services/account-service";
@@ -54,6 +55,7 @@ export default async function MembersPage({
   });
   const branding = await getBrandingSafe();
   const { settings } = await getCurrentLibrary();
+  const thisYear = Number(formatInTimezone(new Date(), settings.timezone, "yyyy"));
   const { q, deleted } = await searchParams;
 
   const members = await listMembers({ search: q });
@@ -126,9 +128,12 @@ export default async function MembersPage({
                     <Link href={`/desk/members/${member.id}`} className="font-bold text-ink">
                       {member.displayName}
                     </Link>
-                    {member.memberProfile?.dateOfBirth ? (
+                    {member.memberProfile?.birthYear ? (
+                      // "turns 9 in 2026", never "9 years old": the library has
+                      // the year and not the birthday, and a precise age here
+                      // would read as though somebody had recorded one.
                       <p className="text-base text-ink-soft">
-                        {ageInYears(member.memberProfile.dateOfBirth, settings.timezone)} years old
+                        {describeAge(member.memberProfile.birthYear, thisYear)}
                       </p>
                     ) : null}
                   </div>
