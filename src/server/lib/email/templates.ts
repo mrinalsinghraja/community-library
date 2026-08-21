@@ -36,19 +36,24 @@ function escapeHtml(value: string): string {
  * drawn mark the site shows, served from `public/` with no token in the URL, so
  * fetching it says nothing about who opened the message.
  *
- * **The email must be whole without it.** Many clients block images by default,
- * so the library's name is still printed as text underneath and nothing here
- * carries meaning the words do not. The mark is decorative and `alt` is empty
- * on purpose: a screen reader announcing the library's name twice is worse than
- * one that skips a picture.
+ * **It carries the library's name as `alt`, not an empty string.** Blocking
+ * external images is the default in a great many inboxes and the setting many
+ * people never change, so "images off" is a normal way to read this email
+ * rather than an edge case. An empty `alt` renders as a bare grey box, which
+ * looks like the library sent something broken; the name renders as the name.
+ * The slight redundancy for a screen reader is a fair price for that.
  *
  * **It is a 16KB copy, not the 160KB one.** These go to parents on phones, on
  * mobile data, in bursts.
+ *
+ * The tag is one line on purpose. Email sanitisers rewrite markup aggressively
+ * and a tag broken across lines is a needless thing to hand them.
  */
 function masthead(context: EmailContext): string {
-  return `<img src="${escapeHtml(context.appUrl)}/brand/library-mark-email.png"
-      width="59" height="64" alt=""
-      style="display:block;border:0;outline:none;text-decoration:none;margin:0 0 12px;" />`;
+  const src = `${escapeHtml(context.appUrl)}/brand/library-mark-email.png`;
+  const alt = escapeHtml(context.libraryName);
+
+  return `<img src="${src}" width="59" height="64" alt="${alt}" style="display:block;border:0;outline:none;text-decoration:none;margin:0 0 12px;max-width:59px;" />`;
 }
 
 function layout(context: EmailContext, heading: string, bodyHtml: string): string {

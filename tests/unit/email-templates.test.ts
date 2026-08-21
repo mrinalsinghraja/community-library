@@ -191,17 +191,32 @@ describe("the library's mark on every message", () => {
     expect(src).toBe(`${CONTEXT.appUrl}/brand/library-mark-email.png`);
   });
 
-  it("is decorative, because the library's name is already there in words", () => {
-    // A screen reader announcing the name twice is worse than one that skips a
-    // picture — and the email must read correctly with images switched off,
-    // which most clients do by default.
+  it("falls back to the library's name when the image is blocked", () => {
+    /*
+     * The bug this closes. `alt=""` renders as a bare grey box in an inbox that
+     * blocks external images -- which is the default in a great many of them,
+     * and the setting most people never change. It looks like the library sent
+     * something broken. The name reads as the name.
+     */
+    const escapedName = CONTEXT.libraryName.replace(/'/g, "&#39;");
+
     for (const rendered of ALL) {
-      expect(rendered.html).toContain('alt=""');
-      // The name is HTML-escaped in the markup, so compare like for like.
-      const escapedName = CONTEXT.libraryName.replace(/'/g, "&#39;");
-      expect(rendered.html).toContain(escapedName);
-      // The words alone still carry the whole message.
+      expect(rendered.html).toContain(`alt="${escapedName}"`);
+      expect(rendered.html).not.toContain('alt=""');
+    }
+  });
+
+  it("keeps the tag on one line, because sanitisers rewrite markup", () => {
+    for (const rendered of ALL) {
+      const tag = rendered.html.match(/<img[^>]*>/);
+      expect(tag, "img tag should match on a single line").not.toBeNull();
+    }
+  });
+
+  it("still reads correctly as plain text, with no image at all", () => {
+    for (const rendered of ALL) {
       expect(rendered.text).not.toContain("library-mark");
+      expect(rendered.text).not.toContain("<img");
     }
   });
 });
