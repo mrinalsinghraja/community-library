@@ -1750,3 +1750,55 @@ guardian row, a new tenant in a flat the last family used, the same child still
 refused twice inside the queue, and the same name accepted in two flats.
 `tests/unit/whatsapp.test.ts` holds the link. `tests/unit/public-pages.test.ts`
 holds the guide, the help block and the single list of doors.
+
+---
+
+## ADR-049 — Everyone can find their own account, and nobody's password changes in silence
+
+**Date:** 2026-08-21 · **Status:** Accepted
+
+Most of what was asked for already existed: `/forgot` and `/reset/[token]` have
+worked since Phase 1, `/login` has always linked to them, `/account` has always
+listed roles and permissions, and `EmailService.sendPasswordChanged` already
+fired on both routes into a new password. The request was still right, because
+**none of it was reachable from where a person actually stands.**
+
+**A librarian could not reach their own account.** Every desk screen renders the
+staff shell, and the staff shell had no link to `/account` — so the only way
+there was to type the URL. Their own name in the header is what they would click
+looking for it, so their name is now the link.
+
+**Somebody who had forgotten their password met a form demanding it.**
+`/account/password` asks for the current one, which is the correct rule: it is
+what stops a borrowed unlocked device becoming a stolen account. But the remedy
+for not knowing it was to sign out and find the link on the login page, which is
+a strange thing to ask of somebody already signed in. Both routes are now offered
+together, on the account page and on the form itself.
+
+**The page called a volunteer `SUPER_ADMIN`.** That is a database key being
+shouted at a person. Roles are now shown by name and with the one-sentence
+description that already existed on `RoleDefinition`, and `roleLabel` falls back
+to the key rather than throwing — an unknown role is a reason to print something
+plain, never a reason for somebody's own page to fail.
+
+**A reader could not find out that recovery reaches their parent.** For a child
+the reset link goes to their guardian, which is the whole reason the guardian
+relationship exists — and a reader who does not know it waits for an email that
+arrived in somebody else's inbox. The account page now names the address a link
+would go to, and says plainly when it is a grown-up's.
+
+One behaviour did change. `recoveryEmailFor` returned **null** for a member with
+no guardian row, and null means nothing is sent at all. A registered child always
+has a guardian and never reaches that branch; the case is an import or a link
+removed by hand, where the choice is between mailing the address on the account
+and silently telling nobody — which is how a person ends up locked out of a
+library with no way to find out why. The guardian is still preferred whenever
+there is one, and a test pins that the fallback has not become a way around the
+grown-up.
+
+`tests/database/activation-and-reset.test.ts` holds the notification: a note
+after a reset link is used and after a self-service change, to the guardian for a
+child and to their own address for staff, the fallback, and that the guardian
+still wins when both exist. It also holds the summary service — session-scoped
+with no id to tamper with, refused when signed out, and never returning a hash or
+a token. `tests/unit/account-page.test.ts` holds the doors.

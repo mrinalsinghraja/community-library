@@ -14,6 +14,8 @@ import {
   requestPasswordReset,
 } from "@/server/services/password-service";
 
+import { getOwnAccountSummary } from "@/server/services/account-service";
+
 import { FakeEmailProvider } from "./fake-email";
 import {
   attachGuardian,
@@ -436,5 +438,144 @@ describe("sessions minted before a password change", () => {
     });
 
     expect(await resolveSession(stale)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("telling somebody their password changed", () => {
+  /*
+   * A password changing without the account holder hearing about it is the
+   * quietest possible account takeover. The note is what turns "somebody has my
+   * password" from something discovered weeks later into something noticed the
+   * same afternoon -- so it goes out on BOTH routes into a new password, not
+   * just the one somebody remembered to wire up.
+   */
+
+  it("writes to the guardian after a reset link is used", async () => {
+    const member = await createMember(fixture.libraryId, { displayName: "Reset Child" });
+    await attachGuardian(fixture.libraryId, member.id, "confirm-reset@example.invalid");
+    const profile = await db.memberProfile.findUniqueOrThrow({ where: { userId: member.id } });
+
+    await requestPasswordReset({ identifier: profile.memberCode, requestIp: nextIp() });
+    const token = mail.tokenFrom(TEMPLATE_IDS.PASSWORD_RESET)!;
+
+    await completePasswordReset({ rawToken: token, newPassword: "purplewhale7" });
+
+    const note = mail.lastTo(TEMPLATE_IDS.PASSWORD_CHANGED);
+    expect(note?.to).toBe("confirm-reset@example.invalid");
+    // A confirmation carrying a link is a second thing to steal.
+    expect(note?.text).not.toMatch(/\/reset\/|\/activate\//);
+  });
+
+  it("writes to a staff member's own address after they change it", async () => {
+    const staff = await createStaff(fixture.libraryId, "LIBRARIAN");
+    await db.appUser.update({
+      where: { id: staff.id },
+      data: { passwordHash: await hashPassword("startingword1"), passwordChangedAt: new Date() },
+    });
+
+    __setSessionHandle(await createSession(staff.id, "STAFF"));
+    await changeOwnPassword({
+      currentPassword: "startingword1",
+      newPassword: "copper marsh lantern 71",
+    });
+
+    expect(mail.lastTo(TEMPLATE_IDS.PASSWORD_CHANGED)?.to).toBe(staff.email);
+  });
+
+  it("falls back to a member's own address when there is no guardian to tell", async () => {
+    /*
+     * A registered child always has a guardian and never reaches this branch.
+     * It is for the account that somehow has none -- an import, a link removed
+     * by hand -- where the choice is between mailing the address on the account
+     * and silently telling nobody, which is how a person ends up locked out
+     * with no way to find out why.
+     */
+    const member = await createMember(fixture.libraryId, { displayName: "No Guardian" });
+    await db.appUser.update({
+      where: { id: member.id },
+      data: {
+        email: "orphaned@example.invalid",
+        passwordHash: await hashPassword("startingword1"),
+        passwordChangedAt: new Date(),
+      },
+    });
+
+    __setSessionHandle(await createSession(member.id, "MEMBER"));
+    await changeOwnPassword({ currentPassword: "startingword1", newPassword: "quietmeadow77" });
+
+    expect(mail.lastTo(TEMPLATE_IDS.PASSWORD_CHANGED)?.to).toBe("orphaned@example.invalid");
+  });
+
+  it("still prefers the guardian when there is one", async () => {
+    // The fallback must never become a way around the grown-up.
+    const member = await createMember(fixture.libraryId, { displayName: "Has Both" });
+    await attachGuardian(fixture.libraryId, member.id, "the-parent@example.invalid");
+    await db.appUser.update({
+      where: { id: member.id },
+      data: {
+        email: "the-child@example.invalid",
+        passwordHash: await hashPassword("startingword1"),
+        passwordChangedAt: new Date(),
+      },
+    });
+
+    __setSessionHandle(await createSession(member.id, "MEMBER"));
+    await changeOwnPassword({ currentPassword: "startingword1", newPassword: "bluewhale31" });
+
+    expect(mail.lastTo(TEMPLATE_IDS.PASSWORD_CHANGED)?.to).toBe("the-parent@example.invalid");
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("what a person may learn about their own sign-in", () => {
+  it("tells a child that recovery reaches their grown-up, and names the address", async () => {
+    // A reader who does not know this waits for an email that went to a parent.
+    const member = await createMember(fixture.libraryId, { displayName: "Curious Reader" });
+    await attachGuardian(fixture.libraryId, member.id, "summary-parent@example.invalid");
+
+    __setSessionHandle(await createSession(member.id, "MEMBER"));
+    const summary = await getOwnAccountSummary();
+
+    expect(summary.recoveryEmail).toBe("summary-parent@example.invalid");
+    expect(summary.recoveryIsGuardian).toBe(true);
+  });
+
+  it("tells staff it is their own address", async () => {
+    const staff = await createStaff(fixture.libraryId, "SUPER_ADMIN");
+
+    __setSessionHandle(await createSession(staff.id, "STAFF"));
+    const summary = await getOwnAccountSummary();
+
+    expect(summary.recoveryEmail).toBe(staff.email);
+    expect(summary.recoveryIsGuardian).toBe(false);
+  });
+
+  it("reads the session and takes no id, so it cannot be pointed at anybody else", async () => {
+    const mine = await createStaff(fixture.libraryId, "LIBRARIAN");
+    const theirs = await createStaff(fixture.libraryId, "LIBRARIAN");
+
+    __setSessionHandle(await createSession(mine.id, "STAFF"));
+    const summary = await getOwnAccountSummary();
+
+    expect(summary.email).toBe(mine.email);
+    expect(summary.email).not.toBe(theirs.email);
+  });
+
+  it("refuses a signed-out caller", async () => {
+    __setSessionHandle(null);
+
+    await expect(getOwnAccountSummary()).rejects.toMatchObject({ code: "NOT_AUTHENTICATED" });
+  });
+
+  it("never returns a password hash or a token", async () => {
+    const staff = await createStaff(fixture.libraryId, "LIBRARIAN");
+
+    __setSessionHandle(await createSession(staff.id, "STAFF"));
+    const summary = await getOwnAccountSummary();
+
+    expect(JSON.stringify(summary)).not.toMatch(/hash|argon2|token/i);
   });
 });

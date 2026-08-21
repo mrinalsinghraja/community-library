@@ -36,6 +36,23 @@ export default async function ChangePasswordPage() {
           <ChangePasswordForm minLength={policy.minLength} isStaff={isStaff} />
         </Card>
 
+        {/*
+          The way out for the person this form cannot serve.
+
+          It asks for the current password, which is the right rule -- it is what
+          stops a borrowed unlocked device becoming a stolen account. But it
+          leaves somebody who has forgotten theirs staring at a field they cannot
+          fill, and the only remedy used to be signing out to find the link on
+          the login page.
+        */}
+        <p className="mt-6 text-base text-ink-soft">
+          Cannot remember the current one?{" "}
+          <Link href="/forgot" className="font-bold text-primary-deep">
+            Have a reset link emailed instead
+          </Link>
+          .
+        </p>
+
         <p className="mt-6 text-base text-ink-soft">
           <Link href="/account" className="font-bold text-primary-deep">
             Back to my library

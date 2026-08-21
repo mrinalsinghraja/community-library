@@ -10,6 +10,7 @@ import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
 import { EmailService } from "@/server/lib/email";
 import { NotFoundError, RuleViolationError, ValidationError } from "@/server/lib/errors";
 import { mintToken, revokeTokens, TOKEN_LIFETIME } from "@/server/lib/tokens";
+import { recoveryEmailFor } from "@/server/services/password-service";
 
 /**
  * Member account lifecycle: suspend, reactivate, deactivate, reissue activation,
@@ -458,6 +459,51 @@ export async function getOwnMemberCard(): Promise<{
     where: { userId: actor.userId },
     select: { memberCode: true, avatarKey: true, photoMediaId: true },
   });
+}
+
+export interface OwnAccountSummary {
+  /** How this person signs in. Either may be null depending on the kind. */
+  email: string | null;
+  username: string | null;
+  /**
+   * Where a reset link would actually arrive. For a child that is their
+   * guardian's inbox, which is exactly the thing they need told: a reader who
+   * does not know this waits for an email that went to their parent.
+   */
+  recoveryEmail: string | null;
+  /** True when `recoveryEmail` belongs to a guardian rather than to this account. */
+  recoveryIsGuardian: boolean;
+  lastPasswordChangeAt: Date | null;
+}
+
+/**
+ * The facts a person is entitled to know about their own sign-in.
+ *
+ * Ownership comes from the session and there is no id to pass, so this cannot
+ * be pointed at somebody else's account — the same rule as `getOwnMemberCard`.
+ *
+ * Nothing secret is returned. An address a person already knows, the fact that
+ * recovery reaches their parent rather than them, and when the password last
+ * changed — which is the one that turns "did I already do this?" and "has
+ * somebody else been in here?" into answerable questions.
+ */
+export async function getOwnAccountSummary(): Promise<OwnAccountSummary> {
+  const actor = await requireActor();
+
+  const user = await prisma.appUser.findUniqueOrThrow({
+    where: { id: actor.userId },
+    select: { email: true, username: true, kind: true, passwordChangedAt: true },
+  });
+
+  const recoveryEmail = await recoveryEmailFor(actor.userId, user.kind, user.email);
+
+  return {
+    email: user.email,
+    username: user.username,
+    recoveryEmail,
+    recoveryIsGuardian: Boolean(recoveryEmail) && recoveryEmail !== user.email,
+    lastPasswordChangeAt: user.passwordChangedAt,
+  };
 }
 
 /** The member list for the desk. Contact details only if the actor may see them. */

@@ -494,11 +494,19 @@ async function findUserByIdentifier(identifier: string) {
 /**
  * Where recovery mail goes.
  *
- * For a member, that is their guardian's inbox — a child has no email address,
- * and this is precisely why the guardian relationship exists. For staff, their
- * own address.
+ * For a member, that is their guardian's inbox first — a child has no email
+ * address, and this is precisely why the guardian relationship exists. For
+ * staff, their own address.
+ *
+ * The fallback to a member's own address is deliberately last and deliberately
+ * present. It is not a way around the guardian: a registered child has a
+ * guardian and always reaches this by the branch above. It is for the account
+ * that somehow has no guardian row — an import, a link deleted by hand — where
+ * the choice is between mailing the address on the account and **silently
+ * sending nothing at all**, which is how somebody ends up locked out of a
+ * library with no way to find out why.
  */
-async function recoveryEmailFor(
+export async function recoveryEmailFor(
   userId: string,
   kind: "STAFF" | "MEMBER" | "GUARDIAN",
   ownEmail: string | null,
@@ -511,5 +519,5 @@ async function recoveryEmailFor(
     select: { guardian: { select: { email: true } } },
   });
 
-  return link?.guardian.email ?? null;
+  return link?.guardian.email ?? ownEmail;
 }

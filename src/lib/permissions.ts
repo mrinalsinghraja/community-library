@@ -431,3 +431,23 @@ export function permissionsForRole(key: RoleKey): readonly PermissionKey[] {
   if (!role) throw new Error(`Unknown role: ${key}`);
   return role.permissions;
 }
+
+/**
+ * The name a role has in front of the person who holds it.
+ *
+ * `SUPER_ADMIN` is a database key. It is what the seed writes, what the
+ * permission checks compare, and exactly the wrong thing to print on somebody's
+ * own account page — the screen that tells a volunteer what they are should say
+ * "Super Admin", not shout an identifier at them.
+ *
+ * Falls back to the key rather than throwing: an unknown role is a reason to
+ * show something plain, never a reason for a person's own page to fail.
+ */
+export function roleLabel(key: string): string {
+  return ROLE_DEFINITIONS.find((role) => role.key === key)?.name ?? key;
+}
+
+/** What that role is for, in one sentence. Same fallback rule. */
+export function roleDescription(key: string): string | null {
+  return ROLE_DEFINITIONS.find((role) => role.key === key)?.description ?? null;
+}

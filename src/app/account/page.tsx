@@ -7,11 +7,12 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Callout } from "@/components/ui/states";
-import { isDormantPermission } from "@/lib/permissions";
+import { formatInTimezone } from "@/lib/dates";
+import { isDormantPermission, roleDescription, roleLabel } from "@/lib/permissions";
 import { signOutAction } from "@/server/actions/auth-actions";
 import { getActor } from "@/server/authz";
-import { getBrandingSafe } from "@/server/lib/settings";
-import { getOwnMemberCard } from "@/server/services/account-service";
+import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
+import { getOwnAccountSummary, getOwnMemberCard } from "@/server/services/account-service";
 import { Icon } from "@/components/ui/icon";
 
 export const metadata: Metadata = { title: "My library" };
@@ -35,6 +36,9 @@ export default async function AccountPage() {
   // Ownership from the session, never from the request. There is no id in the
   // URL to tamper with here, and that is the point.
   const profile = await getOwnMemberCard();
+  const account = await getOwnAccountSummary();
+  const { settings } = await getCurrentLibrary();
+  const timezone = settings.timezone;
   const permissions = [...actor.permissions].sort();
 
   return (
@@ -77,19 +81,40 @@ export default async function AccountPage() {
                 <dt className="font-bold text-ink">Kind</dt>
                 <dd>{actor.kind === "STAFF" ? "Library staff" : "Reader"}</dd>
 
+                {/*
+                  The name, not the database key. This is the screen that tells
+                  a volunteer what they are, and SUPER_ADMIN is an identifier
+                  being shouted at somebody rather than an answer.
+                */}
                 <dt className="font-bold text-ink">Roles</dt>
                 <dd className="flex flex-wrap gap-2">
                   {actor.roleKeys.length > 0 ? (
                     actor.roleKeys.map((role) => (
                       <StatusBadge key={role} tone="neutral">
-                        {role}
+                        {roleLabel(role)}
                       </StatusBadge>
                     ))
                   ) : (
                     <span>No roles assigned</span>
                   )}
                 </dd>
+
+                <dt className="font-bold text-ink">Signing in</dt>
+                <dd>{account.email ?? account.username ?? "Ask a librarian"}</dd>
               </dl>
+
+              {actor.roleKeys.length > 0 ? (
+                <ul className="mt-4 flex flex-col gap-2 border-t border-hairline pt-4">
+                  {actor.roleKeys.map((role) => {
+                    const description = roleDescription(role);
+                    return description ? (
+                      <li key={role} className="list-none text-base">
+                        <span className="font-bold text-ink">{roleLabel(role)}</span> — {description}
+                      </li>
+                    ) : null;
+                  })}
+                </ul>
+              ) : null}
             </CardBody>
           </Card>
 
@@ -126,6 +151,60 @@ export default async function AccountPage() {
           </Card>
         </div>
 
+        {/*
+          Everything about the password in one place, including the two things
+          somebody in trouble actually needs: where the email lands, and what to
+          do when they cannot remember the current one. Both used to be
+          discoverable only by signing out and finding the link on /login, which
+          is a strange thing to ask of somebody who is already signed in.
+        */}
+        <Card tone="shelf" className="mt-6">
+          <CardTitle icon={<Icon name="key" />}>Your secret word</CardTitle>
+          <CardBody>
+            {account.lastPasswordChangeAt ? (
+              <p>
+                Last changed on{" "}
+                <span className="font-bold text-ink">
+                  {formatInTimezone(account.lastPasswordChangeAt, timezone, "d MMM yyyy")}
+                </span>
+                . If that was not you, change it now and tell a librarian.
+              </p>
+            ) : (
+              <p>This account has not changed its secret word yet.</p>
+            )}
+
+            {account.recoveryEmail ? (
+              <p className="mt-3">
+                {account.recoveryIsGuardian
+                  ? "If you ask for a reset link, it goes to the grown-up who signed you up — at "
+                  : "A reset link would be sent to "}
+                <span className="font-bold text-ink">{account.recoveryEmail}</span>.
+              </p>
+            ) : (
+              <p className="mt-3">
+                There is no email address on this account, so a reset link cannot be sent. A
+                librarian can set one up for you.
+              </p>
+            )}
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <ButtonLink href="/account/password" size="md" icon={<Icon name="key" />}>
+                Change my secret word
+              </ButtonLink>
+              {account.recoveryEmail ? (
+                <ButtonLink href="/forgot" variant="secondary" size="md" icon={<Icon name="mail" />}>
+                  Email me a reset link
+                </ButtonLink>
+              ) : null}
+            </div>
+
+            <p className="mt-4 text-base">
+              Whenever it changes, we send a note to that address so somebody always knows it
+              happened. Changing it signs out every other device.
+            </p>
+          </CardBody>
+        </Card>
+
         <div className="mt-10 flex flex-wrap gap-3">
           {/*
             The administrator's way back to their own library.
@@ -157,9 +236,6 @@ export default async function AccountPage() {
             icon={<Icon name="search" />}
           >
             Find a book
-          </ButtonLink>
-          <ButtonLink href="/account/password" variant="secondary" size="lg" icon={<Icon name="key" />}>
-            Change my secret word
           </ButtonLink>
         </div>
 

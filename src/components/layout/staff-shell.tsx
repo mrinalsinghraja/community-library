@@ -123,7 +123,18 @@ export function StaffShell({
           </nav>
 
           <div className="ms-auto flex items-center gap-3">
-            <span className="text-sm text-ink-soft">{actor.displayName}</span>
+            {/*
+              A librarian's own account was reachable only by typing /account:
+              every desk screen renders this shell, and this shell had no door to
+              it. Their name is the thing they would click looking for it, so
+              their name is the link.
+            */}
+            <Link
+              href="/account"
+              className="rounded-md px-2 py-1.5 text-sm font-semibold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
+            >
+              {actor.displayName}
+            </Link>
             <form action={signOutAction}>
               <button
                 type="submit"
