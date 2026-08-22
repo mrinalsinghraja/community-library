@@ -54,6 +54,8 @@ const {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  ENV.EMAIL_PROVIDER = "brevo";
+  ENV.RESEND_API_KEY = undefined;
   ENV.BREVO_API_KEY = "test-key";
   ENV.EMAIL_FROM = "Test Library <library@example.invalid>";
   ENV.EMAIL_REPLY_TO = undefined;
@@ -286,5 +288,107 @@ describe("the HTTP transport", () => {
 
     expect(result.ok).toBe(false);
     expect(result.error).toContain("ENOTFOUND");
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("the Resend transport", () => {
+  /*
+   * Held to the same standard as the Brevo one, because it is the migration
+   * target: Brevo rewrites every link in an email through a branded tracking
+   * host whose certificate expired in April 2024, which makes the activation
+   * button unusable, and its API has no per-message way to turn that off.
+   * Resend leaves links alone unless click tracking is switched on, and it is
+   * off by default.
+   *
+   * Until now this provider had no payload test at all -- only a check that the
+   * selector returned the right class.
+   */
+  function resendEnv() {
+    ENV.EMAIL_PROVIDER = "resend";
+    ENV.RESEND_API_KEY = "test-key";
+    ENV.EMAIL_REPLY_TO = "librarian@example.invalid";
+  }
+
+  it("sends the fields the REST API actually names", async () => {
+    resendEnv();
+    const fetchSpy = stubFetch({ ok: true, status: 200, json: async () => ({ id: "re_123" }) });
+
+    const result = await new ResendEmailProvider().send(MESSAGE);
+    expect(result).toEqual({ ok: true, providerMessageId: "re_123" });
+
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://api.resend.com/emails");
+
+    const body = JSON.parse(String(init.body));
+    // snake_case on the REST API. `replyTo` is the SDK spelling and would be
+    // silently ignored, leaving replies going to the unattended From address.
+    expect(body.reply_to).toBe("librarian@example.invalid");
+    expect(body).not.toHaveProperty("replyTo");
+    expect(body.from).toBe("Test Library <library@example.invalid>");
+    expect(body.to).toEqual(["guardian@example.invalid"]);
+    expect(body.subject).toBe("Your library account");
+  });
+
+  it("sends the activation link exactly as written, with nothing wrapping it", async () => {
+    // The whole point of the migration. No tracking redirect, no rewriting.
+    resendEnv();
+    const fetchSpy = stubFetch({ ok: true, status: 200, json: async () => ({ id: "re_1" }) });
+
+    await new ResendEmailProvider().send(MESSAGE);
+
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(String(init.body));
+    expect(body.html).toContain("https://library.example.org/activate/SECRETTOKEN");
+    expect(body.text).toContain("https://library.example.org/activate/SECRETTOKEN");
+  });
+
+  it("names the reason a domain is not verified yet", async () => {
+    /*
+     * The failure somebody actually meets on migration day. Resend labels its
+     * errors `name`, not `code` -- reading only `code` produced a bare
+     * "Resend responded 403", which says nothing about which DNS record has
+     * not landed.
+     */
+    resendEnv();
+    stubFetch({
+      ok: false,
+      status: 403,
+      json: async () => ({
+        statusCode: 403,
+        name: "validation_error",
+        message: "The msrx.co.in domain is not verified. Please verify your domain.",
+      }),
+    });
+
+    const result = await new ResendEmailProvider().send(MESSAGE);
+
+    expect(result.error).toBe(
+      "Resend responded 403 (validation_error: The msrx.co.in domain is not verified. Please verify your domain.)",
+    );
+  });
+
+  it("keeps a validation error label-only, so no payload comes back", async () => {
+    resendEnv();
+    stubFetch({
+      ok: false,
+      status: 422,
+      json: async () => ({ name: "invalid_parameter", message: `Rejected: ${MESSAGE.text}` }),
+    });
+
+    const result = await new ResendEmailProvider().send(MESSAGE);
+
+    expect(result.error).toBe("Resend responded 422 (invalid_parameter)");
+    expect(result.error).not.toContain("SECRETTOKEN");
+  });
+
+  it("reports a missing key rather than throwing into the workflow", async () => {
+    ENV.RESEND_API_KEY = undefined;
+
+    await expect(new ResendEmailProvider().send(MESSAGE)).resolves.toEqual({
+      ok: false,
+      error: "RESEND_API_KEY is not configured",
+    });
   });
 });

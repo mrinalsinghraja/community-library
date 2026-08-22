@@ -207,14 +207,24 @@ export class BrevoEmailProvider implements EmailProvider {
  */
 async function readErrorDetail(response: Response): Promise<string> {
   try {
-    const body = (await response.json()) as { code?: unknown; message?: unknown };
-    const code = typeof body.code === "string" ? body.code.slice(0, 60) : "";
+    const body = (await response.json()) as { code?: unknown; name?: unknown; message?: unknown };
+
+    /*
+     * Brevo names its error `code`, Resend names it `name`. Reading both keeps
+     * one helper for both transports rather than two that drift.
+     */
+    const label =
+      typeof body.code === "string"
+        ? body.code.slice(0, 60)
+        : typeof body.name === "string"
+          ? body.name.slice(0, 60)
+          : "";
 
     const authFailure = response.status === 401 || response.status === 403;
     const message =
       authFailure && typeof body.message === "string" ? body.message.slice(0, 200) : "";
 
-    const parts = [code, message].filter(Boolean);
+    const parts = [label, message].filter(Boolean);
     return parts.length ? ` (${parts.join(": ")})` : "";
   } catch {
     return "";
@@ -248,9 +258,18 @@ export class ResendEmailProvider implements EmailProvider {
       });
 
       if (!response.ok) {
-        // Status only. A provider error body can echo the payload back, and the
-        // payload contains the activation link.
-        return { ok: false, error: `Resend responded ${response.status}` };
+        /*
+         * Same rule as Brevo: the provider's own label always, and its message
+         * only for 401/403, because an authentication failure is rejected
+         * before the payload is read and so cannot echo the activation link.
+         *
+         * A bare status is not enough here. The failure somebody actually meets
+         * when switching to this transport is a 403 for a domain that is not
+         * verified yet, and "Resend responded 403" tells them nothing about
+         * which of the three DNS records has not landed.
+         */
+        const detail = await readErrorDetail(response);
+        return { ok: false, error: `Resend responded ${response.status}${detail}` };
       }
 
       const body = (await response.json()) as { id?: string };
