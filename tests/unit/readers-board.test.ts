@@ -69,77 +69,76 @@ describe("the month it is about", () => {
   });
 });
 
-describe("appearing is consented, and separately from storage", () => {
-  it("offers the board as its own consent", () => {
-    expect(CURRENT_CONSENT_TYPES).toContain("READERS_BOARD");
-    expect(CONSENT_TEXTS.READERS_BOARD).toBeTruthy();
-    expect(CONSENT_LABELS.READERS_BOARD).toContain("optional");
-  });
-
-  it("never makes it a condition of joining", () => {
-    expect(REQUIRED_CONSENT_TYPES).not.toContain("READERS_BOARD");
-  });
-
+describe("appearing is disclosed, and a family may opt out", () => {
   /*
-   * These assert the PROMISES, not the prose.
-   *
-   * Matching exact sentences makes every wording improvement look like a
-   * regression, and the thing worth protecting is not the phrasing — it is that
-   * a guardian is told who sees the picture, that it is never sold or used to
-   * advertise anything, that it never leaves the library, and that saying no
-   * costs their child nothing.
+   * These assert the PROMISES, not the prose. Matching exact sentences makes
+   * every wording improvement look like a regression, and the thing worth
+   * protecting is that a guardian is told what is shown and to whom, that it
+   * never leaves the library or earns anybody money, and that saying no costs
+   * their child nothing.
    */
   const promises = (text: string) => ({
-    isOptional: /optional|free to (say no|decline)/i.test(text),
     saysWhoSeesIt: /signed in|library staff|other members|librarian/i.test(text),
     noCommercialUse: /commercial purpose/i.test(text) && /advertis/i.test(text),
     staysInsideTheLibrary:
-      /never (sold|shared|given)|outside (this |the )?library/i.test(text),
-    canBeWithdrawn: /withdraw|removed at any time|stop these at any time/i.test(text),
+      /never (sold|shared|given)|outside (this |the )?library|never goes outside/i.test(text),
+    canOptOut: /left out|leave my child off|withdraw|removed at any time/i.test(text),
   });
 
-  it("tells a guardian who sees the board and that it stays inside the library", () => {
-    const board = promises(CONSENT_TEXTS.READERS_BOARD);
-
-    expect(board.isOptional).toBe(true);
-    expect(board.saysWhoSeesIt).toBe(true);
-    expect(board.noCommercialUse).toBe(true);
-    expect(board.staysInsideTheLibrary).toBe(true);
-    expect(board.canBeWithdrawn).toBe(true);
+  it("is no longer a separate question on the form", () => {
+    // Folded into the consent a guardian already gives. The ConsentType stays
+    // in the database, repurposed as the record of a family opting out.
+    expect(CURRENT_CONSENT_TYPES).not.toContain("READERS_BOARD");
+    expect(Object.keys(CONSENT_TEXTS)).not.toContain("READERS_BOARD");
+    expect(Object.keys(CONSENT_LABELS)).not.toContain("READERS_BOARD");
   });
 
-  it("says a child loses nothing by not being on it", () => {
-    expect(CONSENT_TEXTS.READERS_BOARD).toMatch(/membership.*exactly the same|exactly the same.*either way/i);
+  it("tells a guardian, in the account consent, what other members will see", () => {
+    const account = CONSENT_TEXTS.CHILD_ACCOUNT_CREATION;
+
+    expect(account).toMatch(/first name/i);
+    expect(account).toMatch(/picture or avatar/i);
+    expect(promises(account).saysWhoSeesIt).toBe(true);
+    expect(promises(account).staysInsideTheLibrary).toBe(true);
+    expect(promises(account).noCommercialUse).toBe(true);
   });
 
-  it("promises no surname, flat or card number", () => {
-    const text = CONSENT_TEXTS.READERS_BOARD;
+  it("says a family can ask for their child to be left off, at no cost", () => {
+    const account = CONSENT_TEXTS.CHILD_ACCOUNT_CREATION;
 
-    expect(text).toMatch(/never our surname/i);
-    expect(text).toMatch(/flat number/i);
-    expect(text).toMatch(/card number/i);
+    expect(promises(account).canOptOut).toBe(true);
+    expect(account).toMatch(/without it affecting their membership/i);
+  });
+
+  it("says why the card exists, rather than leaving a parent to guess", () => {
+    expect(CONSENT_TEXTS.CHILD_ACCOUNT_CREATION).toMatch(/encourage reading/i);
+  });
+
+  it("keeps the photograph itself optional, with an avatar as a full substitute", () => {
+    /*
+     * This is what makes a disclosure bundled into a required consent fair: a
+     * parent uncomfortable with a picture of their child on a shared card is
+     * never forced to provide one, and the membership is identical either way.
+     */
+    const photo = CONSENT_TEXTS.CHILD_PHOTO_STORAGE;
+
+    expect(photo).toMatch(/optional/i);
+    expect(photo).toMatch(/avatar gives my child exactly the same membership/i);
+    expect(REQUIRED_CONSENT_TYPES).not.toContain("CHILD_PHOTO_STORAGE");
   });
 
   it("makes the same promises about a stored photograph", () => {
     const photo = promises(CONSENT_TEXTS.CHILD_PHOTO_STORAGE);
 
-    expect(photo.isOptional).toBe(true);
     expect(photo.noCommercialUse).toBe(true);
     expect(photo.staysInsideTheLibrary).toBe(true);
-    expect(photo.canBeWithdrawn).toBe(true);
+    expect(photo.canOptOut).toBe(true);
   });
 
   it("never promises a stored photo is private full stop", () => {
-    /*
-     * The original wording said the photograph "is never published", which a
-     * board of faces would have contradicted for every family that had agreed
-     * to it. The storage consent must now point at the board question instead
-     * of making a promise the board breaks.
-     */
-    const text = CONSENT_TEXTS.CHILD_PHOTO_STORAGE;
-
-    expect(text).toMatch(/unless I separately agree to the readers' board/);
-    expect(text).not.toMatch(/never published/);
+    // The original wording said the photograph "is never published", which a
+    // card other members see would have contradicted.
+    expect(CONSENT_TEXTS.CHILD_PHOTO_STORAGE).not.toMatch(/never published/);
   });
 
   it("does not promise to hold a date of birth the library no longer asks for", () => {
@@ -193,9 +192,16 @@ describe("nothing ranks a child", () => {
     expect(component).toContain("size={56}");
   });
 
-  it("gates appearance on consent inside the query itself", () => {
+  it("excludes on an opt-out record, never includes on an opt-in one", () => {
+    /*
+     * The polarity is the whole safety property. Reading it backwards would
+     * show every child whose family had asked to be left off, which is the
+     * exact opposite of what they asked for.
+     */
     expect(service).toContain("'READERS_BOARD'");
-    expect(service).toContain("status = 'GRANTED'");
+    expect(service).toContain("NOT EXISTS");
+    expect(service).toContain("status = 'WITHDRAWN'");
+    expect(service).not.toContain("status = 'GRANTED'");
   });
 
   it("shows a first name only, never the whole one", () => {

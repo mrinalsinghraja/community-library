@@ -10,12 +10,15 @@ import { prisma } from "@/server/db";
  * Three rules hold this together, and each exists because the obvious version
  * of this feature would have broken something:
  *
- *  1. **Consent gates appearance, not just the photograph.** A child appears
- *     only where a guardian has granted READERS_BOARD and not withdrawn it.
- *     Putting a child's first name in front of every other family is a
- *     disclosure in its own right, so it is asked for in its own right. No
- *     consent on record means no appearance — which is every child's state
- *     until somebody actively opts in, and is why the board starts empty.
+ *  1. **Every member may appear; a family may opt out.** Appearing is disclosed
+ *     in the consent a guardian gives when the account is created, so there is
+ *     no second question and no child is missing because nobody got round to
+ *     asking. A family who would rather their child were left off says so to
+ *     the librarian, which writes a WITHDRAWN `READERS_BOARD` record — the
+ *     presence of that record, not its absence, is what removes a child.
+ *
+ *     This is the one place the polarity is worth stating twice, because
+ *     getting it backwards would silently show every child who had opted out.
  *
  *  2. **The month is finished.** Always the previous calendar month, never a
  *     running total. A live board would rank children against each other in
@@ -76,12 +79,14 @@ export async function readersOfTheMonth(now: Date = new Date()): Promise<BoardRe
            AND l.issued_at >= ${from}
            AND l.issued_at <= ${to}
            AND u.status = 'ACTIVE'
-           AND EXISTS (
+           -- Opted out, not opted in. A family who asked to be left off has a
+           -- WITHDRAWN record; everybody else simply has none.
+           AND NOT EXISTS (
              SELECT 1 FROM consent_record c
               WHERE c.member_user_id = u.id
                 AND c.library_id = ${actor.libraryId}
                 AND c.type = 'READERS_BOARD'
-                AND c.status = 'GRANTED'
+                AND c.status = 'WITHDRAWN'
            )
          GROUP BY u.id, u.display_name, m.photo_media_id, m.avatar_key
          ORDER BY count(*) DESC, lower(u.display_name) ASC
@@ -103,8 +108,9 @@ export async function readersOfTheMonth(now: Date = new Date()): Promise<BoardRe
  * Asked by `getAuthorizedMedia` before it will serve one child's photograph to
  * another child. It is a **query, not a flag**, deliberately: the same rule that
  * puts a face on the board decides whether the bytes may be read, so the two can
- * never disagree. A child who drops off the board next month stops being
- * readable the moment the board changes, with nothing to remember to switch off.
+ * never disagree. A child who drops off the board next month — or whose family
+ * asks to be left off — stops being readable the moment the board changes, with
+ * nothing to remember to switch off.
  *
  * The same rule appears on the donor register for book covers, and for the same
  * reason. See ADR-055.
@@ -124,12 +130,13 @@ export async function memberIsOnReadersBoard(
        AND l.issued_at >= ${from}
        AND l.issued_at <= ${to}
        AND u.status = 'ACTIVE'
-       AND EXISTS (
+       -- Same polarity as the board itself: a WITHDRAWN record excludes.
+       AND NOT EXISTS (
          SELECT 1 FROM consent_record c
           WHERE c.member_user_id = u.id
             AND c.library_id = ${libraryId}
             AND c.type = 'READERS_BOARD'
-            AND c.status = 'GRANTED'
+            AND c.status = 'WITHDRAWN'
        )
      GROUP BY u.id, u.display_name
      ORDER BY count(*) DESC, lower(u.display_name) ASC

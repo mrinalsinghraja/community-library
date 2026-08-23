@@ -2133,12 +2133,40 @@ invitations, and the gap reads as welcome rather than as absence — which is th
 hardest thing on the card to get right and the reason the empty socket is drawn
 with the same care as a filled one.
 
-**Appearing is its own consent, asked separately from storage.** `READERS_BOARD`
-is a new `ConsentType`, optional, never required to join, and defaulted to
-absent — so the board starts empty and fills only as families opt in. It is
-deliberately not folded into `CHILD_PHOTO_STORAGE`: agreeing that the library
-may *hold* a photograph is a different question from agreeing that other
-families may *see* it, and one must never be read as the other.
+**Appearing is disclosed in the account consent, and a family may opt out.**
+*(Amended — this ADR originally required a separate opt-in consent, which the
+library's owner reversed. The original reasoning and why the amendment is
+defensible are both kept below, because a reversed decision that leaves no
+trace is how the same argument gets had twice.)*
+
+`READERS_BOARD` remains a `ConsentType`, but it is no longer a question on the
+joining form. Instead the account consent — which every guardian gives — says
+plainly that the library may show a child's first name and their picture or
+avatar to other members, why (to encourage reading), where it stops (inside the
+library's own software, to signed-in members and staff, never outside, never
+commercial), and that a family may ask for their child to be left off at any
+time without it affecting membership. A `READERS_BOARD` record now means the
+opposite of what it used to: **its presence, with status `WITHDRAWN`, removes a
+child.** Its absence — every child's ordinary state — includes them.
+
+That polarity is the whole safety property of the query and is asserted twice,
+because reading it backwards would show exactly the children whose families
+asked to be left out.
+
+The original design asked separately, on the reasoning that agreeing the
+library may *hold* a photograph is a different question from agreeing other
+families may *see* it. That reasoning still stands, and bundling a disclosure
+into a required consent is the weaker form under the DPDP Act, where consent is
+meant to be free and specific. What makes the bundled version defensible here is
+that **the photograph itself remains optional and an avatar is a complete
+substitute**: a parent uncomfortable with a picture of their child on a shared
+card simply never provides one, and the membership is identical either way. Only
+a first name is ever shown, and only to people signed in to this library.
+
+The practical argument for the change is real too: an opt-in board in a library
+of a hundred-odd families would have stayed empty not because anybody objected
+but because nobody was ever asked, and an encouragement feature that encourages
+nobody is not worth the code.
 
 Writing it surfaced a contradiction already in production. The existing photo
 wording promised the picture "is shown only to my child and to library staff, is
@@ -2164,6 +2192,7 @@ child for refreshing it, which is the single behaviour this feature is most at
 risk of encouraging.
 
 `tests/database/readers-board.test.ts` holds the property that matters: a child
-who read nine books and whose guardian was never asked is absent from the board
-and their photograph is unreadable, while a child who read three with consent is
-present — and both facts reverse the instant consent is withdrawn.
+who read nine books and whose family asked to be left off is absent from the
+board and their photograph is unreadable, while a child who read three and said
+nothing is present — and both facts reverse the instant the opt-out is recorded
+or removed.

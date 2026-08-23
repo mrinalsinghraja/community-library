@@ -80,7 +80,7 @@ to a member or a registration. All three have tests.
 
 | Type | Required? | Covers |
 |---|---|---|
-| `CHILD_ACCOUNT_CREATION` | **yes** | storing the child's name, year of birth, flat, and the guardian's contact details |
+| `CHILD_ACCOUNT_CREATION` | **yes** | storing the child's name, year of birth, flat, and the guardian's contact details; and showing the child's first name and picture to other members on the readers' card |
 | `GUARDIAN_EMAIL_NOTIFICATIONS` | **yes** | activation and reset links, due-date reminders, library notices |
 | `CHILD_PHOTO_STORAGE` | only if a photo is uploaded | storing the photograph privately |
 
@@ -174,3 +174,22 @@ long before 2027.
 Verify these dates against the current MeitY materials before relying on them.
 Enforcement timelines have moved before. Detail, sources and the technical
 implications are in [`GUARDIAN_VERIFICATION.md`](GUARDIAN_VERIFICATION.md) §6.
+
+## The readers' card
+
+`READERS_BOARD` is a `ConsentType` that works **backwards** from the others.
+
+Every member may appear on the readers' card — five children a month, first name
+and picture or avatar, shown to signed-in members and staff. That is disclosed in
+`CHILD_ACCOUNT_CREATION`, which every guardian gives, rather than asked as a
+second question.
+
+A family who would rather their child were left off tells the librarian, who
+records a `READERS_BOARD` consent with status `WITHDRAWN`. **The presence of that
+record removes the child; its absence includes them.** There is no `GRANTED`
+`READERS_BOARD` record anywhere, and the query asserts as much — reading the
+polarity backwards would show precisely the children who asked to be left out.
+
+The same query authorises the photograph. A child off the card cannot have their
+picture read by another member, with nothing to switch off separately. See
+ADR-055.

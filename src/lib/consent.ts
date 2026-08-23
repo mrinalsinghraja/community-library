@@ -24,7 +24,6 @@ export const CURRENT_CONSENT_TYPES = [
   "CHILD_ACCOUNT_CREATION",
   "CHILD_PHOTO_STORAGE",
   "GUARDIAN_EMAIL_NOTIFICATIONS",
-  "READERS_BOARD",
 ] as const;
 
 export type ConsentTypeKey = (typeof CURRENT_CONSENT_TYPES)[number];
@@ -36,7 +35,7 @@ export type ConsentTypeKey = (typeof CURRENT_CONSENT_TYPES)[number];
  * and the snapshot they were granted under, so history stays intact — but a new
  * version signals that existing consents were granted against different text.
  */
-export const CONSENT_VERSION = "2026-08-v2";
+export const CONSENT_VERSION = "2026-08-v3";
 
 export const CONSENT_TEXTS: Record<ConsentTypeKey, string> = {
   CHILD_ACCOUNT_CREATION: `I am the parent or guardian of this child, and I agree to the library creating a membership account for them.
@@ -44,6 +43,10 @@ export const CONSENT_TEXTS: Record<ConsentTypeKey, string> = {
 I understand the library will hold my child's name, their year of birth, our flat number, and my own name, phone number and email address. This information is used only to run the library — to issue and return books, to reach me if something needs saying, and to keep the library's own records.
 
 I understand this information is never sold, never used for advertising or any other commercial purpose, and is never shared with anyone outside the library except where the law requires it.
+
+I understand the library may show my child's first name, together with the picture or avatar on their account, to other members — for example on a card celebrating children who have been reading a lot that month. This is to encourage reading within the library. It happens only inside the library's own software, is seen only by members and library staff who are signed in, and never goes outside the library.
+
+I understand that if I would prefer my child not to appear there, I can tell the librarian at any time and they will be left out, without it affecting their membership in any way.
 
 I understand I can ask the librarian to correct or delete any of it at any time, and that it is removed when my child's membership ends.`,
 
@@ -53,7 +56,7 @@ I agree to the library holding the photograph I have uploaded of my child, and I
 
 I understand the photograph is never sold, never used for advertising or any other commercial purpose, never given to any other organisation, and never posted on social media, a public website or anywhere else outside this library.
 
-I understand the photograph is not shown to other families unless I separately agree to the readers' board, which is asked as its own question and which I am free to decline.
+I understand the picture may also appear beside my child's first name on the library's readers' card, which other members see when signed in, as described above. If I would rather it did not, an avatar gives my child exactly the same membership, or I can ask the librarian to leave my child off that card.
 
 I understand I can ask for the photograph to be removed at any time, and that it is deleted when my child's membership ends.`,
 
@@ -63,17 +66,6 @@ I understand these are not marketing emails, that my address is never sold or pa
 
 I understand I can ask the librarian to stop these at any time, though some messages — such as an account set-up link — may then have to reach me another way.`,
 
-  READERS_BOARD: `This is optional, and I am free to say no. My child's membership, and every book they can borrow, is exactly the same either way.
-
-I agree to my child's first name, together with the photograph or avatar on their account, appearing on the library's readers' board: a card celebrating five children who read a lot during the month just gone.
-
-I understand the board is not a competition. The five appear together in alphabetical order, with no places, no scores, and no number of books shown for anybody.
-
-I understand only my child's first name appears — never our surname, never our flat number, and never their library card number.
-
-I understand the board is shown only inside the library's own software, to other members and to library staff who are signed in. It is not visible to the public, not open to search engines, never used for advertising or any other commercial purpose, and never shared with anyone outside the library.
-
-I understand I can withdraw this at any time by telling the librarian, and that my child stops appearing straight away.`,
 };
 
 /** Short labels for the registration form's checkboxes. */
@@ -81,7 +73,6 @@ export const CONSENT_LABELS: Record<ConsentTypeKey, string> = {
   CHILD_ACCOUNT_CREATION: "I am this child's parent or guardian, and I agree to their library account",
   CHILD_PHOTO_STORAGE: "The library may keep the photo I uploaded (optional)",
   GUARDIAN_EMAIL_NOTIFICATIONS: "The library may email me about my child's membership",
-  READERS_BOARD: "My child may appear on the readers' board (optional)",
 };
 
 /**

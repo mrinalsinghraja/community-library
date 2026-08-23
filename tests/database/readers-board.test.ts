@@ -36,11 +36,11 @@ import {
 let fixture: Fixture;
 let librarian: Awaited<ReturnType<typeof createStaff>>;
 let onBoard: Awaited<ReturnType<typeof createMember>>;
-let noConsent: Awaited<ReturnType<typeof createMember>>;
+let optedOut: Awaited<ReturnType<typeof createMember>>;
 let stranger: Awaited<ReturnType<typeof createMember>>;
 
 let onBoardPhoto = "";
-let noConsentPhoto = "";
+let optedOutPhoto = "";
 
 const storageDriver = new FakeStorageDriver();
 const DAY = 24 * 60 * 60 * 1000;
@@ -55,12 +55,14 @@ async function actingAs(userId: string, kind: "STAFF" | "MEMBER" = "STAFF") {
   __setSessionHandle(await createSession(userId, kind));
 }
 
-async function grantBoardConsent(memberUserId: string) {
+/** What the librarian records when a family asks to be left off the card. */
+async function optOutOfBoard(memberUserId: string) {
   await db.consentRecord.create({
     data: {
       libraryId: fixture.libraryId,
       type: "READERS_BOARD",
-      status: "GRANTED",
+      status: "WITHDRAWN",
+      withdrawnAt: new Date(),
       method: "WEB_FORM",
       consentVersion: "test-1",
       consentTextSnapshot: "Test fixture.",
@@ -110,17 +112,17 @@ beforeAll(async () => {
   librarian = await createStaff(fixture.libraryId, "LIBRARIAN");
 
   onBoard = await createMember(fixture.libraryId, { displayName: "Meera Raghunathan" });
-  noConsent = await createMember(fixture.libraryId, { displayName: "Aarav Krishnamurthy" });
+  optedOut = await createMember(fixture.libraryId, { displayName: "Aarav Krishnamurthy" });
   stranger = await createMember(fixture.libraryId, { displayName: "Rohan Das" });
 
-  await grantBoardConsent(onBoard.id);
   await borrowedLastMonth(onBoard.id, 3);
 
-  // Read plenty, but nobody ever asked their guardian about the board.
-  await borrowedLastMonth(noConsent.id, 9);
+  // Reads the most in the library, and their family asked to be left off.
+  await optOutOfBoard(optedOut.id);
+  await borrowedLastMonth(optedOut.id, 9);
 
   onBoardPhoto = await givePhoto(onBoard.id);
-  noConsentPhoto = await givePhoto(noConsent.id);
+  optedOutPhoto = await givePhoto(optedOut.id);
 });
 
 afterAll(async () => {
@@ -128,18 +130,18 @@ afterAll(async () => {
 });
 
 describe("who is on the board", () => {
-  it("includes a child whose guardian agreed", async () => {
+  it("includes a child whose family never said otherwise", async () => {
     await actingAs(stranger.id, "MEMBER");
     const board = await readersOfTheMonth();
 
     expect(board.map((row) => row.firstName)).toContain("Meera");
   });
 
-  it("leaves out a child who read more but was never asked", async () => {
+  it("leaves out a child whose family asked to be left off", async () => {
     await actingAs(stranger.id, "MEMBER");
     const board = await readersOfTheMonth();
 
-    // Nine books to Meera's three. Consent decides appearance, not reading.
+    // Nine books to Meera's three. An opt-out beats any amount of reading.
     expect(board.map((row) => row.firstName)).not.toContain("Aarav");
   });
 
@@ -153,18 +155,14 @@ describe("who is on the board", () => {
     }
   });
 
-  it("drops a child the moment consent is withdrawn", async () => {
-    await db.consentRecord.updateMany({
-      where: { memberUserId: onBoard.id, type: "READERS_BOARD" },
-      data: { status: "WITHDRAWN", withdrawnAt: new Date() },
-    });
+  it("drops a child the moment their family opts out", async () => {
+    await optOutOfBoard(onBoard.id);
 
     await actingAs(stranger.id, "MEMBER");
     expect(await readersOfTheMonth()).toHaveLength(0);
 
-    await db.consentRecord.updateMany({
+    await db.consentRecord.deleteMany({
       where: { memberUserId: onBoard.id, type: "READERS_BOARD" },
-      data: { status: "GRANTED", withdrawnAt: null },
     });
   });
 
@@ -182,25 +180,21 @@ describe("whose photograph another child may read", () => {
     expect(media.mimeType).toBe("image/png");
   });
 
-  it("refuses the photo of a child who is not on the board", async () => {
+  it("refuses the photo of a child whose family opted out", async () => {
     await actingAs(stranger.id, "MEMBER");
 
     // Aarav reads the most in the library and his face is still nobody's to see.
-    await expect(getAuthorizedMedia(noConsentPhoto)).rejects.toThrow();
+    await expect(getAuthorizedMedia(optedOutPhoto)).rejects.toThrow();
   });
 
-  it("stops serving the photo the moment consent is withdrawn", async () => {
-    await db.consentRecord.updateMany({
-      where: { memberUserId: onBoard.id, type: "READERS_BOARD" },
-      data: { status: "WITHDRAWN", withdrawnAt: new Date() },
-    });
+  it("stops serving the photo the moment their family opts out", async () => {
+    await optOutOfBoard(onBoard.id);
 
     await actingAs(stranger.id, "MEMBER");
     await expect(getAuthorizedMedia(onBoardPhoto)).rejects.toThrow();
 
-    await db.consentRecord.updateMany({
+    await db.consentRecord.deleteMany({
       where: { memberUserId: onBoard.id, type: "READERS_BOARD" },
-      data: { status: "GRANTED", withdrawnAt: null },
     });
   });
 
@@ -210,17 +204,17 @@ describe("whose photograph another child may read", () => {
     await expect(getAuthorizedMedia(onBoardPhoto)).rejects.toThrow();
   });
 
-  it("still lets a child see their own photo when they are on no board", async () => {
-    await actingAs(noConsent.id, "MEMBER");
+  it("still lets a child see their own photo when they are off the board", async () => {
+    await actingAs(optedOut.id, "MEMBER");
 
-    const media = await getAuthorizedMedia(noConsentPhoto);
+    const media = await getAuthorizedMedia(optedOutPhoto);
     expect(media.mimeType).toBe("image/png");
   });
 
   it("still lets the desk see a photo, board or no board", async () => {
     await actingAs(librarian.id);
 
-    await expect(getAuthorizedMedia(noConsentPhoto)).resolves.toBeDefined();
+    await expect(getAuthorizedMedia(optedOutPhoto)).resolves.toBeDefined();
     await expect(getAuthorizedMedia(onBoardPhoto)).resolves.toBeDefined();
   });
 });
@@ -228,7 +222,7 @@ describe("whose photograph another child may read", () => {
 describe("the answer the board itself gives", () => {
   it("agrees with what the card shows", async () => {
     expect(await memberIsOnReadersBoard(fixture.libraryId, onBoard.id)).toBe(true);
-    expect(await memberIsOnReadersBoard(fixture.libraryId, noConsent.id)).toBe(false);
+    expect(await memberIsOnReadersBoard(fixture.libraryId, optedOut.id)).toBe(false);
     expect(await memberIsOnReadersBoard(fixture.libraryId, stranger.id)).toBe(false);
   });
 
