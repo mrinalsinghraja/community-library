@@ -21,6 +21,12 @@ export const REPORT_KEYS = [
   "renewal-requests",
   "registrations",
   "audit",
+  // Period reports. Unlike the eight above, these are not "export what this
+  // screen is showing" — they are asked a question about a stretch of time and
+  // answered by counting. They live together on /desk/reports.
+  "circulation",
+  "reader-activity",
+  "book-activity",
 ] as const;
 
 export type ReportKey = (typeof REPORT_KEYS)[number];
@@ -68,6 +74,9 @@ export const REPORT_LABELS: Record<ReportKey, string> = {
   "renewal-requests": "Asks to keep",
   registrations: "New members",
   audit: "Audit log",
+  circulation: "Books borrowed",
+  "reader-activity": "How much each reader is reading",
+  "book-activity": "How much each book is read",
 };
 
 /** The row noun, for "3 books selected" / "3 readers selected". */
@@ -80,6 +89,9 @@ export const REPORT_ROW_NOUN: Record<ReportKey, { one: string; many: string }> =
   "renewal-requests": { one: "ask", many: "asks" },
   registrations: { one: "registration", many: "registrations" },
   audit: { one: "entry", many: "entries" },
+  circulation: { one: "loan", many: "loans" },
+  "reader-activity": { one: "reader", many: "readers" },
+  "book-activity": { one: "book", many: "books" },
 };
 
 export function rowNoun(key: ReportKey, count: number): string {
@@ -119,3 +131,35 @@ export function reportFilename(
   const parts = [slug(libraryName), slug(REPORT_LABELS[key]), day].filter(Boolean);
   return `${parts.join("_")}.${FORMAT_EXTENSION[format]}`;
 }
+
+/**
+ * The reports that are asked about a stretch of time rather than exported from
+ * a list somebody is already looking at.
+ *
+ * They differ from the other eight in three ways that matter to the code: they
+ * take `from`/`to` rather than a screen's filter, they have no per-row tick box
+ * because nobody picks eleven readers out of a summary, and they all live on one
+ * screen. The wiring test reads this list to know which rule to hold each report
+ * to.
+ */
+export const PERIOD_REPORT_KEYS = [
+  "circulation",
+  "reader-activity",
+  "book-activity",
+] as const satisfies readonly ReportKey[];
+
+export type PeriodReportKey = (typeof PERIOD_REPORT_KEYS)[number];
+
+export function isPeriodReportKey(value: string): value is PeriodReportKey {
+  return (PERIOD_REPORT_KEYS as readonly string[]).includes(value);
+}
+
+/** One line under each report's heading, saying what question it answers. */
+export const PERIOD_REPORT_BLURBS: Record<PeriodReportKey, string> = {
+  circulation:
+    "Every book borrowed in this period — who took it, when it was due, and whether it is back.",
+  "reader-activity":
+    "How many books each reader borrowed in this period, and what they still have out.",
+  "book-activity":
+    "How often each book went out in this period, and how long it tends to stay away.",
+};

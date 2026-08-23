@@ -2,18 +2,25 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { DORMANT_PERMISSIONS, PERMISSIONS, permissionsForRole } from "@/lib/permissions";
-import { REPORT_KEYS } from "@/lib/reports";
+import { PERIOD_REPORT_KEYS, REPORT_KEYS } from "@/lib/reports";
 
 /**
- * That every desk listing actually offers the export, and offers it to the two
- * roles the library runs on.
+ * That every report is actually reachable, and offered to the two roles the
+ * library runs on.
  *
  * Source-level assertions, because what is being checked is wiring: that a
- * screen was not left out, that the toolbar is gated on the permission rather
+ * screen was not left out, that the control is gated on the permission rather
  * than on a role name, and that nobody re-implemented authorization inside the
- * report registry instead of calling the service that already owns the screen.
+ * report registry instead of calling the service that already owns the data.
  * A rendering test would prove a component renders; it would not notice the
  * seventh screen quietly missing.
+ *
+ * There are two kinds of report and each has its own rule. A **listing** report
+ * is exported from a screen somebody is already looking at, so it must carry the
+ * tick-box toolbar. A **period** report is asked about a stretch of time and has
+ * nothing to tick, so it lives on `/desk/reports` instead. Between them they
+ * must account for every key in the catalogue — that is the assertion that
+ * notices a report added to the catalogue and wired to nothing.
  */
 
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
@@ -30,8 +37,16 @@ const SCREENS: Array<{ path: string; report: string }> = [
 ];
 
 describe("every listing offers an export", () => {
-  it("covers every report the catalogue declares", () => {
-    expect(SCREENS.map((screen) => screen.report).sort()).toEqual([...REPORT_KEYS].sort());
+  it("accounts for every report the catalogue declares", () => {
+    const wired = [...SCREENS.map((screen) => screen.report), ...PERIOD_REPORT_KEYS];
+
+    expect(wired.sort()).toEqual([...REPORT_KEYS].sort());
+  });
+
+  it("keeps the two kinds apart, so neither rule is applied to the wrong report", () => {
+    for (const screen of SCREENS) {
+      expect(PERIOD_REPORT_KEYS).not.toContain(screen.report);
+    }
   });
 
   it.each(SCREENS)("$report is wired into $path", ({ path, report }) => {
@@ -112,5 +127,75 @@ describe("the download route", () => {
 
   it("is excluded from the page policy the proxy would otherwise impose", () => {
     expect(read("src/proxy.ts")).toContain("api/reports");
+  });
+});
+
+/**
+ * The period reports.
+ *
+ * They are held to a different rule than the listings — one screen, one date
+ * range, no tick boxes — but to the same two guarantees: the control is gated on
+ * the permission rather than a role name, and the dates are resolved in the
+ * library's own timezone rather than in UTC.
+ */
+describe("the period reports", () => {
+  const page = read("src/app/desk/reports/page.tsx");
+  const registry = read("src/server/reports/registry.ts");
+  const nav = read("src/lib/desk-nav.ts");
+
+  it("all live on one screen", () => {
+    for (const key of PERIOD_REPORT_KEYS) {
+      expect(page).toContain("PERIOD_REPORT_KEYS");
+    }
+    expect(page).toContain("@/app/desk/reports/period-download");
+  });
+
+  it("gates the screen on the permission rather than a role name", () => {
+    expect(page).toContain('requirePermissionForPage("report.view"');
+    expect(page).not.toContain("SUPER_ADMIN");
+    expect(page).not.toContain("LIBRARIAN");
+  });
+
+  it("is reachable from the desk by anybody holding the permission", () => {
+    expect(nav).toContain('href: "/desk/reports"');
+    expect(nav).toContain('permission: "report.view"');
+  });
+
+  it("resolves the period in the library's timezone, not UTC", () => {
+    for (const source of [page, registry]) {
+      expect(source).toContain("dateOnlyInTimezone");
+      expect(source).toContain("settings.timezone");
+    }
+    expect(registry).not.toMatch(/new Date\(filter\.(from|to)/);
+  });
+
+  it("does not rank readers by how much they read", () => {
+    const service = read("src/server/services/circulation-reports-service.ts");
+
+    // The reader query orders by name. Ordering it by a count would turn a
+    // children's library into a league table, which is the one thing this
+    // report must never become.
+    const readerQuery = service.slice(
+      service.indexOf("listReaderActivity"),
+      service.indexOf("listBookActivity"),
+    );
+    expect(readerQuery).toContain("ORDER BY lower(u.display_name) ASC");
+    expect(readerQuery).not.toMatch(/ORDER BY[^;]*borrowed DESC/);
+    expect(readerQuery).not.toMatch(/ORDER BY[^;]*count\(\*\) DESC/);
+  });
+
+  it("reads nothing without the desk permissions, and names nobody without member.view", () => {
+    const service = read("src/server/services/circulation-reports-service.ts");
+
+    expect(service).toContain("requireAnyPermission(CIRCULATION_DESK)");
+    expect(service).toContain('requirePermission("member.view")');
+  });
+
+  it("never writes, because a report is a question", () => {
+    const service = read("src/server/services/circulation-reports-service.ts");
+
+    for (const forbidden of ["$executeRaw", "prisma.loan.update", "prisma.loan.create", "recordAudit"]) {
+      expect(service).not.toContain(forbidden);
+    }
   });
 });

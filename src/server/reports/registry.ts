@@ -11,7 +11,9 @@ import {
 import { isLoanFilter } from "@/lib/circulation";
 import type { ReportKey } from "@/lib/reports";
 import { REPORT_LABELS } from "@/lib/reports";
+import { dateOnlyInTimezone, endOfDayInTimezone } from "@/lib/dates";
 import type { Actor } from "@/server/authz";
+import { getCurrentLibrary } from "@/server/lib/settings";
 import type { ReportColumn } from "@/server/reports/table";
 import { listAuditEvents } from "@/server/services/audit-service";
 import { listMembers } from "@/server/services/account-service";
@@ -21,6 +23,12 @@ import {
   listPendingBorrowRequests,
   listPendingRenewalRequests,
 } from "@/server/services/circulation-service";
+import {
+  listBookActivity,
+  listCirculation,
+  listReaderActivity,
+  type PeriodQuery,
+} from "@/server/services/circulation-reports-service";
 import { listRegistrations } from "@/server/services/registration-service";
 import { listStaff } from "@/server/services/staff-service";
 
@@ -286,7 +294,7 @@ async function loadLoans(filter: ReportFilter) {
 
   const columns: ReportColumn<Row>[] = [
     { header: "Reader", value: (row) => row.readerName, weight: 1.6 },
-    { header: "Card number", value: (row) => row.memberCode },
+    { header: "Card", value: (row) => row.memberCode },
     { header: "Book ID", value: (row) => row.copyCode },
     { header: "Title", value: (row) => row.title, weight: 2.2 },
     { header: "Author", value: (row) => row.authors.join(", "), weight: 1.4 },
@@ -307,7 +315,7 @@ async function loadBorrowRequests() {
   const columns: ReportColumn<Row>[] = [
     { header: "Asked", value: (row) => row.requestedAt },
     { header: "Reader", value: (row) => row.readerName, weight: 1.6 },
-    { header: "Card number", value: (row) => row.memberCode },
+    { header: "Card", value: (row) => row.memberCode },
     { header: "Book ID", value: (row) => row.copyCode },
     { header: "Title", value: (row) => row.title, weight: 2.2 },
     {
@@ -327,7 +335,7 @@ async function loadRenewalRequests() {
   const columns: ReportColumn<Row>[] = [
     { header: "Asked", value: (row) => row.requestedAt },
     { header: "Reader", value: (row) => row.readerName, weight: 1.6 },
-    { header: "Card number", value: (row) => row.memberCode },
+    { header: "Card", value: (row) => row.memberCode },
     { header: "Book ID", value: (row) => row.copyCode },
     { header: "Title", value: (row) => row.title, weight: 2.2 },
     { header: "Due now", value: (row) => row.dueAt, dateOnly: true },
@@ -418,6 +426,141 @@ async function loadAudit(filter: ReportFilter) {
   return { rows: page.entries, columns, rowId: (row: Row) => row.id };
 }
 
+// ---------------------------------------------------------------------------
+// The period reports
+// ---------------------------------------------------------------------------
+
+/**
+ * Turns the two dates the screen carries into the window the services want.
+ *
+ * The filter arrives from the browser as strings and is resolved here against
+ * the library's own timezone, exactly as the screen resolves it — a request to
+ * the export route never goes through the screen, so the conversion has to
+ * exist on both sides. An unparseable date is dropped rather than passed on,
+ * which widens the window rather than narrowing it to nothing.
+ */
+async function periodFrom(filter: ReportFilter): Promise<PeriodQuery> {
+  const { settings } = await getCurrentLibrary();
+
+  const fromDay = filter.from ? dateOnlyInTimezone(filter.from, settings.timezone) : null;
+  const toDay = filter.to ? dateOnlyInTimezone(filter.to, settings.timezone) : null;
+
+  return {
+    // `dateOnlyInTimezone` already lands on the first instant of the day.
+    from: fromDay ?? undefined,
+    to: toDay ? endOfDayInTimezone(toDay, settings.timezone) : undefined,
+  };
+}
+
+const LOAN_PERIOD_STATUS_LABELS: Record<string, string> = {
+  ACTIVE: "Still out",
+  RETURNED: "Back",
+  CANCELLED: "Cancelled",
+};
+
+async function loadCirculation(filter: ReportFilter) {
+  const rows = await listCirculation(await periodFrom(filter));
+  type Row = (typeof rows)[number];
+
+  const columns: ReportColumn<Row>[] = [
+    { header: "Issued", value: (row) => row.issuedAt, dateOnly: true },
+    { header: "Reader", value: (row) => row.readerName, weight: 1.6 },
+    { header: "Card", value: (row) => row.memberCode },
+    { header: "Book ID", value: (row) => row.copyCode },
+    /*
+     * No author column. Eleven columns is what fits an A4 page before headers
+     * start truncating to "TIMES KEPT L…", and of the candidates the author is
+     * the one nobody needs here: the book ID and the title each identify the
+     * book on their own. The books report carries authors; this one is about
+     * where books went.
+     */
+    { header: "Title", value: (row) => row.title, weight: 2.4 },
+    { header: "Due", value: (row) => row.dueAt, dateOnly: true },
+    { header: "Returned", value: (row) => row.returnedAt, dateOnly: true },
+    { header: "Days out", value: (row) => row.daysOut },
+    { header: "Kept longer", value: (row) => row.renewalCount },
+    /*
+     * Status carries lateness for a book that is still out, and "Days late"
+     * measures it for every late loan whether it is back or not. Thirteen
+     * columns did not fit an A4 page and two of them said the same thing.
+     */
+    {
+      header: "Status",
+      value: (row) =>
+        row.overdueNow ? "Late" : statusLabel(LOAN_PERIOD_STATUS_LABELS, row.status),
+      weight: 1.3,
+    },
+    { header: "Late by", value: (row) => row.daysLate ?? "" },
+  ];
+
+  return { rows, columns, rowId: (row: Row) => row.loanId };
+}
+
+async function loadReaderActivity(filter: ReportFilter) {
+  const rows = await listReaderActivity(await periodFrom(filter));
+  type Row = (typeof rows)[number];
+
+  const columns: ReportColumn<Row>[] = [
+    { header: "Reader", value: (row) => row.readerName, weight: 1.5 },
+    /*
+     * Short headings, on purpose.
+     *
+     * Ten columns of one-character counts are sized by their headings, not
+     * their data, and "Books borrowed" / "Times kept longer" / "Average days
+     * kept" together want more than an A4 page is wide — at which point the
+     * writer has no choice but to shorten all of them and the sheet becomes a
+     * row of mysteries. These say the same thing in fewer letters.
+     */
+    { header: "Card", value: (row) => row.memberCode },
+    { header: "Flat", value: (row) => row.apartment },
+    { header: "Borrowed", value: (row) => row.borrowed },
+    /*
+     * Different titles, so a child who renewed one book six times is not
+     * reported as having read six books.
+     */
+    { header: "Different books", value: (row) => row.distinctTitles },
+    /*
+     * No "back" column. It is exactly "borrowed" minus "still out", and every
+     * numeric column here is one or two characters of data under a long
+     * heading — so the headings are what set the width, and the eleventh one
+     * squeezed "Back" down to "BA…". A derivable column is the right one to
+     * lose.
+     */
+    { header: "Still out", value: (row) => row.stillOut },
+    { header: "Late now", value: (row) => row.overdueNow },
+    { header: "Kept longer", value: (row) => row.renewals },
+    { header: "Days kept", value: (row) => row.averageDaysOut ?? "" },
+    /*
+     * Last borrowed, not first. Twelve columns did not fit an A4 page, and of
+     * the two the last one is the question somebody actually asks — "has this
+     * child been in lately" — where the first is only interesting if you
+     * already know the answer.
+     */
+    { header: "Last borrowed", value: (row) => row.lastBorrowedAt, dateOnly: true },
+  ];
+
+  return { rows, columns, rowId: (row: Row) => row.memberUserId };
+}
+
+async function loadBookActivity(filter: ReportFilter) {
+  const rows = await listBookActivity(await periodFrom(filter));
+  type Row = (typeof rows)[number];
+
+  const columns: ReportColumn<Row>[] = [
+    { header: "Title", value: (row) => row.title, weight: 2.4 },
+    { header: "Author", value: (row) => row.authors.join(", "), weight: 1.6 },
+    { header: "Shelf", value: (row) => row.categoryName },
+    { header: "Copies", value: (row) => row.copies },
+    { header: "Times borrowed", value: (row) => row.timesBorrowed },
+    { header: "Readers", value: (row) => row.readers },
+    { header: "Kept longer", value: (row) => row.renewals },
+    { header: "Days kept", value: (row) => row.averageDaysOut ?? "" },
+    { header: "Last borrowed", value: (row) => row.lastBorrowedAt, dateOnly: true },
+  ];
+
+  return { rows, columns, rowId: (row: Row) => row.titleId };
+}
+
 /**
  * Loads one report.
  *
@@ -450,6 +593,12 @@ export async function loadReport(
         return loadRegistrations(filter);
       case "audit":
         return loadAudit(filter);
+      case "circulation":
+        return loadCirculation(filter);
+      case "reader-activity":
+        return loadReaderActivity(filter);
+      case "book-activity":
+        return loadBookActivity(filter);
     }
   })();
 

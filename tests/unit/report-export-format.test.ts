@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { inflateRawSync } from "node:zlib";
 
 import {
@@ -11,7 +11,7 @@ import {
   reportFilename,
   rowNoun,
 } from "@/lib/reports";
-import { buildPdf } from "@/server/reports/pdf";
+import { buildPdf, __columnWidthsForTest } from "@/server/reports/pdf";
 import type { ReportTable } from "@/server/reports/table";
 import { buildXlsx } from "@/server/reports/xlsx";
 
@@ -266,5 +266,89 @@ describe("naming and vocabulary", () => {
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
     expect(FORMAT_MIME.pdf).toBe("application/pdf");
+  });
+});
+
+/**
+ * Column widths.
+ *
+ * The rule this pins: a heading is never shortened while there is room on the
+ * page for it. Headings are drawn uppercase and were measured mixed-case, so a
+ * column sized to "Days out" had to draw the wider "DAYS OUT" and ellipsised it
+ * — which on a report with both "Days out" and "Days late" produced two columns
+ * that each read "DAYS…". A truncated title still names a recognisable book; a
+ * truncated heading turns a column of numbers into a guess.
+ */
+describe("the PDF's column widths", () => {
+  interface Narrow {
+    a: number;
+    b: number;
+    c: number;
+    d: number;
+    e: number;
+    f: string;
+  }
+
+  /** Long headings over one-character data — the case that used to truncate. */
+  function narrowTable(): ReportTable<Narrow> {
+    return {
+      title: "Counts",
+      libraryName: "Test Library",
+      scopeLabel: "All 1 rows",
+      generatedAt: new Date("2026-03-04T09:30:00.000Z"),
+      generatedBy: "Test Librarian",
+      timezone: "UTC",
+      columns: [
+        { header: "Days out", value: (row) => row.a },
+        { header: "Days late", value: (row) => row.b },
+        { header: "Different books", value: (row) => row.c },
+        { header: "Times kept longer", value: (row) => row.d },
+        { header: "Still out", value: (row) => row.e },
+        { header: "Reader", value: (row) => row.f, weight: 1.5 },
+      ],
+      rows: [{ a: 1, b: 2, c: 3, d: 4, e: 5, f: "Aarav Krishnamurthy" }],
+    };
+  }
+
+  it("gives every column room for its own heading as it is drawn", async () => {
+    const table = narrowTable();
+    const pdf = await PDFDocument.create();
+    const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+    const widths = __columnWidthsForTest(table.columns, table.rows, bold, "UTC", (value) => value);
+
+    table.columns.forEach((column, index) => {
+      const drawn = bold.widthOfTextAtSize(column.header.toUpperCase(), 7.5);
+      // The width the header is fitted into, once the cell padding is removed.
+      expect(widths[index] - 10).toBeGreaterThanOrEqual(drawn);
+    });
+  });
+
+  it("uses the whole page and no more", async () => {
+    const table = narrowTable();
+    const pdf = await PDFDocument.create();
+    const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+    const widths = __columnWidthsForTest(table.columns, table.rows, bold, "UTC", (value) => value);
+    const total = widths.reduce((sum, width) => sum + width, 0);
+
+    expect(total).toBeCloseTo(842 - 36 * 2, 1);
+  });
+
+  it("still renders a table whose headings alone overflow the page", async () => {
+    // Twenty long headings cannot all be shown. The writer must scale rather
+    // than throw, and say so by shortening everything together.
+    const columns = Array.from({ length: 20 }, (_, index) => ({
+      header: `A rather long heading number ${index}`,
+      value: () => index,
+    }));
+
+    const { bytes } = await buildPdf({
+      ...narrowTable(),
+      columns,
+      rows: [{ a: 1, b: 1, c: 1, d: 1, e: 1, f: "x" }],
+    } as unknown as ReportTable<Narrow>);
+
+    expect(bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
   });
 });

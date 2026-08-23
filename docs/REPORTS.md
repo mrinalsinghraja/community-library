@@ -18,6 +18,31 @@ Design reasoning is in **ADR-045**.
 | New members | `/desk/registrations` | Librarian, Super Admin |
 | Audit log | `/admin/audit` | Super Admin |
 
+Three more are asked about a **stretch of time** rather than exported from a
+list, and they live together on `/desk/reports`:
+
+| Report | What it answers | Who can export it |
+|---|---|---|
+| Books borrowed | Every loan in the period — who, what, when, and whether it is back | Librarian, Super Admin |
+| How much each reader is reading | Books borrowed per reader, and what they still have out | Librarian, Super Admin |
+| How much each book is read | How often each title went out, and how long it stays away | Librarian, Super Admin |
+
+The period is chosen once at the top of the screen and every report follows it.
+Dates are days in the library's own timezone, both ends included, and a loan
+belongs to the period its **issue date** falls in.
+
+Two figures on that screen describe **today** rather than the period — "still
+out" and "late". A book borrowed in August and still missing in December is
+still out today; it was not "still out in August". The screen says so, and the
+columns name their tense.
+
+**The reader report is ordered by name, never by how much anybody read.**
+Sorting children by books finished turns a library into a scoreboard, and a
+child who reads slowly does not belong at the bottom of a list that gets
+forwarded. The counts are all there for whoever needs them. Books *are* ranked,
+most borrowed first — "which titles need another copy" is a question about
+stock, and a book is not a child.
+
 Two formats: **Excel** (`.xlsx`) and **PDF**.
 
 Shelf labels are a separate thing and live in **[LABELS.md](LABELS.md)**: a

@@ -1983,3 +1983,70 @@ on it; it does not record the codes or the titles, because a log that did would
 be a second copy of the catalogue. Counting is not logged at all: a screen that
 wrote an audit entry every time somebody adjusted a date would drown the log it
 was trying to keep useful.
+
+## ADR-053 — Reports about a period, and the one ordering a children's library must not have
+
+The eight exports from ADR-045 all answer the same shape of question: give me
+what this screen is showing. Three new ones answer a different shape — what did
+the library do between these two dates — and they are different enough in the
+code to be worth naming.
+
+They take `from`/`to` rather than a screen's filter. They have no per-row tick
+box, because nobody picks eleven readers out of a summary. And they live
+together on `/desk/reports`, where the period is chosen once and every report on
+the page honours it. `PERIOD_REPORT_KEYS` marks them, and the wiring test holds
+the two kinds to their two different rules so that neither can be added and
+quietly wired to nothing.
+
+**Books are ranked. Children are not.** This is the decision in this ADR that
+matters, and it is one word of SQL wide.
+
+"How much is each reader reading" is a question a librarian genuinely needs
+answered — who has four books out, who has not been in since March, who is
+sitting on something overdue. So the report exists and carries every count.
+It is ordered `lower(display_name)`. Ordering it by books borrowed would turn a
+children's library into a league table, and a spreadsheet is a thing that gets
+forwarded: a child who reads slowly should not arrive at somebody's inbox at the
+bottom of a ranked list. The counts are all there for anyone who needs them; the
+*order* is not an opinion about who is winning.
+
+The book report is sorted most-borrowed-first, deliberately. "Which titles need
+another copy" is a question about stock and its answer is a list in order. A
+book is not a child. Two functions rather than one parameterised by a sort key,
+so the difference is structural rather than a default somebody can pass past.
+
+**A period means "issued in it".** A loan belongs to the window its `issued_at`
+falls in, and its return state is reported as it stands today. That is what a
+person means by "how many books went out in August" and it is the only reading
+that does not need a paragraph. The consequence is that some figures describe
+*now* rather than the period — a book borrowed in August and still missing in
+December is still out today, it was not "still out in August" — so every such
+column names its tense and the screen says so under the totals.
+
+**Authorization is layered, not restated.** `report.view` for the page and the
+export; the circulation desk permissions to read any of it; `member.view` on top
+for the reader report specifically, because that is the one that puts a child's
+name in a file. A role that could somehow reach the screen without `member.view`
+still cannot read a name off it. The service is separate from
+`circulation-service.ts` and holds no write: a reporting query must never be one
+refactor away from moving a book.
+
+**A defect the reports surfaced.** Building these turned up a real bug in the
+shared PDF writer, present since ADR-045 and affecting every export. Column
+widths were measured from the mixed-case header while `startPage` draws it
+uppercased — and uppercase Helvetica runs about a sixth wider — so columns were
+sized too narrow for their own headings. Worse, the fill algorithm had no notion
+of a heading at all: it shared the page out like water, so a column of
+one-character counts under a long heading was handed a narrow share and
+ellipsised. That is how reports came to carry headings like "TIMES KEPT L…",
+and how one report ended up with two different columns that both read "DAYS…".
+
+The rule now is that **every column keeps room for its own heading**, measured
+in the case it is drawn in, and the squeeze is shared across whatever each
+column wanted above that minimum. A truncated title still names a recognisable
+book; a truncated heading turns a column of numbers into a guess. When even the
+headings alone overflow — twenty columns on A4 — everything scales down together
+rather than throwing, which is the honest signal that a report has been given
+more columns than the paper holds. `__columnWidthsForTest` exists because widths
+cannot be read back out of a compressed content stream, and asserting that a
+rendered PDF "looks right" is what let those headings survive as long as they did.

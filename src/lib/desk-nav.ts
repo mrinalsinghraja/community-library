@@ -41,6 +41,9 @@ export const DESK_DESTINATIONS: readonly DeskDestination[] = [
   // only appear for somebody who can actually manage the collection.
   { href: "/admin/books", label: "Books", permission: "book.edit" },
   { href: "/admin/staff", label: "Staff", permission: "user.manage_staff" },
+  // What the library did over a period, as opposed to what it is doing now.
+  // `report.view` is held by Librarian and Super Admin both.
+  { href: "/desk/reports", label: "Reports", permission: "report.view" },
   // Administration. Three links, not fifteen: how the library works, what it
   // looks like, and what has been done to it.
   { href: "/admin/settings", label: "Settings", permission: "settings.view" },

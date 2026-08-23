@@ -27,6 +27,8 @@ const HEADER_SIZE = 7.5;
 const BODY_SIZE = 8.5;
 const ROW_PADDING = 5;
 const HEADER_BAND_HEIGHT = 20;
+/** Breathing room so a heading sized to its own width is not ellipsised. */
+const HEADER_FIT_MARGIN = 2;
 
 const INK = rgb(0.11, 0.13, 0.12);
 const INK_SOFT = rgb(0.42, 0.45, 0.43);
@@ -80,6 +82,14 @@ function renderCell<Row>(column: ReportColumn<Row>, row: Row, timezone: string):
  * `drawText` does, so measuring first and filtering later would crash on the
  * row it was supposed to make safe.
  */
+/**
+ * Exported under a deliberately ugly name for the test that pins the heading
+ * rule. Widths are not observable from a compressed content stream, and the
+ * alternative — asserting that a rendered PDF "looks right" — is what let two
+ * columns both read "DAYS…" for as long as they did.
+ */
+export const __columnWidthsForTest = columnWidths;
+
 function columnWidths<Row>(
   columns: ReportColumn<Row>[],
   rows: Row[],
@@ -87,58 +97,81 @@ function columnWidths<Row>(
   timezone: string,
   safe: (value: string) => string,
 ): number[] {
-  const natural = columns.map((column) => {
-    let widest = font.widthOfTextAtSize(safe(column.header), HEADER_SIZE);
+  /*
+   * Two numbers per column.
+   *
+   * `minimum` is what the heading needs to be readable — measured in the case
+   * it is DRAWN in, because `startPage` uppercases it and uppercase Helvetica
+   * runs about a sixth wider than mixed case.
+   *
+   * `natural` is what the column would like: the widest thing in it, header or
+   * cell, scaled by the author's weight.
+   */
+  const minimum = columns.map(
+    (column) =>
+      font.widthOfTextAtSize(safe(column.header.toUpperCase()), HEADER_SIZE) +
+      ROW_PADDING * 2 +
+      // A hair of slack. Sized to exactly the heading, `fit` compares a width
+      // against itself and a float away from equal is enough to ellipsise a
+      // heading that does fit.
+      HEADER_FIT_MARGIN,
+  );
+
+  const natural = columns.map((column, index) => {
+    let widest = 0;
     for (const row of rows.slice(0, 400)) {
       const width = font.widthOfTextAtSize(safe(renderCell(column, row, timezone)), BODY_SIZE);
       if (width > widest) widest = width;
     }
-    return (widest + ROW_PADDING * 2) * (column.weight ?? 1);
+    return Math.max(minimum[index], (widest + ROW_PADDING * 2) * (column.weight ?? 1));
   });
 
   const total = natural.reduce((sum, width) => sum + width, 0);
 
   if (total <= CONTENT_WIDTH) {
-    // Everything fits: give the slack to the widest column rather than
-    // stretching a column of dates across half the page.
+    /*
+     * Everything fits. The leftover is shared out in proportion to what each
+     * column already holds, so the wordy columns get most of it and a column of
+     * one-digit counts is not stretched across an inch of paper — but neither
+     * does one column swallow the lot, which is what dumping the whole slack on
+     * the single widest one did.
+     */
     const slack = CONTENT_WIDTH - total;
-    const widths = [...natural];
-    widths[natural.indexOf(Math.max(...natural))] += slack;
-    return widths;
+    return natural.map((width) => width + (width / total) * slack);
   }
 
-  const widths = new Array<number>(columns.length).fill(0);
-  const settled = new Array<boolean>(columns.length).fill(false);
-  let remaining = CONTENT_WIDTH;
-  let unsettled = columns.length;
+  /*
+   * It does not fit, so something must give — and it must not be the headings.
+   *
+   * The rule is that every column keeps enough room for its own heading, and
+   * the squeeze is shared out across whatever each column wanted *above* that
+   * minimum, in proportion. A truncated title still names a recognisable book;
+   * a truncated heading turns a column of numbers into a mystery, and two
+   * different columns reading "DAYS…" is worse than either.
+   *
+   * Earlier this filled each column like water to an equal share, which had no
+   * notion of a heading at all: a column of one-character counts under a long
+   * heading was handed a narrow share and shortened to "BA…".
+   */
+  const floorTotal = minimum.reduce((sum, width) => sum + width, 0);
 
-  // Each pass settles at least one column, so this cannot run away.
-  for (let pass = 0; pass < columns.length && unsettled > 0; pass += 1) {
-    const share = remaining / unsettled;
-    let settledThisPass = false;
-
-    for (let index = 0; index < columns.length; index += 1) {
-      if (settled[index] || natural[index] > share) continue;
-      widths[index] = natural[index];
-      settled[index] = true;
-      remaining -= natural[index];
-      unsettled -= 1;
-      settledThisPass = true;
-    }
-
-    if (!settledThisPass) break;
+  if (floorTotal >= CONTENT_WIDTH) {
+    /*
+     * Even the headings alone overflow the page. Nothing can be shown in full,
+     * so every column is scaled down together — an honest last resort, and the
+     * signal that a report has been given more columns than A4 can hold.
+     */
+    const scale = CONTENT_WIDTH / floorTotal;
+    return minimum.map((width) => width * scale);
   }
 
-  // Whatever is still unsettled genuinely wants more than its share; those are
-  // the columns that get truncated, and they split what is left between them.
-  if (unsettled > 0) {
-    const share = remaining / unsettled;
-    for (let index = 0; index < columns.length; index += 1) {
-      if (!settled[index]) widths[index] = share;
-    }
-  }
+  const spare = CONTENT_WIDTH - floorTotal;
+  const appetite = natural.map((width, index) => width - minimum[index]);
+  const totalAppetite = appetite.reduce((sum, want) => sum + want, 0);
 
-  return widths;
+  if (totalAppetite <= 0) return [...minimum];
+
+  return minimum.map((width, index) => width + (appetite[index] / totalAppetite) * spare);
 }
 
 interface Chrome {
