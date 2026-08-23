@@ -80,34 +80,73 @@ describe("appearing is consented, and separately from storage", () => {
     expect(REQUIRED_CONSENT_TYPES).not.toContain("READERS_BOARD");
   });
 
-  it("tells a guardian who will see it, in plain words", () => {
-    const text = CONSENT_TEXTS.READERS_BOARD;
+  /*
+   * These assert the PROMISES, not the prose.
+   *
+   * Matching exact sentences makes every wording improvement look like a
+   * regression, and the thing worth protecting is not the phrasing — it is that
+   * a guardian is told who sees the picture, that it is never sold or used to
+   * advertise anything, that it never leaves the library, and that saying no
+   * costs their child nothing.
+   */
+  const promises = (text: string) => ({
+    isOptional: /optional|free to (say no|decline)/i.test(text),
+    saysWhoSeesIt: /signed in|library staff|other members|librarian/i.test(text),
+    noCommercialUse: /commercial purpose/i.test(text) && /advertis/i.test(text),
+    staysInsideTheLibrary:
+      /never (sold|shared|given)|outside (this |the )?library/i.test(text),
+    canBeWithdrawn: /withdraw|removed at any time|stop these at any time/i.test(text),
+  });
 
-    expect(text).toContain("first name");
-    expect(text).toContain("every other child");
-    expect(text).toContain("withdraw");
-    // The promise that membership does not depend on saying yes.
-    expect(text).toContain("exactly the same whether I agree to this or not");
+  it("tells a guardian who sees the board and that it stays inside the library", () => {
+    const board = promises(CONSENT_TEXTS.READERS_BOARD);
+
+    expect(board.isOptional).toBe(true);
+    expect(board.saysWhoSeesIt).toBe(true);
+    expect(board.noCommercialUse).toBe(true);
+    expect(board.staysInsideTheLibrary).toBe(true);
+    expect(board.canBeWithdrawn).toBe(true);
+  });
+
+  it("says a child loses nothing by not being on it", () => {
+    expect(CONSENT_TEXTS.READERS_BOARD).toMatch(/membership.*exactly the same|exactly the same.*either way/i);
   });
 
   it("promises no surname, flat or card number", () => {
     const text = CONSENT_TEXTS.READERS_BOARD;
 
-    expect(text).toContain("never our surname");
-    expect(text).toContain("flat number");
-    expect(text).toContain("card number");
+    expect(text).toMatch(/never our surname/i);
+    expect(text).toMatch(/flat number/i);
+    expect(text).toMatch(/card number/i);
   });
 
-  it("no longer claims a stored photo is never shown to other families", () => {
+  it("makes the same promises about a stored photograph", () => {
+    const photo = promises(CONSENT_TEXTS.CHILD_PHOTO_STORAGE);
+
+    expect(photo.isOptional).toBe(true);
+    expect(photo.noCommercialUse).toBe(true);
+    expect(photo.staysInsideTheLibrary).toBe(true);
+    expect(photo.canBeWithdrawn).toBe(true);
+  });
+
+  it("never promises a stored photo is private full stop", () => {
     /*
-     * The old wording promised the photograph "is never published" full stop.
-     * A board other families can see would have broken exactly that promise,
-     * so the sentence had to change and the version had to move with it.
+     * The original wording said the photograph "is never published", which a
+     * board of faces would have contradicted for every family that had agreed
+     * to it. The storage consent must now point at the board question instead
+     * of making a promise the board breaks.
      */
     const text = CONSENT_TEXTS.CHILD_PHOTO_STORAGE;
 
-    expect(text).toContain("unless I separately agree to the readers' board");
-    expect(text).not.toMatch(/is never published, and can be removed/);
+    expect(text).toMatch(/unless I separately agree to the readers' board/);
+    expect(text).not.toMatch(/never published/);
+  });
+
+  it("does not promise to hold a date of birth the library no longer asks for", () => {
+    // ADR-051 replaced the date with a year. A consent naming the wrong field
+    // is a consent to something that is not happening.
+    expect(CONSENT_TEXTS.CHILD_ACCOUNT_CREATION).toContain("year of birth");
+    expect(CONSENT_TEXTS.CHILD_ACCOUNT_CREATION).not.toMatch(/date of birth/i);
   });
 });
 
