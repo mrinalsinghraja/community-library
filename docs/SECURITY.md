@@ -54,7 +54,7 @@ Full detail: `CONSENT.md` and `GUARDIAN_VERIFICATION.md`.
 
 ## 2. Data minimisation
 
-Collected about a child: name, date of birth, apartment, optional photo or
+Collected about a child: name, year of birth, apartment, optional photo or
 avatar. Nothing else.
 
 Collected about a guardian: name, phone, email.

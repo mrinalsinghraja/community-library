@@ -75,19 +75,6 @@ export function daysUntilDue(dueAt: Date, timezone: string, now: Date = new Date
   return differenceInCalendarDays(new TZDate(dueAt, timezone), new TZDate(now, timezone));
 }
 
-/** Age in whole years on a given day, evaluated in the library's timezone. */
-export function ageInYears(dateOfBirth: Date, timezone: string, now: Date = new Date()): number {
-  const today = new TZDate(now, timezone);
-  const dob = new TZDate(dateOfBirth, timezone);
-
-  let age = today.getFullYear() - dob.getFullYear();
-  const monthDelta = today.getMonth() - dob.getMonth();
-  if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < dob.getDate())) {
-    age -= 1;
-  }
-  return age;
-}
-
 /**
  * Turns a date picker's `YYYY-MM-DD` into the instant that day *began* in the
  * library's timezone.

@@ -171,7 +171,7 @@ Roles are seed rows. Permissions are string keys stored in `permission`; roles m
 ```
 Parent → /join
   ├─ "Let's create your library account!"  (single friendly form)
-  ├─ child name · date of birth · apartment
+  ├─ child name · year of birth · apartment
   ├─ parent name · mobile · email
   ├─ photo upload OR pick an avatar (12 friendly SVG characters)
   ├─ consent checkbox: guardian consent for a child's account (§17.4)
@@ -289,7 +289,7 @@ PostgreSQL. `snake_case` tables, UUIDv7 primary keys (time-sortable), `timestamp
 | `permission` | key PK, description, category |
 | `role_permission` | role_id, permission_key |
 | `user_role` | user_id, role_id, granted_by, granted_at |
-| `member_profile` | user_id PK→app_user, library_id, member_code, date_of_birth, avatar_key, photo_object_key, apartment, joined_at, staff_notes |
+| `member_profile` | user_id PK→app_user, library_id, member_code, birth_year, avatar_key, photo_object_key, apartment, joined_at, staff_notes |
 | `guardian` | id, library_id, full_name, email (citext), phone, apartment, created_at |
 | `guardian_member` | guardian_id, member_user_id, relationship, is_primary, consent_version, consent_at |
 | `registration_request` | id, library_id, child_name, child_dob, apartment, guardian_name, guardian_email, guardian_phone, avatar_key, photo_object_key, status (PENDING·UNDER_REVIEW·APPROVED·REJECTED), submitted_at, reviewed_by, reviewed_at, review_note, created_member_user_id, consent_version, consent_at, ip_hash |
@@ -595,7 +595,7 @@ The daily cron at **08:30 IST** does one pass: due-soon nudges, overdue nudges o
 | Secrets | Vercel environment variables only; `.env` gitignored; `.env.example` has placeholders only; a `gitleaks` CI step blocks accidental commits |
 | Audit | Every mutation logged in the same transaction as the change; passwords, tokens and hashes never appear in metadata |
 | Dependencies | Dependabot + `npm audit` in CI |
-| Data minimisation | We collect child name, DOB, apartment, optional photo — nothing else. No analytics, no third-party scripts, no tracking pixels on any child-facing page |
+| Data minimisation | We collect child name, year of birth, apartment, optional photo — nothing else. Never a full date of birth (ADR-051). No analytics, no third-party scripts, no tracking pixels on any child-facing page |
 | Backups | **Verified 2026-08-17: Neon free-tier point-in-time restore is 6 hours only.** Too thin to rely on, so a scheduled `pg_dump` you control is REQUIRED, not optional — see `docs/OPERATIONS.md` |
 
 **Deliberately not built:** custom crypto of any kind. Tokens are `crypto.randomBytes`, hashing is argon2id, sessions are Auth.js.

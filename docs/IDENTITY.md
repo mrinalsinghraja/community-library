@@ -10,7 +10,7 @@ reach.
 | Table | Who | Signs in? |
 |---|---|---|
 | `app_user` | anyone who can hold a session | yes |
-| `member_profile` | a child's library card: code, date of birth, flat, avatar | — |
+| `member_profile` | a child's library card: code, year of birth, flat, avatar | — |
 | `guardian` | a contactable adult | not in Version 1 |
 
 They are separate on purpose:

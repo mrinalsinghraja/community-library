@@ -80,7 +80,7 @@ to a member or a registration. All three have tests.
 
 | Type | Required? | Covers |
 |---|---|---|
-| `CHILD_ACCOUNT_CREATION` | **yes** | storing the child's name, date of birth, flat, and the guardian's contact details |
+| `CHILD_ACCOUNT_CREATION` | **yes** | storing the child's name, year of birth, flat, and the guardian's contact details |
 | `GUARDIAN_EMAIL_NOTIFICATIONS` | **yes** | activation and reset links, due-date reminders, library notices |
 | `CHILD_PHOTO_STORAGE` | only if a photo is uploaded | storing the photograph privately |
 

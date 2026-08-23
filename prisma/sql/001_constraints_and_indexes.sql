@@ -106,17 +106,24 @@ ALTER TABLE donation
     CHECK (display_consent <> 'APARTMENT_ONLY' OR btrim(coalesce(donor_apartment, '')) <> '');
 
 -- ---------------------------------------------------------------------------
--- 8. Members are people with plausible birthdays and real card codes.
+-- 8. Members have a plausible year of birth and a real card code.
+--
+--    A year, not a date. ADR-051 dropped date_of_birth and child_dob outright:
+--    the library needs to know roughly how old a child is, and a full birthday
+--    is one of the few facts that identifies a person for life. The range here
+--    is a sanity bound only -- the real one comes from the library's own
+--    ageMin/ageMax and lives in the service, which is the only thing that
+--    knows it.
 -- ---------------------------------------------------------------------------
 ALTER TABLE member_profile
-  ADD CONSTRAINT member_dob_in_past
-    CHECK (date_of_birth < CURRENT_DATE),
+  ADD CONSTRAINT member_profile_birth_year_plausible
+    CHECK (birth_year BETWEEN 1900 AND 2200),
   ADD CONSTRAINT member_code_present
     CHECK (btrim(member_code) <> '');
 
 ALTER TABLE registration_request
-  ADD CONSTRAINT registration_child_dob_in_past
-    CHECK (child_dob < CURRENT_DATE);
+  ADD CONSTRAINT registration_request_birth_year_plausible
+    CHECK (child_birth_year BETWEEN 1900 AND 2200);
 
 -- ---------------------------------------------------------------------------
 -- 9. Sessions cannot be created already dead, and idle expiry can never

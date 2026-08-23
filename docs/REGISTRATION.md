@@ -42,7 +42,7 @@ sees so and can use **Send link again**.
 
 ## 2. What is collected
 
-Required: child's name, date of birth, flat, guardian's name, email, phone.
+Required: child's name, year of birth, flat, guardian's name, email, phone.
 Optional: an avatar (twelve to choose from; one is preselected).
 
 That is the entire list. No school, no address beyond the flat, no demographics,

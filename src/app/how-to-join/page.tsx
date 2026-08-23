@@ -61,7 +61,7 @@ export default async function HowToJoinPage() {
   const steps: { title: string; body: string; waiting?: boolean }[] = [
     {
       title: "Fill in the joining form",
-      body: "It asks for your child's name and date of birth, your flat number, and your name, email and phone. It takes about two minutes, and you will need to agree on your child's behalf before we can create the account.",
+      body: "It asks for your child's name and the year they were born — not their full birthday — your flat number, and your name, email and phone. It takes about two minutes, and you will need to agree on your child's behalf before we can create the account.",
     },
     ...(confirmsEmail
       ? [

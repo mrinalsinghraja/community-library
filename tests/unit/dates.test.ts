@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  ageInYears,
   calculateDueDate,
   calculateRenewedDueDate,
   daysUntilDue,
@@ -122,19 +121,6 @@ describe("friendly due date wording", () => {
   });
 });
 
-describe("age in years", () => {
-  it("counts a birthday that has already happened this year", () => {
-    expect(ageInYears(new Date("2016-04-12T00:00:00Z"), IST, ist("2026-08-17T10:00:00"))).toBe(10);
-  });
-
-  it("does not count a birthday still to come this year", () => {
-    expect(ageInYears(new Date("2016-12-25T00:00:00Z"), IST, ist("2026-08-17T10:00:00"))).toBe(9);
-  });
-
-  it("counts the birthday itself", () => {
-    expect(ageInYears(new Date("2016-08-17T00:00:00Z"), IST, ist("2026-08-17T10:00:00"))).toBe(10);
-  });
-});
 
 describe("end of day", () => {
   it("returns 23:59:59.999 local time as a UTC instant", () => {
