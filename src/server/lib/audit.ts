@@ -99,6 +99,7 @@ export const AUDIT_ACTIONS = {
   BOOK_COVER_ADDED: "book.cover.added",
   BOOK_COVER_REPLACED: "book.cover.replaced",
   BOOK_COVER_REMOVED: "book.cover.removed",
+  BOOK_LABELS_PRINTED: "book.labels.printed",
   DONATION_RECORDED: "donation.recorded",
   DONATION_UPDATED: "donation.updated",
 

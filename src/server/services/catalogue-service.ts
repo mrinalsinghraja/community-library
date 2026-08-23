@@ -267,6 +267,14 @@ export interface CatalogueQuery {
   status?: CopyStatus;
   /** Staff only. A reader never sees an archived book at all. */
   includeArchived?: boolean;
+  /**
+   * Books added to the catalogue on or after this instant, and on or before
+   * `addedTo`. Both are instants, not dates: the caller has already resolved a
+   * day the librarian typed into the library's own timezone, because "books
+   * added on Saturday" means Saturday in Bengaluru and not in UTC.
+   */
+  addedFrom?: Date;
+  addedTo?: Date;
   sort?: CatalogueSort;
   page?: number;
   pageSize?: number;
@@ -327,6 +335,11 @@ function buildWhere(libraryId: string, query: CatalogueQuery): Prisma.Sql {
       OR lower(c.copy_code) LIKE ${term}
     )`);
   }
+
+  // Inclusive at both ends. `addedTo` is the last instant of the chosen day,
+  // so a single-day range covers that day rather than nothing at all.
+  if (query.addedFrom) clauses.push(Prisma.sql`c.created_at >= ${query.addedFrom}`);
+  if (query.addedTo) clauses.push(Prisma.sql`c.created_at <= ${query.addedTo}`);
 
   if (query.categoryId) clauses.push(Prisma.sql`t.category_id = ${query.categoryId}`);
   if (query.ageGroup) clauses.push(Prisma.sql`t.age_group = ${query.ageGroup}::"AgeGroup"`);

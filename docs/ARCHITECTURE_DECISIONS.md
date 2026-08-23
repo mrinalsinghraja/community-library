@@ -1913,3 +1913,73 @@ be built from the year or not at all.
 the range and that the dropdown can never offer a year the server will reject.
 The database suites carry the year end to end: submitted on a form, checked
 again at approval, and written to the member's card.
+
+## ADR-052 — Shelf labels are a grid on plain paper, not a table and not a die-cut sheet
+
+A book arrives, it is entered, it is given a code — and then somebody has to
+write that code on the book before it can go on a shelf. That last step was
+being done by hand. This is the feature that stops it: a Super Admin picks a
+date range, usually the week just gone, and gets a PDF of stickers with the
+book number set large and the title under it.
+
+**It is not a report, and it does not go through the report writer.** Every
+export in `src/server/reports/` is a table with columns, and a label sheet is a
+grid of small cards — two lines, centred, one per copy. Bending `ReportColumn`
+into that shape would have produced a column model that describes neither
+thing well. So `printBookLabels` is its own service and `/api/labels` is its
+own route, and what they reuse is the part worth reusing: the permission rule,
+the origin check, the audit discipline, and `winAnsi`, which was lifted out of
+the table writer into `src/server/reports/winansi.ts` so both share one
+encoding table rather than two that drift.
+
+**Authorization is the same two-lock rule as the exports.** `report.view`
+decides whether somebody may take a printable thing out of the building;
+`listBooksForStaff` — the same call the books screen makes — decides whether
+they may see these books at all. Neither is restated inside the label code and
+neither is sufficient alone. A label sheet is a catalogue extract in a
+different shape, and it must never become the way somebody prints a list they
+were not allowed to open.
+
+**The sheets are for ordinary A4 and scissors, and that is a decision rather
+than a shortcut.** Pre-cut label stock was the obvious target and was rejected:
+every brand places its die cuts a millimetre or two differently, and a
+millimetre of error at the top of a page is most of a centimetre by the bottom.
+A generator that guesses at that geometry does not produce slightly imperfect
+labels — it produces a wasted sheet of stock, with no way to tell in advance
+which brand it will be wrong for. A printed grid with hairline cut guides is
+honest about what it is, and when it goes wrong it costs a sheet of paper. The
+screen says so in as many words.
+
+**Three sizes, with type chosen per size rather than scaled.** Scaling the
+type with the box is how the smallest preset ends up with a book code nobody
+can read from a crouch, which is the entire job of the label. So each preset
+names its own `codeSize` and `titleSize`, and a test asserts the code stays
+larger than the title at every size and that two lines of title still fit.
+
+**The block is centred in the label.** The first version hung it from the top,
+which looked fine on a full sheet and wrong on a cut-out sticker — a one-line
+title sat in the top third with a blank inch beneath it. A label is looked at
+on its own, so it is composed as its own small page.
+
+**A date is a day in the library's timezone.** `CatalogueQuery` gained
+`addedFrom`/`addedTo` as instants, and the route resolves the two typed dates
+against `settings.timezone` before they get there. `to` becomes the last
+instant of its day, so choosing one date twice prints that day rather than
+nothing. This is the only part that cannot be tested without PostgreSQL, and
+`tests/database/book-labels.test.ts` pins both edges of the week.
+
+**Titles Helvetica cannot draw.** The fourteen built-in PDF faces are WinAnsi,
+so a title in Kannada or Devanagari cannot be printed without embedding a font
+— roughly a megabyte on every download. It is not embedded. Instead the code,
+which is always Latin, still prints, the surviving characters of the title
+print, and the sheet footer says plainly that some characters could not be
+shown. A blank half-label is worse than a marked one, and a book with a code on
+it can still be found.
+
+**Nothing personal is on a label** — a code and a title, no donor, no reader,
+no flat. That is what makes this the one export that can be left lying on the
+desk. The audit log records that a sheet was printed and how many labels were
+on it; it does not record the codes or the titles, because a log that did would
+be a second copy of the catalogue. Counting is not logged at all: a screen that
+wrote an audit entry every time somebody adjusted a date would drown the log it
+was trying to keep useful.

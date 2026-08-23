@@ -20,6 +20,10 @@ Design reasoning is in **ADR-045**.
 
 Two formats: **Excel** (`.xlsx`) and **PDF**.
 
+Shelf labels are a separate thing and live in **[LABELS.md](LABELS.md)**: a
+grid of stickers rather than a table, its own route, its own writer, the same
+`report.view` permission.
+
 ## How it behaves
 
 A toolbar sits above each list with a **Select all** box, a format switch and

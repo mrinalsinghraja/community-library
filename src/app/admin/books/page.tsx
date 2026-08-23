@@ -126,11 +126,23 @@ export default async function AdminBooksPage({
           {result.total === 1 ? "1 book" : `${result.total} books`}
           {includeArchived ? " (including archived)" : ""}
         </p>
-        {actor.permissions.has("book.create") ? (
-          <ButtonLink href="/admin/books/new" icon={<Icon name="plus" />}>
-            Add a book
-          </ButtonLink>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          {/*
+            Labels sit next to "Add a book" because they are the second half of
+            the same job: a book arrives, it is entered, and then it needs its
+            number on the cover before it can go on a shelf.
+          */}
+          {actor.permissions.has("report.view") ? (
+            <ButtonLink href="/admin/books/labels" variant="secondary" icon={<Icon name="card" />}>
+              Print labels
+            </ButtonLink>
+          ) : null}
+          {actor.permissions.has("book.create") ? (
+            <ButtonLink href="/admin/books/new" icon={<Icon name="plus" />}>
+              Add a book
+            </ButtonLink>
+          ) : null}
+        </div>
       </div>
 
       <form

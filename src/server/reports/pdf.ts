@@ -4,6 +4,7 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf
 
 import { formatInTimezone } from "@/lib/dates";
 import type { ReportColumn, ReportTable } from "@/server/reports/table";
+import { winAnsi } from "@/server/reports/winansi";
 
 /**
  * The printable form of a report.
@@ -32,53 +33,6 @@ const INK_SOFT = rgb(0.42, 0.45, 0.43);
 const BRAND = rgb(0.122, 0.435, 0.361); // the library's primary green
 const HAIRLINE = rgb(0.85, 0.86, 0.85);
 const BAND = rgb(0.965, 0.972, 0.96);
-
-/**
- * The characters a standard PDF font can actually draw.
- *
- * The fourteen built-in faces are encoded in WinAnsi, which is Latin-1 plus a
- * short list of typographic extras. A child's name written in Assamese or
- * Devanagari is not in it, and `drawText` throws rather than guessing — so the
- * text has to be filtered before it reaches the page or one name takes the
- * whole export down.
- *
- * Filtering loses information, which is why it is reported rather than hidden:
- * when anything is dropped the page says so and names the spreadsheet, which is
- * UTF-8 and loses nothing. Silently replacing somebody's name with question
- * marks and handing over the file is the one behaviour that is not acceptable.
- */
-const WIN_ANSI_EXTRAS = new Set([
-  0x20ac, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030, 0x0160,
-  0x2039, 0x0152, 0x017d, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014,
-  0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x017e, 0x0178,
-]);
-
-function isDrawable(code: number): boolean {
-  if (code >= 0x20 && code <= 0x7e) return true;
-  if (code >= 0xa0 && code <= 0xff) return true;
-  return WIN_ANSI_EXTRAS.has(code);
-}
-
-interface Sanitised {
-  text: string;
-  lost: boolean;
-}
-
-function winAnsi(value: string): Sanitised {
-  let text = "";
-  let lost = false;
-  for (const character of value) {
-    const code = character.codePointAt(0) ?? 0;
-    if (isDrawable(code)) {
-      text += character;
-    } else if (code === 0x09 || code === 0x0a || code === 0x0d) {
-      text += " ";
-    } else {
-      lost = true;
-    }
-  }
-  return { text, lost };
-}
 
 /** Cuts a string to fit a column, with an ellipsis when it had to. */
 function fit(text: string, font: PDFFont, size: number, maxWidth: number): string {
