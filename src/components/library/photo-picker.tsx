@@ -107,8 +107,18 @@ export function PhotoPicker({
       <div className="mt-8 rounded-[var(--radius-field)] bg-surface-sunk p-5">
         <p className="text-lg font-bold text-ink">Or add a photo, if you would like to</p>
         <p className="mt-1 text-base text-ink-soft">
-          Completely optional. A photo is kept private — only your child and the librarian can ever
-          see it, it is never published, and you can ask us to remove it at any time.
+          {/*
+            This sentence is a promise made at the exact moment a parent decides
+            whether to hand over a picture of their child, so it has to match
+            what the library actually does. It used to say the photo was "never
+            published" and seen only by the child and the librarian, which the
+            readers' card contradicted the day that shipped. See ADR-055.
+          */}
+          Completely optional — an avatar works just as well. A photo stays inside the library:
+          the librarian and your child can see it, and it may appear beside your child&rsquo;s
+          first name on the readers&rsquo; card that other members see when they sign in. It never
+          leaves the library, is never used for advertising, and you can ask us to remove it — or
+          to leave your child off that card — at any time.
         </p>
 
         {/* Visually hidden rather than styled: a native file input cannot be

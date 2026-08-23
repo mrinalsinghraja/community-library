@@ -141,6 +141,43 @@ describe("appearing is disclosed, and a family may opt out", () => {
     expect(CONSENT_TEXTS.CHILD_PHOTO_STORAGE).not.toMatch(/never published/);
   });
 
+  it("makes no promise anywhere in the interface that the card contradicts", () => {
+    /*
+     * The consent wording was corrected and the photo picker was not, so for one
+     * deploy the joining form told a parent their child's picture was "never
+     * published" and seen only by the child and the librarian — on the very
+     * control where they choose whether to upload one.
+     *
+     * A promise made in UI copy binds the library exactly as much as one made in
+     * a consent record, and this file is the only place that checks either.
+     * Swept across every child-facing surface rather than the one that broke.
+     */
+    const surfaces = [
+      "src/components/library/photo-picker.tsx",
+      "src/app/join/join-form.tsx",
+      "src/app/how-to-join/page.tsx",
+      "src/components/library/readers-board.tsx",
+    ];
+
+    for (const path of surfaces) {
+      const source = read(path);
+
+      expect(source).not.toMatch(/never published/i);
+      expect(source).not.toMatch(/only your child and the librarian/i);
+      expect(source).not.toMatch(/no one else (can|will) (ever )?see/i);
+    }
+  });
+
+  it("tells a parent about the card where they choose whether to upload a photo", () => {
+    // JSX wraps prose across lines, so the copy is flattened before matching.
+    const picker = read("src/components/library/photo-picker.tsx").replace(/\s+/g, " ");
+
+    expect(picker).toMatch(/readers&rsquo; card|readers' card/);
+    expect(picker).toMatch(/other members/i);
+    expect(picker).toMatch(/never leaves the library/i);
+    expect(picker).toMatch(/leave your child off that card/i);
+  });
+
   it("does not promise to hold a date of birth the library no longer asks for", () => {
     // ADR-051 replaced the date with a year. A consent naming the wrong field
     // is a consent to something that is not happening.
