@@ -2050,3 +2050,60 @@ rather than throwing, which is the honest signal that a report has been given
 more columns than the paper holds. `__columnWidthsForTest` exists because widths
 cannot be read back out of a compressed content stream, and asserting that a
 rendered PDF "looks right" is what let those headings survive as long as they did.
+
+## ADR-054 — How long is left, in a colour and a word
+
+Every screen that shows a due date now leads with how long is left rather than
+with the date itself, set large, bold and in one of three colours: green from a
+fortnight down to four days, amber from three to one, red on the day and after.
+`src/lib/due-countdown.ts` decides the band once and the child's shelf, the
+desk's list, the renewals queue and both loan exports all read it, so they
+cannot drift about whether a book is nearly late.
+
+**Colour never carries the meaning alone, and that constraint shaped the whole
+feature.** Green and red are precisely the pair a red-green colour-blind reader
+cannot separate, and roughly one boy in twelve is — in a children's library that
+is not a rounding error, it is a child a week. So the numeral is never alone:
+"9" is always "9 days left", and `dueCountdown` returns the word as a required
+part of its result rather than as something a caller may choose to render. Strip
+every colour from the components and they still read correctly; that is the test
+the design was built to pass, and `tests/unit/due-countdown.test.ts` asserts the
+markup at the source so nobody can later delete the word and leave a bare
+coloured number.
+
+**The overdue count is a change of position and is worth naming as one.**
+`readerLoanBadge` deliberately refused to show a child a number of days —
+"Not 'LATE', not a red exclamation, not a number of days. The book is ready to
+come home; that is the whole message." The library's owner asked for the count,
+and it is now shown. The compromise kept is that the *wording* stays warm: the
+badge still says "Ready to come home", the sentence under it still says "Please
+return it when you can", and the panel says "3 days over" rather than anything
+with an adjective in it. Red marks the end of an interval, not the start of a
+punishment — there are no fines here and there never will be.
+
+**Overdue days count upward, not downward.** The numeral is what somebody reads
+across a room, and "−3 days left" is a riddle where "3 days over" is a fact. The
+sign lives in the word.
+
+**A returned book has no countdown.** `loanCountdown` returns null for anything
+that is not ACTIVE, because a finished loan has a story rather than a deadline
+and a number there would be counting against a date nobody is waiting for.
+
+**In the exports the colour becomes prose.** A spreadsheet has no red and a
+printout read down a phone line has none either, so the reports carry a single
+"Time left" column holding "9 days left", "3 days over" or "4 days late" as
+words. It began as two columns — time left and late by — which said the same
+thing on every active loan, disagreed about returned ones, and pushed the sheet
+to twelve columns.
+
+**Two defects in the shared PDF writer surfaced and were fixed.** The first was
+a heading measured in mixed case and drawn in upper case, covered in ADR-053.
+The second appeared as soon as the twelfth column arrived: the surplus width was
+shared in straight proportion to what each column wanted, so a title column
+asking for four hundred points took almost all of it and left the date columns
+ten points short — printing "19 Aug 2…", a date that has lost its year. The
+surplus is now shared by the **square root** of each column's appetite, and any
+column that reaches its natural width hands the excess back to be re-shared.
+Wordy columns still get most of the room; fixed-width neighbours keep their
+values whole. The asymmetry is deliberate: a clipped title is still a
+recognisable book, where a clipped date or book code is no longer information.

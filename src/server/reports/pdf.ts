@@ -167,11 +167,56 @@ function columnWidths<Row>(
 
   const spare = CONTENT_WIDTH - floorTotal;
   const appetite = natural.map((width, index) => width - minimum[index]);
-  const totalAppetite = appetite.reduce((sum, want) => sum + want, 0);
 
-  if (totalAppetite <= 0) return [...minimum];
+  /*
+   * The spare is shared out by the SQUARE ROOT of what each column wants.
+   *
+   * Straight proportion sounds fairer and is not. A title column asks for four
+   * hundred points and a date column for ten, so proportion hands almost the
+   * whole surplus to the title and leaves the date ten points short of "19 Aug
+   * 2026" — which then prints as "19 Aug 2…" and has lost the year. Damping the
+   * appetite still favours the wordy columns, which genuinely need the room,
+   * without letting one of them starve every fixed-width neighbour.
+   *
+   * The asymmetry is deliberate: a clipped title is still a recognisable book,
+   * where a clipped date or a clipped book code is no longer information.
+   */
+  const share = appetite.map((want) => Math.sqrt(Math.max(want, 0)));
+  const totalShare = share.reduce((sum, want) => sum + want, 0);
 
-  return minimum.map((width, index) => width + (appetite[index] / totalAppetite) * spare);
+  if (totalShare <= 0) return [...minimum];
+
+  const widths = minimum.map((width, index) => width + (share[index] / totalShare) * spare);
+
+  /*
+   * Nothing may end up wider than it asked for. A column that reached its
+   * natural width hands the excess back, and the loop re-shares it among the
+   * columns still short — so the surplus ends where it is actually wanted
+   * rather than padding a column of two-digit counts.
+   */
+  for (let pass = 0; pass < 4; pass += 1) {
+    let returned = 0;
+    const hungry: number[] = [];
+
+    widths.forEach((width, index) => {
+      if (width > natural[index]) {
+        returned += width - natural[index];
+        widths[index] = natural[index];
+      } else if (width < natural[index]) {
+        hungry.push(index);
+      }
+    });
+
+    if (returned <= 0.01 || hungry.length === 0) break;
+
+    const hungryShare = hungry.reduce((sum, index) => sum + share[index], 0);
+    if (hungryShare <= 0) break;
+    for (const index of hungry) {
+      widths[index] += (share[index] / hungryShare) * returned;
+    }
+  }
+
+  return widths;
 }
 
 interface Chrome {

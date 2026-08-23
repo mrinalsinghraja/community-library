@@ -335,6 +335,56 @@ describe("the PDF's column widths", () => {
     expect(total).toBeCloseTo(842 - 36 * 2, 1);
   });
 
+  it("does not let one wordy column starve its fixed-width neighbours", async () => {
+    /*
+     * The failure this pins: sharing the surplus in straight proportion gave a
+     * title column almost all of it and left the date columns ten points short
+     * of "19 Aug 2026", which printed as "19 Aug 2…" — a date that has lost its
+     * year is not a date.
+     */
+    const pdf = await PDFDocument.create();
+    const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+    const body = await pdf.embedFont(StandardFonts.Helvetica);
+
+    interface Wide {
+      issued: string;
+      card: string;
+      code: string;
+      title: string;
+      due: string;
+      returned: string;
+    }
+
+    const columns = [
+      { header: "Issued", value: (row: Wide) => row.issued },
+      { header: "Card", value: (row: Wide) => row.card },
+      { header: "Book ID", value: (row: Wide) => row.code },
+      { header: "Title", value: (row: Wide) => row.title, weight: 2.4 },
+      { header: "Due", value: (row: Wide) => row.due },
+      { header: "Returned", value: (row: Wide) => row.returned },
+    ];
+
+    const rows: Wide[] = [
+      {
+        issued: "19 Aug 2026",
+        card: "MJCL-R0001",
+        code: "MJCL-B0004",
+        title: "A Series of Unfortunate Events: The Bad Beginning and What Followed",
+        due: "2 Sep 2026",
+        returned: "23 Aug 2026",
+      },
+    ];
+
+    const widths = __columnWidthsForTest(columns, rows, bold, "UTC", (value) => value);
+
+    // Every fixed-width column keeps its whole value. The title may ellipsise.
+    columns.forEach((column, index) => {
+      if (column.header === "Title") return;
+      const content = body.widthOfTextAtSize(String(column.value(rows[0])), 8.5);
+      expect(widths[index] - 10).toBeGreaterThanOrEqual(content);
+    });
+  });
+
   it("still renders a table whose headings alone overflow the page", async () => {
     // Twenty long headings cannot all be shown. The writer must scale rather
     // than throw, and say so by shortening everything together.

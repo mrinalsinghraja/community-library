@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { RenewalRequest } from "@/app/my-books/renewal-request";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
+import { DueCountdownPanel } from "@/components/library/due-countdown";
 import { PublicShell } from "@/components/layout/site-shell";
 import { Butterfly } from "@/components/library/library-logo";
 import { ButtonLink } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { EmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { BORROW_REQUEST_MESSAGES, readerDueSentence, readerLoanBadge } from "@/lib/circulation";
 import { formatInTimezone } from "@/lib/dates";
+import { loanCountdown } from "@/lib/due-countdown";
 import { getActor } from "@/server/authz";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import {
@@ -102,7 +104,17 @@ export default async function MyBooksPage() {
             <h2 id="shelf" className="garden-rule inline-block text-2xl">
               Your reading shelf
             </h2>
-            <ul className="mt-8 grid gap-5 sm:grid-cols-2">
+            {/*
+              One card per row, not two.
+              
+              The shelf was a two-column grid until the countdown arrived, and
+              three columns of content — jacket, title, days left — inside half
+              a page left every one of them too narrow to breathe. A child has
+              two or three books out, so a single column costs nothing in
+              scrolling and gives the number the room that makes it readable
+              from across a table.
+            */}
+            <ul className="mt-8 grid gap-5">
             {active.map((loan) => (
               <ActiveBookCard
                 key={loan.code}
@@ -244,14 +256,15 @@ function ActiveBookCard({
 }) {
   const badge = readerLoanBadge(loan, timezone);
   const sentence = readerDueSentence(loan, timezone);
+  const countdown = loanCountdown({ status: "ACTIVE", dueAt: loan.dueAt }, timezone);
 
   return (
-    <Card as="li" tone="shelf" className="lift flex gap-5">
-      <span className="w-24 shrink-0 sm:w-28">
+    <Card as="li" tone="shelf" className="lift flex flex-col gap-5 sm:flex-row">
+      <span className="w-28 shrink-0 self-start sm:w-36">
         <CoverThumbnail
           coverMediaId={loan.coverMediaId}
           title={loan.title}
-          sizes="(min-width: 640px) 112px, 96px"
+          sizes="(min-width: 640px) 144px, 112px"
         />
       </span>
 
@@ -269,11 +282,6 @@ function ActiveBookCard({
             Borrowed{" "}
             <strong className="text-ink">{formatInTimezone(loan.issuedAt, timezone, "d MMM")}</strong>
           </p>
-          <p className="mt-1 flex items-center gap-2">
-            <Icon name="calendar" className="text-ink-faint" />
-            Due back{" "}
-            <strong className="text-ink">{formatInTimezone(loan.dueAt, timezone, "d MMM")}</strong>
-          </p>
         </CardBody>
 
         <p className="mt-2">
@@ -287,6 +295,16 @@ function ActiveBookCard({
         </p>
 
         <p className="text-base text-ink-soft">{sentence}</p>
+
+        {/*
+          The countdown sits after the kind sentence, not instead of it. The
+          number answers "how long have I got"; the sentence is still the one
+          that says please, and on an overdue book it is the sentence that
+          carries the tone rather than the colour.
+        */}
+        {countdown ? (
+          <DueCountdownPanel countdown={countdown} className="mt-3 self-start sm:hidden" />
+        ) : null}
 
         {loan.donorAcknowledgement ? (
           <p className="mt-1 text-base text-ink-soft">{loan.donorAcknowledgement}</p>
@@ -306,6 +324,13 @@ function ActiveBookCard({
           renewalPeriodDays={renewalPeriodDays}
         />
       </div>
+
+      {countdown ? (
+        <DueCountdownPanel
+          countdown={countdown}
+          className="hidden w-44 shrink-0 self-start sm:flex"
+        />
+      ) : null}
     </Card>
   );
 }

@@ -9,6 +9,7 @@ import {
   statusDefinition,
 } from "@/lib/catalogue";
 import { isLoanFilter } from "@/lib/circulation";
+import { dueCountdown } from "@/lib/due-countdown";
 import type { ReportKey } from "@/lib/reports";
 import { REPORT_LABELS } from "@/lib/reports";
 import { dateOnlyInTimezone, endOfDayInTimezone } from "@/lib/dates";
@@ -284,6 +285,9 @@ async function loadStaff() {
 }
 
 async function loadLoans(filter: ReportFilter) {
+  const { settings } = await getCurrentLibrary();
+  const timezone = settings.timezone;
+
   const page = await listLoansForStaff({
     search: filter.search || undefined,
     filter: isLoanFilter(filter.filter) ? filter.filter : undefined,
@@ -301,6 +305,21 @@ async function loadLoans(filter: ReportFilter) {
     { header: "Issued", value: (row) => row.issuedAt, dateOnly: true },
     { header: "Due", value: (row) => row.dueAt, dateOnly: true },
     { header: "Returned", value: (row) => row.returnedAt, dateOnly: true },
+    /*
+     * The same countdown the screen shows, in words rather than colour.
+     *
+     * A spreadsheet has no red, so the sentence has to carry it — "3 days over"
+     * means the same thing in a printout, a screen reader and a forwarded
+     * email, which colour never does. Blank once a book is back: a returned
+     * book has no time left, and a number there would be counting against a
+     * date nobody is waiting for.
+     */
+    {
+      header: "Time left",
+      value: (row) =>
+        row.status === "ACTIVE" ? dueCountdown(row.dueAt, timezone).headline : "",
+      weight: 1.2,
+    },
     { header: "Times kept longer", value: (row) => row.renewalCount },
     { header: "Status", value: (row) => statusLabel(LOAN_STATUS_LABELS, row.status) },
   ];
@@ -459,6 +478,9 @@ const LOAN_PERIOD_STATUS_LABELS: Record<string, string> = {
 };
 
 async function loadCirculation(filter: ReportFilter) {
+  const { settings } = await getCurrentLibrary();
+  const timezone = settings.timezone;
+
   const rows = await listCirculation(await periodFrom(filter));
   type Row = (typeof rows)[number];
 
@@ -477,6 +499,28 @@ async function loadCirculation(filter: ReportFilter) {
     { header: "Title", value: (row) => row.title, weight: 2.4 },
     { header: "Due", value: (row) => row.dueAt, dateOnly: true },
     { header: "Returned", value: (row) => row.returnedAt, dateOnly: true },
+    /*
+     * One column for the whole question of time, in words.
+     *
+     * A book still out says how long is left or how far past it is; a book that
+     * came back late says how late it was; a book that came back on time says
+     * nothing, because there is nothing to say. This was briefly two columns —
+     * "time left" and "late by" — which overlapped on every active loan, said
+     * different things about returned ones, and between them pushed the sheet
+     * to twelve columns and started clipping the dates.
+     *
+     * Words, not a colour, because a spreadsheet has no red and neither does a
+     * printout read down a phone line.
+     */
+    {
+      header: "Time left",
+      value: (row) => {
+        if (row.status === "ACTIVE") return dueCountdown(row.dueAt, timezone).headline;
+        if (row.daysLate === null) return "";
+        return row.daysLate === 1 ? "1 day late" : `${row.daysLate} days late`;
+      },
+      weight: 1.3,
+    },
     { header: "Days out", value: (row) => row.daysOut },
     { header: "Kept longer", value: (row) => row.renewalCount },
     /*
@@ -490,7 +534,6 @@ async function loadCirculation(filter: ReportFilter) {
         row.overdueNow ? "Late" : statusLabel(LOAN_PERIOD_STATUS_LABELS, row.status),
       weight: 1.3,
     },
-    { header: "Late by", value: (row) => row.daysLate ?? "" },
   ];
 
   return { rows, columns, rowId: (row: Row) => row.loanId };

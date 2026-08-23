@@ -7,7 +7,9 @@ import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-pan
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { DueCountdownInline } from "@/components/library/due-countdown";
 import { formatInTimezone } from "@/lib/dates";
+import { dueCountdown } from "@/lib/due-countdown";
 import { requirePermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import {
@@ -116,7 +118,17 @@ export default async function DeskRenewalsPage() {
                 <td className="px-3.5 py-2.5 align-top code">{request.copyCode}</td>
 
                 <td className="px-3.5 py-2.5 align-top">
-                  <span className="text-ink">
+                  {/*
+                    A renewal is a question about how much time is left, so the
+                    answer belongs in the row rather than in the librarian's
+                    head. An ask on a book already a week over reads very
+                    differently from one on a book due on Friday.
+                  */}
+                  <DueCountdownInline
+                    countdown={dueCountdown(request.dueAt, settings.timezone)}
+                  />
+                  <br />
+                  <span className="text-base text-ink-soft">
                     {formatInTimezone(request.dueAt, settings.timezone)}
                   </span>
                   {/*

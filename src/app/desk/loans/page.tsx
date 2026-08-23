@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { LoanActions } from "@/app/desk/loans/loan-actions";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
+import { DueCountdownInline } from "@/components/library/due-countdown";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
 import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-panel";
 import { ButtonLink } from "@/components/ui/button";
@@ -12,11 +13,11 @@ import {
   isLoanFilter,
   loanCondition,
   loanStatusDefinition,
-  staffOverdueSummary,
   LOAN_PAGE_SIZES,
   type LoanFilter,
 } from "@/lib/circulation";
 import { formatInTimezone } from "@/lib/dates";
+import { loanCountdown } from "@/lib/due-countdown";
 import { requireAnyPermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { listLoansForStaff } from "@/server/services/circulation-service";
@@ -201,11 +202,11 @@ export default async function DeskLoansPage({
             filter={{ filter, ...(search ? { search } : {}) }}
           >
           <DataTable
-            headers={["", "Reader", "Book", "Book ID", "Issued", "Due", "Status", "Actions"]}
+            headers={["", "Reader", "Book", "Book ID", "Issued", "Time left", "Status", "Actions"]}
           >
             {result.items.map((loan) => {
               const condition = loanCondition(loan, settings.timezone);
-              const overdue = staffOverdueSummary(loan, settings.timezone);
+              const countdown = loanCountdown(loan, settings.timezone);
               const renewalsLeft = settings.maxRenewals - loan.renewalCount;
 
               return (
@@ -256,7 +257,19 @@ export default async function DeskLoansPage({
                   </td>
 
                   <td className="px-3.5 py-2.5 align-top">
-                    <span className="text-ink">
+                    {/*
+                      How long is left, before the date it is left until. A
+                      librarian works this column by exception — the late ones
+                      and the nearly-late ones — and a row of identical grey
+                      dates makes them do the arithmetic thirty times.
+                    */}
+                    {countdown ? (
+                      <>
+                        <DueCountdownInline countdown={countdown} />
+                        <br />
+                      </>
+                    ) : null}
+                    <span className="text-base text-ink-soft">
                       {formatInTimezone(loan.dueAt, settings.timezone)}
                     </span>
                     {loan.renewalCount > 0 ? (
@@ -287,9 +300,6 @@ export default async function DeskLoansPage({
                             : "Out"
                         : loanStatusDefinition(loan.status).staffLabel}
                     </StatusBadge>
-                    {overdue ? (
-                      <p className="mt-1 text-base font-bold text-danger">{overdue}</p>
-                    ) : null}
                     {loan.returnedAt ? (
                       <p className="mt-1 text-base text-ink-soft">
                         {formatInTimezone(loan.returnedAt, settings.timezone)}
