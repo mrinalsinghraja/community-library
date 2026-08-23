@@ -52,6 +52,12 @@ enum ConsentType {
   CHILD_ACCOUNT_CREATION
   CHILD_PHOTO_STORAGE
   GUARDIAN_EMAIL_NOTIFICATIONS
+  /// Permission for a child's first name and photograph to appear on the
+  /// readers' board that every other reader can see. Deliberately separate from
+  /// CHILD_PHOTO_STORAGE: agreeing that the library may HOLD a photograph is a
+  /// different question from agreeing that other families may SEE it, and one
+  /// must never be read as the other.
+  READERS_BOARD
 }
 
 enum ConsentStatus {

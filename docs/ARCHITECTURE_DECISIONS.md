@@ -2107,3 +2107,63 @@ column that reaches its natural width hands the excess back to be re-shared.
 Wordy columns still get most of the room; fixed-width neighbours keep their
 values whole. The asymmetry is deliberate: a clipped title is still a
 recognisable book, where a clipped date or book code is no longer information.
+
+## ADR-055 — A board of five readers, and the two questions it had to ask first
+
+The library wanted something on the reader's own screen to encourage reading:
+the top five readers of last month, with names and faces. What shipped is five
+readers of last month, with names and faces, and **no ranking of any kind** —
+and the difference is the whole ADR.
+
+**A constellation, not a podium.** The card is a figure of five points, and the
+point of a constellation is that it has no first star: the shape exists because
+all of them are shining at once. So there is no numeral on the card, no count of
+books, and no ordering the browser could read a placing from. The five are
+chosen by how much they read and then re-sorted by name inside the same SQL
+statement; the tally never leaves that query. ADR-053 had already refused to
+rank children in the reports, and a leaderboard on a child's own home screen is
+that same decision asked much more loudly. The answer is the same.
+
+**The empty socket is the feature.** Five sockets always. Ones nobody filled are
+drawn at identical size in dashed outline and say "It could be you". Before the
+library's first full month every socket is empty and the card is pure
+invitation, which is exactly right for that moment and required no special
+"coming soon" state. A month with three readers shows three faces and two
+invitations, and the gap reads as welcome rather than as absence — which is the
+hardest thing on the card to get right and the reason the empty socket is drawn
+with the same care as a filled one.
+
+**Appearing is its own consent, asked separately from storage.** `READERS_BOARD`
+is a new `ConsentType`, optional, never required to join, and defaulted to
+absent — so the board starts empty and fills only as families opt in. It is
+deliberately not folded into `CHILD_PHOTO_STORAGE`: agreeing that the library
+may *hold* a photograph is a different question from agreeing that other
+families may *see* it, and one must never be read as the other.
+
+Writing it surfaced a contradiction already in production. The existing photo
+wording promised the picture "is shown only to my child and to library staff, is
+never published" — a promise a board of faces would have broken for every family
+that had already agreed to it. The wording now says the photograph is never
+shown to other families **unless the guardian separately agrees to the board**,
+and `CONSENT_VERSION` moved to `2026-08-v2`. Existing records keep their own
+verbatim snapshot, so no family's history is rewritten; they simply consented
+under text that said something narrower, which is the correct outcome.
+
+**The photograph is authorised by a query, not a flag.** `getAuthorizedMedia`
+gained one branch, and it is the only route by which a child's face reaches
+anybody but that child, their guardian and the desk. It asks the board itself:
+is this member on the current board, with consent granted. A child who drops off
+next month stops being readable the moment the board changes, and there is no
+switch anybody has to remember to turn off. The donor register authorises book
+covers the same way and for the same reason. `MEDIA_MAY_REVALIDATE` is untouched
+— a board photograph still earns no ETag and still carries `no-store`.
+
+**The month is finished, never running.** Always the previous calendar month. A
+live board would rank children against each other in real time and reward a
+child for refreshing it, which is the single behaviour this feature is most at
+risk of encouraging.
+
+`tests/database/readers-board.test.ts` holds the property that matters: a child
+who read nine books and whose guardian was never asked is absent from the board
+and their photograph is unreadable, while a child who read three with consent is
+present — and both facts reverse the instant consent is withdrawn.

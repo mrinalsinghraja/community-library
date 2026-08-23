@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { RenewalRequest } from "@/app/my-books/renewal-request";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DueCountdownPanel } from "@/components/library/due-countdown";
+import { ReadersBoard } from "@/components/library/readers-board";
 import { PublicShell } from "@/components/layout/site-shell";
 import { Butterfly } from "@/components/library/library-logo";
 import { ButtonLink } from "@/components/ui/button";
@@ -14,6 +15,8 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { BORROW_REQUEST_MESSAGES, readerDueSentence, readerLoanBadge } from "@/lib/circulation";
 import { formatInTimezone } from "@/lib/dates";
 import { loanCountdown } from "@/lib/due-countdown";
+import { previousMonthWindow } from "@/lib/readers-board";
+import { readersOfTheMonth } from "@/server/services/readers-board-service";
 import { getActor } from "@/server/authz";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import {
@@ -63,20 +66,41 @@ export default async function MyBooksPage() {
   // shelf on purpose: a book they have asked for is not a book they have.
   const asked = await listOwnBorrowRequests();
 
+  // Five children who read a lot last month, in no order. Empty until a month
+  // has finished and guardians have opted in, which is the right starting state.
+  const boardReaders = await readersOfTheMonth();
+  const boardMonth = previousMonthWindow(new Date()).label;
+
   return (
     <PublicShell branding={branding}>
       <div className="relative mx-auto w-full max-w-5xl px-5 py-12 sm:px-8">
         <Butterfly className="drift pointer-events-none absolute right-4 top-8 w-10 opacity-70 sm:w-12" />
         <h1 className="garden-rule inline-block text-4xl">My books</h1>
-        <p className="mt-8 text-lg text-ink-soft">
-          {active.length === 0
-            ? "You have nothing borrowed right now."
-            : active.length === 1
-              ? "You have one book at home."
-              : `You have ${active.length} books at home.`}{" "}
-          {/* The limit comes from library settings, never a literal. */}
-          You can have {limit === 1 ? "one book" : `${limit} books`} at a time.
-        </p>
+
+        {/*
+          The board sits beside the greeting on a wide screen and beneath it on
+          a narrow one. Beside, because it is the first thing worth noticing on
+          the page; beneath rather than above on a phone, because a child opened
+          this screen to find their own books and somebody else's month should
+          never be what greets them.
+        */}
+        <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
+          <p className="text-lg text-ink-soft lg:flex-1">
+            {active.length === 0
+              ? "You have nothing borrowed right now."
+              : active.length === 1
+                ? "You have one book at home."
+                : `You have ${active.length} books at home.`}{" "}
+            {/* The limit comes from library settings, never a literal. */}
+            You can have {limit === 1 ? "one book" : `${limit} books`} at a time.
+          </p>
+
+          <ReadersBoard
+            readers={boardReaders}
+            monthLabel={boardMonth}
+            className="order-last w-full shrink-0 lg:order-none lg:w-[26rem]"
+          />
+        </div>
 
         {active.length === 0 ? (
           <div className="mt-8">

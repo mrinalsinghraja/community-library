@@ -24,6 +24,7 @@ export const CURRENT_CONSENT_TYPES = [
   "CHILD_ACCOUNT_CREATION",
   "CHILD_PHOTO_STORAGE",
   "GUARDIAN_EMAIL_NOTIFICATIONS",
+  "READERS_BOARD",
 ] as const;
 
 export type ConsentTypeKey = (typeof CURRENT_CONSENT_TYPES)[number];
@@ -35,7 +36,7 @@ export type ConsentTypeKey = (typeof CURRENT_CONSENT_TYPES)[number];
  * and the snapshot they were granted under, so history stays intact — but a new
  * version signals that existing consents were granted against different text.
  */
-export const CONSENT_VERSION = "2026-08-v1";
+export const CONSENT_VERSION = "2026-08-v2";
 
 export const CONSENT_TEXTS: Record<ConsentTypeKey, string> = {
   CHILD_ACCOUNT_CREATION: `I am the parent or guardian of this child, and I agree to the library creating a membership account for them.
@@ -46,11 +47,21 @@ I understand that I can ask the librarian to correct or delete this information 
 
   CHILD_PHOTO_STORAGE: `I agree to the library storing the photograph I have uploaded of my child.
 
-I understand the photograph is kept privately, is shown only to my child and to library staff, is never published, and can be removed at any time on request. I understand that choosing an avatar instead is equally acceptable and gives my child exactly the same membership.`,
+I understand the photograph is kept privately and is shown only to my child and to library staff. It is never posted anywhere outside the library's own website, and it is never shown to other families unless I separately agree to the readers' board — which is a different question, asked on its own, and which I do not have to say yes to.
+
+I understand the photograph can be removed at any time on request, and that choosing an avatar instead is equally acceptable and gives my child exactly the same membership.`,
 
   GUARDIAN_EMAIL_NOTIFICATIONS: `I agree to the library emailing me about my child's membership — activation and password links, reminders that a book is due back, and occasional library notices.
 
 I understand these are not marketing emails and that the library will never pass my details to anyone else.`,
+
+  READERS_BOARD: `I agree to my child's first name, and the photograph or avatar on their account, appearing on the library's readers' board.
+
+I understand this board is seen by every other child and family who signs in to the library, that it shows five children who read a lot in the month just gone, and that it is not a competition — the five are shown together, in alphabetical order, with no places and no scores.
+
+I understand only my child's first name is ever shown — never our surname, our flat number or their library card number — and that I can withdraw this at any time, after which my child stops appearing immediately.
+
+I understand my child's membership is exactly the same whether I agree to this or not.`,
 };
 
 /** Short labels for the registration form's checkboxes. */
@@ -58,6 +69,7 @@ export const CONSENT_LABELS: Record<ConsentTypeKey, string> = {
   CHILD_ACCOUNT_CREATION: "I am this child's parent or guardian, and I agree to their library account",
   CHILD_PHOTO_STORAGE: "I agree to the library storing the photo I uploaded",
   GUARDIAN_EMAIL_NOTIFICATIONS: "The library may email me about my child's membership",
+  READERS_BOARD: "My child may appear on the readers' board (optional)",
 };
 
 /**

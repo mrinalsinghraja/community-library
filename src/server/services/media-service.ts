@@ -7,6 +7,7 @@ import { getActor, requirePermission, type Actor } from "@/server/authz";
 import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
 import { NotFoundError, ValidationError } from "@/server/lib/errors";
 import { catalogueIsPubliclyVisible, getCurrentLibrary } from "@/server/lib/settings";
+import { memberIsOnReadersBoard } from "@/server/services/readers-board-service";
 import { storage } from "@/server/lib/storage";
 import { UPLOAD_PURPOSES, validateUpload, type UploadPurpose } from "@/server/lib/uploads";
 
@@ -394,7 +395,32 @@ export async function getAuthorizedMedia(mediaId: string): Promise<AuthorizedMed
   const isStaffReviewingRequest =
     media.registrationRequests.length > 0 && actor.permissions.has("registration.view");
 
-  if (!isOwnPhoto && !isStaffWithMemberView && !isStaffReviewingRequest) {
+  /*
+   * One child's photograph, shown to another child, and only ever this way.
+   *
+   * The readers' board celebrates five children a month, and a face on it has
+   * to be readable by whoever is looking at the board. This is the ONLY route
+   * by which a child's photograph reaches anybody but that child, their
+   * guardian and the desk — and it is a **query, not a flag**: the same rule
+   * that decides who is on the board decides whose bytes may be read. A child
+   * who drops off next month stops being readable the moment the board changes,
+   * with nothing to remember to switch off.
+   *
+   * Two conditions, both required. The guardian must have granted
+   * READERS_BOARD — which is asked for separately from permission to hold a
+   * photograph at all, because agreeing that the library may KEEP a picture is
+   * a different question from agreeing that other families may SEE it. And the
+   * child must actually be on the current board; consent alone is not a
+   * standing licence to serve a face to anyone who asks for the id.
+   *
+   * `MEDIA_MAY_REVALIDATE` is untouched. These bytes still carry `no-store`,
+   * so a board photograph is never written to a shared family device's disk.
+   */
+  const isBoardPhoto =
+    media.memberProfile != null &&
+    (await memberIsOnReadersBoard(libraryId, media.memberProfile.userId));
+
+  if (!isOwnPhoto && !isStaffWithMemberView && !isStaffReviewingRequest && !isBoardPhoto) {
     throw new NotFoundError(
       `User ${actor.userId} may not read media ${mediaId} (purpose ${media.purpose})`,
     );
