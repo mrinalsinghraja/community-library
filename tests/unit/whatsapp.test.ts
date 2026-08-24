@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { JOIN_HELP_MESSAGE, toWhatsAppNumber, whatsAppLink } from "@/lib/whatsapp";
+import {
+  DONATE_BOOKS_MESSAGE,
+  JOIN_HELP_MESSAGE,
+  toWhatsAppNumber,
+  whatsAppLink,
+} from "@/lib/whatsapp";
 
 /**
  * The help link.
@@ -76,5 +81,34 @@ describe("building the link", () => {
     // or the flat number, and should not have to say.
     expect(JOIN_HELP_MESSAGE).toMatch(/account for my child/i);
     expect(JOIN_HELP_MESSAGE).not.toMatch(/error|form|website|bug/i);
+  });
+});
+
+describe("the message a neighbour offering books sends", () => {
+  it("says what they have, not what the software is called", () => {
+    expect(DONATE_BOOKS_MESSAGE).toMatch(/books/i);
+    expect(DONATE_BOOKS_MESSAGE).toMatch(/give/i);
+  });
+
+  it("asks rather than commits", () => {
+    /*
+     * The whole argument of the donors page is that giving is voluntary.
+     * Nobody should feel they have signed something by pressing a button, so
+     * the sentence opens a conversation and leaves the family free to stop.
+     */
+    expect(DONATE_BOOKS_MESSAGE).toMatch(/would like to/i);
+    expect(DONATE_BOOKS_MESSAGE).not.toMatch(/donat|pledge|commit/i);
+  });
+
+  it("is a different sentence from the one somebody stuck sends", () => {
+    // Two people, two situations. One door, two messages through it.
+    expect(DONATE_BOOKS_MESSAGE).not.toBe(JOIN_HELP_MESSAGE);
+  });
+
+  it("survives the trip into a URL", () => {
+    const link = whatsAppLink(NUMBER, DONATE_BOOKS_MESSAGE);
+
+    expect(link).toContain("https://wa.me/919663312707?text=");
+    expect(link).not.toContain(" ");
   });
 });

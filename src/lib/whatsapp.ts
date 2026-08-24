@@ -81,3 +81,25 @@ export function whatsAppLink(
  * the flat number, and should not have to.
  */
 export const JOIN_HELP_MESSAGE = "Hi, can you help me to create an account for my child?";
+
+/**
+ * What a neighbour offering books says before they have typed anything.
+ *
+ * The same door as `JOIN_HELP_MESSAGE` and a different sentence through it,
+ * because the two people are not in the same situation. One is stuck; this one
+ * has a carton in the hall and a question they are slightly shy about — is this
+ * the sort of thing you want, and what do I do with it?
+ *
+ * So it asks that, and it asks it *before* committing: "would like to give"
+ * rather than "am giving". Nobody should have to feel they have signed
+ * something by pressing a button, least of all on the one page whose whole
+ * argument is that giving is voluntary. The librarian answers, and the family
+ * is still free to say never mind.
+ *
+ * No apostrophe in it, which is not fussiness: `encodeURIComponent` leaves `'`
+ * alone, so it travels to the page as a literal character inside an `href`,
+ * gets escaped to `&#x27;` on the way out, and the sentence is then depending on
+ * two unrelated decoders agreeing. Writing around it costs one word.
+ */
+export const DONATE_BOOKS_MESSAGE =
+  "Hi, I have some books for children that I would like to give to the library. What should I do?";

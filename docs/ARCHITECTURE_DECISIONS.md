@@ -2196,3 +2196,45 @@ who read nine books and whose family asked to be left off is absent from the
 board and their photograph is unreadable, while a child who read three and said
 nothing is present — and both facts reverse the instant the opt-out is recorded
 or removed.
+
+## ADR-056 — The same phone, a second sentence
+
+Giving a book had exactly one door: an email address on the donors page.
+
+That is the wrong door for the person it is for. Somebody deciding whether to
+carry a box of outgrown books downstairs is standing in their own hallway with a
+phone in their hand, and WhatsApp is the thing already open on it. An email
+address is a task for later, and later is where a carton of children's books
+goes to stay. The library's `contactPhone` was already reachable from the
+masthead, the footer, the home page and the joining guide — every one of those
+saying "I am stuck". None of them said "I have books".
+
+So the phone is unchanged and the sentence is new. `DONATE_BOOKS_MESSAGE` sits
+beside `JOIN_HELP_MESSAGE` in `src/lib/whatsapp.ts`, and it asks rather than
+commits — *would like to give*, not *am giving*. The whole argument of the
+donors page is that giving is voluntary and never a condition of membership.
+Nobody should be able to feel they have signed something by pressing a button on
+it, so the message opens a conversation and the family stays free to say never
+mind. It also carries no apostrophe: `encodeURIComponent` leaves `'` alone, so
+one would reach the page as a literal character inside an `href`, get escaped to
+`&#x27;` on the way out, and leave the sentence depending on two unrelated
+decoders agreeing. Writing around it cost one word.
+
+**The chat leads and the address follows.** Both are on the donors page, in that
+order, and each renders only when its setting is present — the phone and the
+email are configured independently, and a button that opens a chat addressed to
+nobody is worse than no button. Only when neither is set does the page fall back
+to "bring it to the library".
+
+**Quieter on the home page than on the donors page.** The gratitude card exists
+to say thank you and to point at the register; a loud *give us a book* on the
+front page turns a thank-you note into a collection tin. So the register keeps
+the accented button and the offer sits next to it in the `quiet` variant, for
+the one reader who has already decided and should not have to walk through a
+second page to say so.
+
+**One button, not a second button system.** The link leaves the site, so it
+needs `target` and `rel` and cannot be `ButtonLink`. Rather than hand-copying a
+class string — which is how a design system quietly grows a second button —
+`button.tsx` now exports `buttonClasses`, and `WhatsAppButton` borrows it. The
+two cannot drift.

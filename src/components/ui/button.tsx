@@ -50,6 +50,23 @@ const BASE_CLASSES =
   "disabled:opacity-55 disabled:pointer-events-none " +
   "no-underline text-center";
 
+/**
+ * The same classes, for the rare control that cannot be `Button` or
+ * `ButtonLink`.
+ *
+ * There is one: a link that leaves the site and therefore needs `target` and
+ * `rel`, which `next/link` here is not given props for. Handing that link its
+ * own hand-copied class string is how a design system quietly grows a second
+ * button, so it borrows this instead and the two cannot drift.
+ */
+export function buttonClasses(
+  variant: Variant = "primary",
+  size: Size = "md",
+  className?: string,
+): string {
+  return cn(BASE_CLASSES, VARIANT_CLASSES[variant], SIZE_CLASSES[size], className);
+}
+
 interface CommonProps {
   variant?: Variant;
   size?: Size;

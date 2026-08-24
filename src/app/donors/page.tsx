@@ -3,9 +3,11 @@ import Link from "next/link";
 
 import { Butterfly } from "@/components/library/library-logo";
 import { PublicShell } from "@/components/layout/site-shell";
+import { WhatsAppButton } from "@/components/library/whatsapp-help";
 import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { EmptyState } from "@/components/ui/states";
+import { DONATE_BOOKS_MESSAGE } from "@/lib/whatsapp";
 import { getBrandingSafe } from "@/server/lib/settings";
 import { listDonorRegister, type DonorRegisterEntry } from "@/server/services/donor-service";
 
@@ -245,16 +247,55 @@ export default async function DonorsPage() {
             would open — as long as it is whole enough for the next reader.
           </p>
 
-          {branding.contactEmail ? (
-            <p className="mt-7">
-              <ButtonLink
-                href={`mailto:${branding.contactEmail}?subject=I%20would%20like%20to%20give%20a%20book`}
-                size="lg"
-                icon={<Icon name="mail" />}
-              >
-                Write to {branding.contactEmail}
-              </ButtonLink>
-            </p>
+          {/*
+            Two doors, and the order is deliberate. This page is read by a
+            neighbour standing in their own hallway next to a carton, and the
+            thing already open on their phone is WhatsApp — an email address is
+            a task for later, and later is where a box of outgrown books goes to
+            stay. So the chat leads and the address follows it, still there for
+            anyone who would rather write.
+
+            Either can be missing. The library sets its phone and its email
+            independently, and a button that opens a chat addressed to nobody is
+            worse than no button, so each is rendered only when it can work and
+            the fallback speaks only when neither can.
+          */}
+          {branding.contactPhone || branding.contactEmail ? (
+            <>
+              <div className="mt-7 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+                <WhatsAppButton
+                  phone={branding.contactPhone}
+                  message={DONATE_BOOKS_MESSAGE}
+                  size="lg"
+                >
+                  Offer a book on WhatsApp
+                </WhatsAppButton>
+
+                {branding.contactEmail ? (
+                  <ButtonLink
+                    href={`mailto:${branding.contactEmail}?subject=I%20would%20like%20to%20give%20a%20book`}
+                    variant="secondary"
+                    size="lg"
+                    icon={<Icon name="mail" />}
+                  >
+                    Or write to us
+                  </ButtonLink>
+                ) : null}
+              </div>
+
+              {/*
+                The address moved out of the button and into the sentence under
+                it. As a label it was thirty characters wide, which on a 375px
+                phone is a button whose text wraps to two lines; as a line of
+                prose it reads normally and is still there for somebody who
+                would rather use their own mail app than a `mailto:` link.
+              */}
+              <p className="mt-4 text-base text-ink-soft">
+                {branding.contactEmail ? <>Our address is {branding.contactEmail}. </> : null}A
+                neighbour reads these, not a robot — so please give us a little time to answer.
+                Nothing is settled by sending a message; ask us anything first.
+              </p>
+            </>
           ) : (
             <p className="mt-7 text-lg text-ink">
               Bring it to the library and the librarian will take it from there.
@@ -265,7 +306,7 @@ export default async function DonorsPage() {
             {[
               {
                 title: "You bring the book",
-                body: "Hand it in at the library, or write to us and we will come and collect it.",
+                body: "Hand it in at the library, or send us a message and we will come and collect it.",
               },
               {
                 title: "We write the thank-you",

@@ -5,7 +5,8 @@ import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Callout } from "@/components/ui/states";
 import { Butterfly, LeafSprig, LibraryLogo, ShelfIllustration } from "@/components/library/library-logo";
 import { PublicShell } from "@/components/layout/site-shell";
-import { WhatsAppHelp } from "@/components/library/whatsapp-help";
+import { WhatsAppButton, WhatsAppHelp } from "@/components/library/whatsapp-help";
+import { DONATE_BOOKS_MESSAGE } from "@/lib/whatsapp";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { Icon } from "@/components/ui/icon";
 
@@ -178,11 +179,29 @@ export default async function HomePage() {
               a book to pass on, we would be delighted — and if you do not, you are just as welcome.
               Borrowing is never tied to giving.
             </p>
-            <p className="mt-4">
+            {/*
+              The register first, the offer second. Somebody who has not decided
+              yet is persuaded by the neighbours already on that page, not by a
+              button; somebody who has decided should not have to go through a
+              second page to say so, so the chat is here as well. The offer is
+              the quieter of the two on purpose — this card exists to say thank
+              you, and a loud "give us a book" on the front page turns a
+              gratitude note into a collection tin.
+            */}
+            <div className="mt-4 flex flex-col items-start gap-2.5 sm:flex-row sm:items-center">
               <ButtonLink href="/donors" variant="secondary" size="sm" icon={<Icon name="heart" />}>
                 Meet our book friends
               </ButtonLink>
-            </p>
+
+              <WhatsAppButton
+                phone={branding.contactPhone}
+                message={DONATE_BOOKS_MESSAGE}
+                variant="quiet"
+                size="sm"
+              >
+                Offer a book on WhatsApp
+              </WhatsAppButton>
+            </div>
           </div>
         </Card>
       </section>
