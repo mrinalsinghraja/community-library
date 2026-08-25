@@ -1,18 +1,24 @@
 import type { PermissionKey } from "@/lib/permissions";
 
 /**
- * The desk, written once.
+ * Every door in the application, written once, for both shells.
  *
- * Two separate screens needed to agree about this and did not. The staff shell
- * built its own list and filtered it by permission, correctly. The reader
- * masthead asked a different question entirely — `user.manage_staff` — to decide
- * whether to offer a way back to the desk at all, and only the Super Admin holds
- * that. A librarian who opened their own account page therefore arrived on a
- * page with no route back to the library they run, and had to type the URL.
+ * **The whole point of this file is that a role sees the same menu on every
+ * screen.** It did not, and the reason was structural rather than a slip: the
+ * application has two shells — the reader app and the desk — and each used to
+ * own a navigation list. A Super Admin therefore got the children's masthead on
+ * `/account` and the desk's on `/desk/loans`, with different items in each, and
+ * one of the items on the reader side ("My books") went nowhere at all for
+ * somebody with no library card. See ADR-059.
  *
- * Both now read this file: the shell renders the destinations, the masthead asks
- * whether any of them are open. Adding a desk screen cannot leave one of them
- * behind.
+ * Both shells now render from here:
+ *
+ *   * `deskDestinationsFor` — the working screens, filtered by permission.
+ *   * `readerDestinationsFor` — the public side, filtered by who is looking.
+ *
+ * A role's menu is the concatenation of those two answers, and it does not
+ * depend on which page they happen to be standing on. `tests/unit/navigation.
+ * test.ts` asserts that directly.
  */
 
 export interface DeskDestination {
@@ -39,7 +45,10 @@ export const DESK_DESTINATIONS: readonly DeskDestination[] = [
   { href: "/desk/members", label: "Readers", permission: "member.view" },
   // book.edit, not book.view: every reader holds book.view, and this link must
   // only appear for somebody who can actually manage the collection.
-  { href: "/admin/books", label: "Books", permission: "book.edit" },
+  // "Book list", not "Books". The reader side has a "Catalogue"; two menus
+  // using the same word for two different pages is the one inconsistency a
+  // navigation must never have.
+  { href: "/admin/books", label: "Book list", permission: "book.edit" },
   // Reviews waiting to go on a book's page. `review.moderate` is the authority
   // to decide, and so is exactly the authority to read what is waiting — not
   // `book.edit`, which is a fact about the collection rather than a judgement
@@ -57,6 +66,61 @@ export const DESK_DESTINATIONS: readonly DeskDestination[] = [
   { href: "/admin/branding", label: "Branding", permission: "branding.edit" },
   { href: "/admin/audit", label: "Audit", permission: "audit.view" },
 ] as const;
+
+// ---------------------------------------------------------------------------
+// The reader's side
+// ---------------------------------------------------------------------------
+
+export interface ReaderDestination {
+  href: string;
+  label: string;
+  /**
+   * Needs a library card, not merely a session.
+   *
+   * The distinction is the bug this replaced. The old filter asked "is somebody
+   * signed in", so a librarian was shown "My books" — and `/my-books` reads the
+   * session, finds no member, and silently redirects them to the desk. A door
+   * that teleports you somewhere else is worse than no door.
+   */
+  membersOnly?: boolean;
+  /** Shown to a signed-out visitor only when the catalogue is public. */
+  cataloguePublicOnly?: boolean;
+}
+
+export const READER_DESTINATIONS: readonly ReaderDestination[] = [
+  /*
+   * "Catalogue", not "Books". The desk has a "Book list" and this is the shelf
+   * a child browses; when both were called "Books" a librarian saw the same
+   * word in two menus pointing at two different pages, which is the one kind of
+   * inconsistency a navigation must never have.
+   */
+  { href: "/books", label: "Catalogue", cataloguePublicOnly: true },
+  { href: "/my-books", label: "My books", membersOnly: true },
+  { href: "/my-reviews", label: "What I thought", membersOnly: true },
+  { href: "/how-to-join", label: "How to join" },
+  { href: "/rules", label: "Our rules" },
+  { href: "/donors", label: "Book friends" },
+];
+
+/**
+ * The public doors this person may open.
+ *
+ * `isMember` is a fact about the account, not about the session: staff hold no
+ * library card, so the two "my own" pages are not theirs. The catalogue is a
+ * fact about the library's settings, so a signed-out visitor sees it exactly
+ * when the shelf is public.
+ */
+export function readerDestinationsFor(options: {
+  isMember: boolean;
+  signedIn: boolean;
+  cataloguePublic: boolean;
+}): readonly ReaderDestination[] {
+  return READER_DESTINATIONS.filter((item) => {
+    if (item.membersOnly) return options.isMember;
+    if (item.cataloguePublicOnly) return options.signedIn || options.cataloguePublic;
+    return true;
+  });
+}
 
 /** The doors this person may open. Same filter the desk shell renders. */
 export function deskDestinationsFor(

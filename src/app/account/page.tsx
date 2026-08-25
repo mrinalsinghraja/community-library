@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { MemberAvatar } from "@/components/library/avatar";
 import { PublicShell } from "@/components/layout/site-shell";
+import { StaffShell } from "@/components/layout/staff-shell";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -41,8 +42,20 @@ export default async function AccountPage() {
   const timezone = settings.timezone;
   const permissions = [...actor.permissions].sort();
 
+  /*
+   * Staff get the desk's shell, readers get the reader's.
+   *
+   * This page was the seam where a librarian's navigation visibly changed. It
+   * is the only screen staff reach that lives on the reader side, so signing in
+   * as Super Admin and opening your own account swapped the desk's menu for the
+   * children's masthead. Choosing the shell by `kind` means a role now sees one
+   * menu everywhere without either shell having to grow a special case for this
+   * page. See ADR-059.
+   */
+  const Shell = actor.kind === "STAFF" ? StaffShell : PublicShell;
+
   return (
-    <PublicShell branding={branding}>
+    <Shell branding={branding} actor={actor} title="My account">
       <div className="mx-auto w-full max-w-4xl px-5 py-14 sm:px-8">
         <div className="flex items-center gap-4">
           {/*
@@ -251,6 +264,6 @@ export default async function AccountPage() {
           </p>
         </div>
       </div>
-    </PublicShell>
+    </Shell>
   );
 }

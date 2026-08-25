@@ -325,40 +325,43 @@ describe("the doors, top and bottom", () => {
      * They were two hand-written lists, which is how the donors page came to be
      * reachable from the foot of the page and the home page but never from the
      * masthead.
+     *
+     * The list itself now lives in `@/lib/desk-nav` with the desk's, because
+     * the masthead and the STAFF shell had the same disagreement a layer up —
+     * see ADR-059 and `tests/unit/navigation.test.ts`, which owns the content
+     * of the menus. What this file still asserts is that both ends of the
+     * reader page render the same computed list.
      */
     const source = code(SHELL);
 
-    expect(source).toContain("const DESTINATIONS");
-    // Both navigations read the same filtered list, with the same two arguments
-    // — the footer asking a narrower question than the masthead is exactly how
-    // the two lists disagreed last time.
-    expect(source.match(/destinationsFor\(signedIn, cataloguePublic\)/g)?.length).toBe(2);
+    expect(source).not.toContain("const DESTINATIONS");
+    expect(source).toContain("readerDestinationsFor");
+    // Masthead and footer, each rendering the array they were both handed.
+    expect(source.match(/\{destinations\.map\(/g)?.length).toBe(2);
   });
 
-  it("offers the joining guide and the donors page from both", () => {
-    const source = code(SHELL);
-
-    expect(source).toContain('href: "/how-to-join"');
-    expect(source).toContain('href: "/donors"');
-  });
-
-  it("hides a reader's own shelf from somebody who is not signed in", () => {
-    // A door that answers "sign in first" is worse than no door.
-    const source = code(SHELL);
-
-    expect(source).toMatch(/href: "\/my-books", label: "My books", readersOnly: true/);
-  });
-
-  it("opens the catalogue door to a visitor only when the shelf is public", () => {
+  it("asks the session rather than taking a prop, at both ends", () => {
     /*
-     * The one exception to `readersOnly`, and a real one: whether a stranger may
-     * open the catalogue is a library *setting*, not a fact about the session.
-     * A home page inviting a visitor to search a catalogue they cannot reach
-     * from the masthead is a page arguing with itself. See ADR-057.
+     * `signedIn` used to arrive as a prop defaulting to false, so a page that
+     * forgot it showed a signed-in reader a different footer from their own
+     * header. A flag every page must remember is a flag some page will forget.
      */
     const source = code(SHELL);
 
-    expect(source).toMatch(/href: "\/books"[\s\S]{0,80}cataloguePublicOnly: true/);
+    expect(source).not.toMatch(/signedIn\s*=\s*false/);
+    expect(source.match(/await getActor\(\)/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("never offers a reader's own pages to somebody with no library card", () => {
+    // Staff hold no card, and `/my-books` would redirect them to the desk.
+    const source = code(SHELL);
+
+    expect(source).toMatch(/isMember:\s*actor\?\.kind === "MEMBER"/);
+  });
+
+  it("opens the catalogue door only when the shelf is actually public", () => {
+    const source = code(SHELL);
+
     // Never a hard-coded yes: the setting is read, and a failure means "no".
     expect(source).toContain("catalogueIsPubliclyVisible()");
     expect(source).toMatch(/catalogueIsPubliclyVisible\(\)\.catch\(\(\) => false\)/);

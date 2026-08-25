@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import { Butterfly, LibraryLogo } from "@/components/library/library-logo";
 import { StoryCharacters } from "@/components/library/story-characters";
-import { canReachDesk } from "@/lib/desk-nav";
+import { canReachDesk, deskDestinationsFor, readerDestinationsFor } from "@/lib/desk-nav";
 import { JOIN_HELP_MESSAGE, whatsAppLink } from "@/lib/whatsapp";
 import { getActor } from "@/server/authz";
 import { catalogueIsPubliclyVisible, type Branding } from "@/server/lib/settings";
@@ -35,34 +35,12 @@ const NAV_LINK =
  * from the footer and the home page but not from the masthead, and how a new
  * page gets added to one of them and forgotten in the other.
  *
- * `readersOnly` entries appear only once somebody is signed in, because
- * offering a door that answers "sign in first" is worse than not showing one.
- *
- * The catalogue is the exception, and it is a real one: whether a stranger may
- * open it is a library *setting*, not a fact about the session. When the shelf
- * is PUBLIC the Books link is for everybody — and it has to be, because a home
- * page inviting a visitor to search a catalogue they cannot reach from the
- * masthead is a page arguing with itself.
+ * The destinations themselves live in `@/lib/desk-nav`, with the desk's, so
+ * that a role's menu is the same list wherever they are standing. See ADR-059:
+ * this shell and the staff shell each used to own a navigation array, which is
+ * how a Super Admin came to see one menu on `/account` and a different one on
+ * `/desk/loans`.
  */
-const DESTINATIONS: {
-  href: string;
-  label: string;
-  readersOnly?: boolean;
-  /** Shown to a signed-out visitor only when the catalogue is public. */
-  cataloguePublicOnly?: boolean;
-}[] = [
-  { href: "/books", label: "Books", readersOnly: true, cataloguePublicOnly: true },
-  { href: "/my-books", label: "My books", readersOnly: true },
-  { href: "/how-to-join", label: "How to join" },
-  { href: "/rules", label: "Our rules" },
-  { href: "/donors", label: "Book friends" },
-];
-
-function destinationsFor(signedIn: boolean, cataloguePublic: boolean) {
-  return DESTINATIONS.filter(
-    (item) => !item.readersOnly || signedIn || (item.cataloguePublicOnly && cataloguePublic),
-  );
-}
 
 export async function SiteHeader({ branding }: { branding: Branding }) {
   /*
@@ -90,6 +68,18 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
    * failure means "not public" and the link stays hidden.
    */
   const cataloguePublic = await catalogueIsPubliclyVisible().catch(() => false);
+
+  /*
+   * The same two calls the staff shell makes, with the same answers. Staff hold
+   * no library card, so `isMember` is a question about the account rather than
+   * about the session — which is what stops "My books" being offered to a
+   * librarian and silently redirecting them to the desk.
+   */
+  const destinations = readerDestinationsFor({
+    isMember: actor?.kind === "MEMBER",
+    signedIn,
+    cataloguePublic,
+  });
 
   return (
     <header className="relative bg-surface">
@@ -175,7 +165,7 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
           className="mx-auto max-w-6xl overflow-x-auto px-5 [scrollbar-width:none] sm:px-8 [&::-webkit-scrollbar]:hidden"
         >
           <ul className="flex items-center gap-1 py-1.5 sm:gap-2">
-            {destinationsFor(signedIn, cataloguePublic).map((item) => (
+            {destinations.map((item) => (
               <li key={item.href} className="list-none">
                 <Link href={item.href} className={`${NAV_LINK} whitespace-nowrap`}>
                   {item.label}
@@ -202,24 +192,32 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
  * The foot of every reader-facing page.
  *
  * Three columns on a wide screen, stacked on a phone, and the middle one is the
- * same `DESTINATIONS` list the masthead renders — a reader who has scrolled to
- * the bottom should not have to scroll back up to find a door, and the two
- * lists must not be able to disagree about what exists.
+ * same list the masthead renders — a reader who has scrolled to the bottom
+ * should not have to scroll back up to find a door, and the two lists must not
+ * be able to disagree about what exists.
  *
  * The green rule from the masthead is repeated at the very bottom, closing the
  * page the same way the header opens it.
  */
-export async function SiteFooter({
-  branding,
-  signedIn = false,
-}: {
-  branding: Branding;
-  signedIn?: boolean;
-}) {
+export async function SiteFooter({ branding }: { branding: Branding }) {
   const whatsapp = whatsAppLink(branding.contactPhone, JOIN_HELP_MESSAGE);
-  // Asked here as well as in the masthead so the two lists cannot disagree
-  // about whether the catalogue has a public door. Cached per request.
+
+  /*
+   * Read from the session, exactly like the masthead, and for the reason the
+   * masthead already learned: `signedIn` used to arrive as a prop with a default
+   * of `false`, so every page that forgot to pass it rendered a signed-in
+   * reader a different footer from their own header. A flag every page must
+   * remember is a flag some page will forget. Both are cached per request.
+   */
+  const actor = await getActor();
   const cataloguePublic = await catalogueIsPubliclyVisible().catch(() => false);
+
+  const signedIn = Boolean(actor);
+  const destinations = readerDestinationsFor({
+    isMember: actor?.kind === "MEMBER",
+    signedIn,
+    cataloguePublic,
+  });
 
   return (
     <footer className="mt-16 border-t border-hairline bg-surface">
@@ -242,12 +240,18 @@ export async function SiteFooter({
           </p>
         </div>
 
+        {/*
+          "Pages" is the site's own list of destinations. Three paginations used
+          to carry the same accessible name, so a screen-reader user hearing
+          "Pages navigation" could not tell the footer from a list of page
+          numbers. Each pagination is now named after what it pages through.
+        */}
         <nav aria-label="Pages">
           <h2 className="font-display text-base font-bold uppercase tracking-[0.12em] text-ink">
             Find your way
           </h2>
           <ul className="mt-4 flex flex-col gap-2.5">
-            {destinationsFor(signedIn, cataloguePublic).map((item) => (
+            {destinations.map((item) => (
               <li key={item.href} className="list-none">
                 <Link href={item.href} className="font-bold text-primary-deep no-underline">
                   {item.label}
@@ -320,13 +324,6 @@ export async function PublicShell({
   branding: Branding;
   children: ReactNode;
 }) {
-  /*
-   * Asked once, here, and handed to both ends of the page. There is deliberately
-   * no `signedIn` prop any more: it was a flag every page had to remember, seven
-   * of them did not, and the masthead contradicted itself on those seven.
-   */
-  const signedIn = Boolean(await getActor());
-
   return (
     <div className="flex min-h-screen flex-col">
       {/* Behind everything on the reader side, and never on the desk. */}
@@ -335,7 +332,7 @@ export async function PublicShell({
       <main id="main" className="flex-1">
         {children}
       </main>
-      <SiteFooter branding={branding} signedIn={signedIn} />
+      <SiteFooter branding={branding} />
     </div>
   );
 }

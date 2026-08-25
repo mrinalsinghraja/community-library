@@ -5,8 +5,8 @@ import { LibraryLogo } from "@/components/library/library-logo";
 import { cn } from "@/lib/cn";
 import type { PermissionKey } from "@/lib/permissions";
 import type { Actor } from "@/server/authz";
-import { deskDestinationsFor } from "@/lib/desk-nav";
-import type { Branding } from "@/server/lib/settings";
+import { deskDestinationsFor, readerDestinationsFor } from "@/lib/desk-nav";
+import { catalogueIsPubliclyVisible, type Branding } from "@/server/lib/settings";
 import { signOutAction } from "@/server/actions/auth-actions";
 
 /**
@@ -29,7 +29,7 @@ interface NavItem {
   badge?: number;
 }
 
-export function StaffShell({
+export async function StaffShell({
   branding,
   actor,
   pendingRegistrations,
@@ -71,6 +71,25 @@ export function StaffShell({
     ...item,
     badge: badges[item.href],
   }));
+
+  /*
+   * The public side of the library, in the same band the reader masthead uses.
+   *
+   * Added in ADR-059. Before it, eighteen desk screens offered no route to the
+   * catalogue, the rules or the donors page — so a librarian's menu changed
+   * completely depending on whether they were standing on `/desk/loans` or on
+   * `/account`, which is the inconsistency this file and `site-shell.tsx` were
+   * asked to stop having.
+   *
+   * `isMember: false` always: staff hold no library card, so "My books" and
+   * "What I thought" are not theirs and would redirect them straight back here.
+   */
+  const cataloguePublic = await catalogueIsPubliclyVisible().catch(() => false);
+  const readerDoors = readerDestinationsFor({
+    isMember: false,
+    signedIn: true,
+    cataloguePublic,
+  });
 
 
   return (
@@ -126,6 +145,32 @@ export function StaffShell({
               </button>
             </form>
           </div>
+        </div>
+
+        {/*
+          The reader's doors, in a band of their own beneath the desk's.
+
+          Two bands rather than seventeen links on one row, and the split is the
+          same one the reader masthead makes: what you are working on above, the
+          places to go below. Quieter than the row above it, because a librarian
+          serving a queue is not looking for the rules page — but it is there,
+          and it is the same list they see on every other screen.
+        */}
+        <div className="border-t border-hairline bg-ground/50">
+          <nav
+            aria-label="The library"
+            className="mx-auto flex w-full max-w-[104rem] flex-wrap items-center gap-1 px-5 py-1 sm:px-7"
+          >
+            {readerDoors.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="rounded-md px-2.5 py-1 text-sm font-medium whitespace-nowrap text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
         </div>
 
         {/*

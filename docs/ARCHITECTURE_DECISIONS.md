@@ -2406,3 +2406,60 @@ each case: writing them would make the log less useful, not more.
     all on a run that did nothing, so a quiet night leaves no trace. Neither
     claims an actor — a cron job is not a person, and inventing one would be
     worse than saying plainly that nobody pressed anything.
+
+## ADR-059 — One menu per role, on every screen
+
+The owner signed in as Super Admin, opened `/account`, and saw the children's
+masthead — Books, My books, How to join, Our rules, Book friends. Then opened
+`/desk/loans` and saw a completely different menu. Same person, same session,
+same minute.
+
+**The cause was structural, not a slip.** This application has two shells: the
+reader app (17 pages) and the desk (18 pages). Each owned a navigation array.
+Nothing forced them to agree, so they did not.
+
+The earlier fix in this log — "the doors are one list, rendered twice" — made
+the reader *masthead* and the reader *footer* agree. It never touched the shell
+boundary, which is the seam the owner actually walked across.
+
+Four defects, all verified against the running application before changing
+anything:
+
+1. **"My books" was offered to staff and went nowhere.** The filter asked "is
+   somebody signed in", not "does this person hold a library card". `/my-books`
+   reads the session, finds no member, and silently redirects to `/desk/loans`;
+   `/my-reviews` redirects to `/desk`. A door that teleports you elsewhere is
+   worse than no door.
+2. **Eighteen desk screens had no route to the public side at all** — no
+   catalogue, no rules, no donors page.
+3. **`/account` and `/account/password` were the only staff-reachable pages on
+   the reader shell**, which is exactly where the menu visibly flipped.
+4. **"Books" meant two different pages.** The reader menu's `/books` and the
+   desk menu's `/admin/books` carried the same word. For a librarian the same
+   label pointed at two destinations depending on which menu they were reading.
+
+**The fix is one list, in one file.** `READER_DESTINATIONS` moved next to
+`DESK_DESTINATIONS` in `@/lib/desk-nav`, and both shells now render from
+`readerDestinationsFor` and `deskDestinationsFor`. Neither function takes a
+route, a pathname or a shell — a role's menu is a pure function of who they are,
+and there is nowhere for a per-page difference to come from. The staff shell
+grew a second band for the reader's doors, mirroring the split the reader
+masthead already makes; `/account` chooses its shell by `actor.kind`, so staff
+never meet the reader shell at all. The two labels were disambiguated:
+"Catalogue" for the shelf a child browses, "Book list" for the desk's
+management screen.
+
+The footer also stopped taking `signedIn` as a prop and now reads the session,
+which is the same lesson the masthead learned earlier: a flag every page must
+remember is a flag some page will forget.
+
+`tests/unit/navigation.test.ts` holds it: neither shell may declare a
+destination array of its own, no two destinations may share a label or an href,
+staff are never offered a member's pages, and the navigation functions may not
+take an argument describing where the person is standing.
+
+**A related fix found on the way.** Three paginations carried
+`aria-label="Pages"`, the same accessible name as the footer's site
+navigation — so a screen-reader user hearing "Pages navigation" could not tell
+the library's doors from a row of page numbers. Each is now named after what it
+pages through.

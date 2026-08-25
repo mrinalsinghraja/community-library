@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { ChangePasswordForm } from "@/app/account/password/change-password-form";
 import { PublicShell } from "@/components/layout/site-shell";
+import { StaffShell } from "@/components/layout/staff-shell";
 import { Card } from "@/components/ui/card";
 import { getActor } from "@/server/authz";
 import { PASSWORD_POLICY } from "@/server/lib/password";
@@ -19,10 +20,12 @@ export default async function ChangePasswordPage() {
   if (!actor) redirect("/login?next=/account/password");
 
   const isStaff = actor.kind === "STAFF";
+  const Shell = isStaff ? StaffShell : PublicShell;
   const policy = isStaff ? PASSWORD_POLICY.staff : PASSWORD_POLICY.member;
 
   return (
-    <PublicShell branding={branding}>
+    // Same rule as /account: a role's menu must not change with the page.
+    <Shell branding={branding} actor={actor} title="Change password">
       <div className="mx-auto w-full max-w-xl px-5 py-14 sm:px-8">
         <h1 className="text-4xl">
           {isStaff ? "Change your password" : "Change your secret word"}
@@ -59,6 +62,6 @@ export default async function ChangePasswordPage() {
           </Link>
         </p>
       </div>
-    </PublicShell>
+    </Shell>
   );
 }

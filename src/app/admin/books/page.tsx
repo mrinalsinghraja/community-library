@@ -333,7 +333,7 @@ export default async function AdminBooksPage({
       </div>
 
       {result.pageCount > 1 ? (
-        <nav aria-label="Pages" className="mt-6 flex flex-wrap items-center gap-2">
+        <nav aria-label="More books" className="mt-6 flex flex-wrap items-center gap-2">
           {Array.from({ length: result.pageCount }, (_, index) => index + 1).map((number) => {
             const query = new URLSearchParams();
             for (const [key, value] of Object.entries(params)) {

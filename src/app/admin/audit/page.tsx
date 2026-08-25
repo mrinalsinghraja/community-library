@@ -166,7 +166,7 @@ export default async function AuditPage({
         ) : null}
 
         {result.pageCount > 1 ? (
-          <nav aria-label="Pages" className="flex items-center gap-4">
+          <nav aria-label="More events" className="flex items-center gap-4">
             {result.page > 1 ? (
               <Link href={pageHref(result.page - 1)} className="font-bold">
                 ← Newer
