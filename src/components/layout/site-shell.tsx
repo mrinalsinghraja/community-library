@@ -6,7 +6,7 @@ import { StoryCharacters } from "@/components/library/story-characters";
 import { canReachDesk } from "@/lib/desk-nav";
 import { JOIN_HELP_MESSAGE, whatsAppLink } from "@/lib/whatsapp";
 import { getActor } from "@/server/authz";
-import type { Branding } from "@/server/lib/settings";
+import { catalogueIsPubliclyVisible, type Branding } from "@/server/lib/settings";
 
 /**
  * The public shell: masthead, main landmark, footer.
@@ -35,20 +35,33 @@ const NAV_LINK =
  * from the footer and the home page but not from the masthead, and how a new
  * page gets added to one of them and forgotten in the other.
  *
- * `readersOnly` entries appear only once somebody is signed in, because the
- * catalogue defaults to members-only and offering a door that answers "sign in
- * first" is worse than not showing one.
+ * `readersOnly` entries appear only once somebody is signed in, because
+ * offering a door that answers "sign in first" is worse than not showing one.
+ *
+ * The catalogue is the exception, and it is a real one: whether a stranger may
+ * open it is a library *setting*, not a fact about the session. When the shelf
+ * is PUBLIC the Books link is for everybody — and it has to be, because a home
+ * page inviting a visitor to search a catalogue they cannot reach from the
+ * masthead is a page arguing with itself.
  */
-const DESTINATIONS: { href: string; label: string; readersOnly?: boolean }[] = [
-  { href: "/books", label: "Books", readersOnly: true },
+const DESTINATIONS: {
+  href: string;
+  label: string;
+  readersOnly?: boolean;
+  /** Shown to a signed-out visitor only when the catalogue is public. */
+  cataloguePublicOnly?: boolean;
+}[] = [
+  { href: "/books", label: "Books", readersOnly: true, cataloguePublicOnly: true },
   { href: "/my-books", label: "My books", readersOnly: true },
   { href: "/how-to-join", label: "How to join" },
   { href: "/rules", label: "Our rules" },
   { href: "/donors", label: "Book friends" },
 ];
 
-function destinationsFor(signedIn: boolean) {
-  return DESTINATIONS.filter((item) => !item.readersOnly || signedIn);
+function destinationsFor(signedIn: boolean, cataloguePublic: boolean) {
+  return DESTINATIONS.filter(
+    (item) => !item.readersOnly || signedIn || (item.cataloguePublicOnly && cataloguePublic),
+  );
 }
 
 export async function SiteHeader({ branding }: { branding: Branding }) {
@@ -71,6 +84,12 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
   const actor = await getActor();
   const signedIn = Boolean(actor);
   const deskIsOpen = actor ? canReachDesk(actor.permissions) : false;
+  /*
+   * Read, not passed in, for the same reason `actor` is. An unconfigured
+   * database throwing here must not take down the masthead on every page, so a
+   * failure means "not public" and the link stays hidden.
+   */
+  const cataloguePublic = await catalogueIsPubliclyVisible().catch(() => false);
 
   return (
     <header className="relative bg-surface">
@@ -156,7 +175,7 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
           className="mx-auto max-w-6xl overflow-x-auto px-5 [scrollbar-width:none] sm:px-8 [&::-webkit-scrollbar]:hidden"
         >
           <ul className="flex items-center gap-1 py-1.5 sm:gap-2">
-            {destinationsFor(signedIn).map((item) => (
+            {destinationsFor(signedIn, cataloguePublic).map((item) => (
               <li key={item.href} className="list-none">
                 <Link href={item.href} className={`${NAV_LINK} whitespace-nowrap`}>
                   {item.label}
@@ -190,7 +209,7 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
  * The green rule from the masthead is repeated at the very bottom, closing the
  * page the same way the header opens it.
  */
-export function SiteFooter({
+export async function SiteFooter({
   branding,
   signedIn = false,
 }: {
@@ -198,6 +217,9 @@ export function SiteFooter({
   signedIn?: boolean;
 }) {
   const whatsapp = whatsAppLink(branding.contactPhone, JOIN_HELP_MESSAGE);
+  // Asked here as well as in the masthead so the two lists cannot disagree
+  // about whether the catalogue has a public door. Cached per request.
+  const cataloguePublic = await catalogueIsPubliclyVisible().catch(() => false);
 
   return (
     <footer className="mt-16 border-t border-hairline bg-surface">
@@ -225,7 +247,7 @@ export function SiteFooter({
             Find your way
           </h2>
           <ul className="mt-4 flex flex-col gap-2.5">
-            {destinationsFor(signedIn).map((item) => (
+            {destinationsFor(signedIn, cataloguePublic).map((item) => (
               <li key={item.href} className="list-none">
                 <Link href={item.href} className="font-bold text-primary-deep no-underline">
                   {item.label}

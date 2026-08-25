@@ -3,17 +3,24 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { BorrowRequest } from "@/app/books/[code]/borrow-request";
+import { ReviewForm } from "@/app/books/[code]/review-form";
+import { BookReviews } from "@/components/library/book-reviews";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { Butterfly, LeafSprig } from "@/components/library/library-logo";
 import { PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
+import { RatingSummaryLine } from "@/components/ui/star-rating";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ageGroupLabel, statusDefinition } from "@/lib/catalogue";
 import { getActor } from "@/server/authz";
 import { isAppError } from "@/server/lib/errors";
-import { getBrandingSafe } from "@/server/lib/settings";
+import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { getBookByCode } from "@/server/services/catalogue-service";
 import { getOwnBorrowStateForCode } from "@/server/services/circulation-service";
+import {
+  getOwnReviewStateForCode,
+  reviewsForTitle,
+} from "@/server/services/review-service";
 import { Icon } from "@/components/ui/icon";
 
 export const dynamic = "force-dynamic";
@@ -27,9 +34,14 @@ export const metadata: Metadata = { title: "A book" };
  *
  * What is deliberately absent: internal ids, audit information, storage paths,
  * staff notes, the book's condition, and anything at all about who has borrowed
- * it. **No child's name appears anywhere in this catalogue.** That is not a
- * rendering choice; `ReaderBookDetail` has no field to put one in, so a future
- * edit to this template cannot leak one by accident.
+ * it. A child's *loans* are still invisible here — nothing says who has this
+ * book or who had it last.
+ *
+ * What is new is a first name on a review, and only where that reader chose to
+ * publish it. That is the one place a name appears in this catalogue, it is
+ * never more than a first name, it is attached to an opinion about a book
+ * rather than to a borrowing record, and every review carries its own answer to
+ * the question. See ADR-057.
  *
  * The cover is given real size and a shadow, because this is the one screen
  * where a child is deciding whether they want the book.
@@ -60,9 +72,22 @@ export default async function BookDetailPage({
   }
 
   const status = statusDefinition(book.status);
-  // Only a reader gets an answer here; a signed-out visitor and a librarian
-  // both get "none", and the control renders nothing at all.
-  const borrow = await getOwnBorrowStateForCode(decodeURIComponent(code));
+  const { settings } = await getCurrentLibrary();
+
+  /*
+   * Three questions about the same book, asked at once because none of them
+   * depends on another: may this reader take it home, what did everyone think
+   * of it, and what did *they* think of it.
+   *
+   * Only a reader gets an answer to the first and third; a signed-out visitor
+   * and a librarian both get "none", and the controls render nothing at all
+   * rather than a disabled button.
+   */
+  const [borrow, reviews, ownReview] = await Promise.all([
+    getOwnBorrowStateForCode(decodeURIComponent(code)),
+    reviewsForTitle(book.titleId),
+    getOwnReviewStateForCode(decodeURIComponent(code)),
+  ]);
 
   return (
     <PublicShell branding={branding}>
@@ -78,7 +103,13 @@ export default async function BookDetailPage({
         </Link>
 
         <div className="mt-8 flex flex-col gap-8 sm:flex-row sm:items-start sm:gap-10">
-          <div className="w-48 shrink-0 self-center sm:w-60 sm:self-start">
+          {/*
+            Wider than it was. This screen is where a child decides whether they
+            want the book, and the jacket is most of that decision — 288px on a
+            desktop rather than 240, and the full column width on a phone rather
+            than a stamp floating in the middle of it.
+          */}
+          <div className="w-56 shrink-0 self-center sm:w-72 sm:self-start">
             <div className="overflow-hidden rounded-[var(--radius-card)] shadow-raise">
               {/*
                 Tap it to see it properly. Nothing new is fetched and nowhere is
@@ -88,7 +119,7 @@ export default async function BookDetailPage({
               <CoverThumbnail
                 coverMediaId={book.coverMediaId}
                 title={book.title}
-                sizes="240px"
+                sizes="(min-width: 640px) 288px, 224px"
                 className="rounded-none"
               />
             </div>
@@ -100,6 +131,21 @@ export default async function BookDetailPage({
           <div className="min-w-0 flex-1">
             <h1 className="text-4xl leading-tight">{book.title}</h1>
             <p className="mt-2 text-xl text-ink-soft">{book.authors.join(", ")}</p>
+
+            {/*
+              Directly under the author, above every badge. It is the first
+              thing anyone looks for on a page like this, and it links to the
+              reviews below rather than repeating them here.
+            */}
+            <p className="mt-4">
+              <a
+                href="#reviews-heading"
+                className="inline-flex no-underline hover:opacity-80"
+                aria-label={`Read what readers thought of ${book.title}`}
+              >
+                <RatingSummaryLine summary={book.rating} />
+              </a>
+            </p>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <StatusBadge tone="neutral">
@@ -143,6 +189,35 @@ export default async function BookDetailPage({
             />
 
             {/*
+              The visitor's door.
+              
+              Anybody may read this page and nobody may borrow from it without a
+              library card, and the difference has to be said in a sentence
+              rather than shown as a missing button. It renders only for the
+              signed-out — a librarian is not offered a way to borrow, because
+              they are not who this control is for.
+            */}
+            {!actor ? (
+              <div className="mt-6 rounded-[var(--radius-card)] border-l-4 border-l-primary bg-surface-sunk px-5 py-4">
+                <p className="text-lg text-ink">
+                  Books go home with our readers. If you have a library card, sign in to ask for
+                  this one.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <ButtonLink
+                    href={`/login?next=/books/${encodeURIComponent(book.code)}`}
+                    icon={<Icon name="key" />}
+                  >
+                    Sign in
+                  </ButtonLink>
+                  <ButtonLink href="/how-to-join" variant="secondary" icon={<Icon name="reader" />}>
+                    How to join
+                  </ButtonLink>
+                </div>
+              </div>
+            ) : null}
+
+            {/*
               The thank-you, rendered by the service exactly as the donor chose
               to be credited — named, flat only, or simply "a neighbour". The
               template never sees the raw donation, so it cannot say more than
@@ -160,12 +235,33 @@ export default async function BookDetailPage({
               </div>
             ) : null}
 
-            <div className="mt-8 flex flex-wrap gap-3">
-              <ButtonLink href="/books" size="lg" icon={<Icon name="shelf" />}>
-                Find another book
-              </ButtonLink>
-            </div>
           </div>
+        </div>
+
+        {/* ------------------------------------------------------------- */}
+        {/* What readers thought                                           */}
+        {/*                                                                */}
+        {/* Full width, below both columns rather than inside the right    */}
+        {/* one. A review is prose and prose needs a measure; squeezed      */}
+        {/* beside a 288px jacket it would set at about forty characters a  */}
+        {/* line, which is a newspaper column, not a page a child reads.    */}
+        {/* ------------------------------------------------------------- */}
+        <BookReviews reviews={reviews} summary={book.rating} timezone={settings.timezone} />
+
+        {/*
+          The composer, for the one person who has earned it. `canReview` is
+          answered from the loan table on the server — a visitor, a librarian
+          and a reader who has never borrowed this book all get nothing here,
+          and a hand-written POST is refused by the same check.
+        */}
+        {ownReview.canReview ? (
+          <ReviewForm code={book.code} title={book.title} mine={ownReview.mine} />
+        ) : null}
+
+        <div className="mt-12 flex flex-wrap gap-3">
+          <ButtonLink href="/books" size="lg" icon={<Icon name="shelf" />}>
+            Find another book
+          </ButtonLink>
         </div>
       </div>
     </PublicShell>

@@ -13,6 +13,7 @@ import {
   type Page,
 } from "@/lib/catalogue";
 import { dateOnlyInTimezone } from "@/lib/dates";
+import { NO_RATINGS, type RatingSummary } from "@/lib/reviews";
 import { prisma } from "@/server/db";
 import {
   can,
@@ -32,6 +33,7 @@ import {
   scheduleMediaDeletion,
 } from "@/server/services/media-service";
 import { copyIsOnLoan } from "@/server/services/circulation-service";
+import { ratingForTitle } from "@/server/services/review-service";
 
 /**
  * The catalogue.
@@ -195,11 +197,26 @@ export interface ReaderBookCard {
   ageGroup: AgeGroup;
   status: CopyStatus;
   coverMediaId: string | null;
+  /**
+   * What readers made of it, averaged over every copy of the same work.
+   *
+   * Always present, never null: a book nobody has rated is `{average: 0,
+   * count: 0}` rather than a missing field, so every card renders the same
+   * shape and "no ratings yet" is a state rather than an absence.
+   */
+  rating: RatingSummary;
 }
 
 export interface ReaderBookDetail extends ReaderBookCard {
   /** Pre-rendered, already respecting the donor's own choice. Null when none. */
   donorAcknowledgement: string | null;
+  /**
+   * The work this copy is one of. Reviews hang off the work, so the page needs
+   * it to ask for them — and it is the one internal id that leaves this
+   * service. It identifies a book, never a person, and it is not in
+   * `ReaderBookCard`, so no listing carries it.
+   */
+  titleId: string;
 }
 
 /**
@@ -280,7 +297,7 @@ export interface CatalogueQuery {
   pageSize?: number;
 }
 
-export type CatalogueSort = "newest" | "title" | "author" | "code";
+export type CatalogueSort = "newest" | "title" | "author" | "code" | "loved";
 
 /**
  * Sort is chosen from a fixed list and never interpolated from user input.
@@ -294,6 +311,16 @@ const SORT_SQL: Record<CatalogueSort, Prisma.Sql> = {
   title: Prisma.sql`lower(t.title) ASC, c.copy_code ASC`,
   author: Prisma.sql`book_title_authors_text(t.authors) ASC, lower(t.title) ASC`,
   code: Prisma.sql`c.copy_code ASC`,
+  /*
+   * Best loved first.
+   *
+   * `NULLS LAST` matters: a book nobody has rated has no average, and without
+   * it PostgreSQL would sort every unrated book to the top of a list whose
+   * whole purpose is the opposite. The count is the tie-break, so 5.0 from
+   * eleven readers outranks 5.0 from one — otherwise the top of this list would
+   * be whichever book happened to get a single enthusiastic review.
+   */
+  loved: Prisma.sql`r.rating_average DESC NULLS LAST, r.rating_count DESC, lower(t.title) ASC`,
 };
 
 /**
@@ -366,6 +393,9 @@ interface CopyRow {
   donor_apartment: string | null;
   donated_at: Date | null;
   display_consent: DonorDisplayConsent | null;
+  /** Null when nobody has rated the work. Postgres returns numeric as string. */
+  rating_average: string | number | null;
+  rating_count: bigint;
 }
 
 /**
@@ -416,11 +446,30 @@ async function queryCopies(
            d.donor_name    AS donor_name,
            d.donor_apartment AS donor_apartment,
            d.donated_at    AS donated_at,
-           d.display_consent AS display_consent
+           d.display_consent AS display_consent,
+           r.rating_average AS rating_average,
+           coalesce(r.rating_count, 0) AS rating_count
       FROM book_copy c
       JOIN book_title t ON t.id = c.title_id
       JOIN book_category cat ON cat.id = t.category_id
       LEFT JOIN donation d ON d.copy_id = c.id
+      /*
+       * The rating, aggregated per work rather than per copy — three copies of
+       * the same book are one book as far as an opinion is concerned.
+       *
+       * A LATERAL against the indexed (library_id, title_id) rather than a
+       * GROUP BY over the whole join: this runs once per row of the page, which
+       * is twenty-four, and it leaves the outer query's shape and its ORDER BY
+       * exactly as they were. Hidden reviews are excluded here, which is what
+       * makes taking one down move the average as well as the list.
+       */
+      LEFT JOIN LATERAL (
+        SELECT avg(br.rating) AS rating_average,
+               count(*)       AS rating_count
+          FROM book_review br
+         WHERE br.title_id = t.id
+           AND br.hidden_at IS NULL
+      ) r ON TRUE
      WHERE ${where}
      ORDER BY ${order}
      LIMIT ${pageSize} OFFSET ${(safePage - 1) * pageSize}
@@ -580,7 +629,22 @@ function toReaderCard(row: CopyRow): ReaderBookCard {
     ageGroup: row.age_group,
     status: row.status,
     coverMediaId: row.cover_media_id,
+    rating: toRatingSummary(row),
   };
+}
+
+/**
+ * The two aggregate columns, as the shape every surface renders.
+ *
+ * `avg()` comes back from PostgreSQL as `numeric`, which the driver hands over
+ * as a string rather than a number — `4.3333333333333333` — and `count()` comes
+ * back as a bigint. Both would survive all the way to a template and fail there,
+ * so they are converted once, here.
+ */
+function toRatingSummary(row: Pick<CopyRow, "rating_average" | "rating_count">): RatingSummary {
+  const count = Number(row.rating_count);
+  if (count === 0 || row.rating_average === null) return NO_RATINGS;
+  return { average: Number(row.rating_average), count };
 }
 
 /**
@@ -602,6 +666,7 @@ export async function getBookByCode(code: string): Promise<ReaderBookDetail> {
     select: {
       copyCode: true,
       status: true,
+      titleId: true,
       title: {
         select: {
           title: true,
@@ -629,6 +694,8 @@ export async function getBookByCode(code: string): Promise<ReaderBookDetail> {
     status: copy.status,
     coverMediaId: copy.title.coverMediaId,
     donorAcknowledgement: donorAcknowledgement(copy.donation),
+    titleId: copy.titleId,
+    rating: await ratingForTitle(copy.titleId),
   };
 }
 

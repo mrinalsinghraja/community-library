@@ -189,6 +189,18 @@ enum DonorDisplayConsent {
 /// CANCELLED exists for exactly one situation: an issue that should not have
 /// happened, reversed at the desk moments later. It is not a soft delete. The
 /// row stays, the events stay, and the book returns to the shelf.
+/// How a reader chose to be credited on their own review.
+///
+/// Asked once per review rather than once per account, because the answer is
+/// not the same every time: a child may be happy to be named beside a book
+/// about dinosaurs and want to be quiet about the one they cried at. Defaults
+/// to FIRST_NAME because a review signed by nobody helps nobody choose a book,
+/// and a first name is the most this library ever publishes.
+enum ReviewAttribution {
+  FIRST_NAME
+  ANONYMOUS
+}
+
 enum LoanStatus {
   ACTIVE
   RETURNED
@@ -303,6 +315,7 @@ model Library {
   bookCopies            BookCopy[]
   donations             Donation[]
   loans                 Loan[]
+  bookReviews           BookReview[]
   loanNotifications     LoanNotification[]
   auditLogs             AuditLog[]
   announcements         Announcement[]
@@ -488,6 +501,8 @@ model AppUser {
   borrowRequests    BorrowRequest[]       @relation("BorrowRequester")
   borrowDecisions   BorrowRequest[]       @relation("BorrowRequestDecider")
   auditLogs         AuditLog[]
+  bookReviews       BookReview[]          @relation("ReviewAuthor")
+  reviewsHidden     BookReview[]          @relation("ReviewHiddenBy")
   donationsGiven    Donation[]            @relation("DonationDonor")
   donationsRecorded Donation[]            @relation("DonationRecorder")
   mediaUploaded     MediaObject[]
@@ -635,15 +650,15 @@ model RegistrationRequest {
   libraryId String             @map("library_id")
   status    RegistrationStatus @default(PENDING)
 
-  childName     String   @map("child_name")
+  childName      String  @map("child_name")
   /// Year only, for the same reason as member_profile.birth_year (ADR-051).
   childBirthYear Int     @map("child_birth_year")
-  apartment     String
-  guardianName  String   @map("guardian_name")
-  guardianEmail String   @map("guardian_email")
-  guardianPhone String   @map("guardian_phone")
-  avatarKey     String?  @map("avatar_key")
-  photoMediaId  String?  @map("photo_media_id")
+  apartment      String
+  guardianName   String  @map("guardian_name")
+  guardianEmail  String  @map("guardian_email")
+  guardianPhone  String  @map("guardian_phone")
+  avatarKey      String? @map("avatar_key")
+  photoMediaId   String? @map("photo_media_id")
 
   submittedAt  DateTime  @default(now()) @map("submitted_at") @db.Timestamptz(6)
   reviewedAt   DateTime? @map("reviewed_at") @db.Timestamptz(6)
@@ -805,9 +820,15 @@ model BookCategory {
 /// What the book *is*: one row per work, however many physical copies exist.
 ///
 /// Deliberately holds no ISBN, publisher, publication year, series, language,
-/// description, tags, ratings or reviews. Version 1 of this catalogue is run by
-/// volunteers and read by children; every field it does not have is a field
-/// nobody has to fill in, get wrong, or maintain. See docs/CATALOGUE.md §2.
+/// description or tags. Version 1 of this catalogue is run by volunteers and
+/// read by children; every field it does not have is a field nobody has to fill
+/// in, get wrong, or maintain. See docs/CATALOGUE.md §2.
+///
+/// It holds no rating column either, and that absence is load-bearing rather
+/// than an omission: an average kept on the row would have to be recomputed on
+/// every write, would drift the first time a review was hidden, and would be
+/// the one number a child could see growing. `book_review` is the only place a
+/// rating lives, and the average is derived every time it is asked for.
 ///
 /// `authors` stays an array because the search index is built over it and a
 /// second author costs nothing to store. The Add Book form offers a single
@@ -835,6 +856,7 @@ model BookTitle {
   // SetNull: losing a cover picture must never take the book off the shelf.
   coverMedia MediaObject? @relation(fields: [coverMediaId], references: [id], onDelete: SetNull)
   copies     BookCopy[]
+  reviews    BookReview[]
 
   @@index([libraryId, categoryId])
   @@index([libraryId, ageGroup])
@@ -923,6 +945,66 @@ model Donation {
 /// Current state of one borrowing. A partial unique index on (copy_id) WHERE
 /// status = 'ACTIVE' makes a double issue impossible at the database level —
 /// see the migration SQL. Overdue is NOT a column: it is dueAt < now().
+/// What a reader thought of a book they took home.
+///
+/// **Keyed to the title, not the copy.** A library with three copies of Matilda
+/// has one Matilda as far as a rating is concerned, and a child who borrowed
+/// copy B-0031 in March and B-0044 in July has one opinion of it, not two. The
+/// unique index enforces that: one row per reader per work, updated when they
+/// change their mind, never appended to. It is also the whole of the defence
+/// against a rating being inflated by borrowing the same book five times.
+///
+/// `loanId` records which borrowing earned the right to write it. Nullable and
+/// SetNull, because a loan can be corrected away years later and losing it must
+/// never delete what a child wrote about a book they really did read.
+///
+/// **Moderation is after the fact, not before it.** A review is published the
+/// moment it is written; `hiddenAt` is a librarian taking one down. Pre-approval
+/// was considered and rejected: a queue nobody works is a feature that silently
+/// never ships, and the failure mode of post-moderation (something unkind is up
+/// for a few hours) is smaller than the failure mode of pre-moderation (no
+/// child ever sees their own words appear). A hidden review leaves the average,
+/// the count and every public list, but still belongs to its author and still
+/// counts as "you have rated this" — hiding is not a punishment that reopens a
+/// reminder.
+///
+/// No column holds a full name. The reader's identity is a foreign key, and the
+/// only thing any public surface may derive from it is a first name — or
+/// nothing at all, when `attribution` says ANONYMOUS.
+model BookReview {
+  id           String  @id @default(uuid(7))
+  libraryId    String  @map("library_id")
+  titleId      String  @map("title_id")
+  memberUserId String  @map("member_user_id")
+  loanId       String? @map("loan_id")
+
+  /// 1 to 5, enforced by a CHECK constraint as well as by Zod.
+  rating Int
+  /// Optional. A rating with no words is a complete review.
+  review String?
+
+  attribution ReviewAttribution @default(FIRST_NAME)
+
+  hiddenAt     DateTime? @map("hidden_at") @db.Timestamptz(6)
+  hiddenById   String?   @map("hidden_by_id")
+  hiddenReason String?   @map("hidden_reason")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  library  Library   @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  title    BookTitle @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  member   AppUser   @relation("ReviewAuthor", fields: [memberUserId], references: [id], onDelete: Cascade)
+  loan     Loan?     @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  hiddenBy AppUser?  @relation("ReviewHiddenBy", fields: [hiddenById], references: [id], onDelete: SetNull)
+
+  @@unique([memberUserId, titleId], map: "book_review_one_per_member_title")
+  @@index([libraryId, titleId])
+  @@index([libraryId, hiddenAt])
+  @@index([memberUserId, createdAt])
+  @@map("book_review")
+}
+
 model Loan {
   id           String     @id @default(uuid(7))
   libraryId    String     @map("library_id")
@@ -954,6 +1036,7 @@ model Loan {
   renewalRequests RenewalRequest[]
   notifications   LoanNotification[]
   borrowRequests  BorrowRequest[]
+  reviews         BookReview[]
 
   @@index([libraryId, status, dueAt])
   @@index([memberUserId, status])

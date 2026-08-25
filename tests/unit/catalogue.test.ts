@@ -198,10 +198,30 @@ describe("what Version 1 deliberately does not store", () => {
     ["description", /^\s*description\s/m],
     ["tags", /^\s*tags\s/m],
     ["keywords", /^\s*keywords\s/m],
-    ["rating", /^\s*rating/im],
-    ["reviews", /^\s*reviews\s/m],
     ["price", /^\s*price/im],
   ])("has no %s field on a book", (_name, pattern) => {
+    expect(bookTitleModel).not.toMatch(pattern);
+  });
+
+  /*
+   * Ratings arrived in ADR-057, and this is the shape of them: a relation to
+   * `book_review`, and no scalar anywhere on the book itself.
+   *
+   * The distinction is the whole point rather than a technicality. A cached
+   * average or count on this row would have to be recomputed on every write,
+   * would drift the first time a librarian hid a review, and would be one more
+   * column able to disagree with the truth. Every average in the application is
+   * derived at read time from the reviews that are actually visible.
+   */
+  it("holds reviews as a relation and never as a column", () => {
+    expect(bookTitleModel).toMatch(/^\s*reviews\s+BookReview\[\]/m);
+  });
+
+  it.each([
+    ["rating", /^\s*rating\s+(Int|Float|Decimal)/im],
+    ["average rating", /^\s*(ratingAverage|averageRating)\s/im],
+    ["rating count", /^\s*(ratingCount|reviewCount)\s/im],
+  ])("keeps no cached %s on a book", (_name, pattern) => {
     expect(bookTitleModel).not.toMatch(pattern);
   });
 

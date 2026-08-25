@@ -2238,3 +2238,88 @@ needs `target` and `rel` and cannot be `ButtonLink`. Rather than hand-copying a
 class string — which is how a design system quietly grows a second button —
 `button.tsx` now exports `buttonClasses`, and `WhatsAppButton` borrows it. The
 two cannot drift.
+
+## ADR-057 — Stars from children, and the four rules that make them mean anything
+
+The owner asked for an Amazon-shaped rating system: five stars, an optional
+hundred words, an average with the count in brackets, everywhere a book appears
+— and the whole catalogue readable by a stranger with no account.
+
+That is a straightforward feature everywhere except that the reviewers are
+children and the readers are the open internet. Four rules carry it.
+
+**You may rate a book you have taken home, and only that.** Not one you asked
+for, not one you looked at. `submitReview` joins against `loan` on every write
+and refuses without one, and the check is in the service rather than the action,
+so a hand-written POST meets the same wall as a hidden button. This is the only
+reason any of these numbers mean anything.
+
+**One opinion per reader per work.** Keyed to `book_title`, not `book_copy`, and
+enforced by a unique index on (member, title) rather than by application code.
+A library with three copies of Matilda has one Matilda as far as an opinion is
+concerned; without this, the way to give a book five stars five times would be
+to borrow it five times, which a nine-year-old works out by the end of the week.
+Writing again edits the row. There is no revision history: a child who changes
+their mind has one opinion, not two.
+
+**A first name, or nothing at all.** `publicByline` is the only function in the
+application that turns a stored display name into something a stranger may read,
+and it is deliberately blunt — take the first whitespace-separated word, throw
+the rest away. The choice is asked per review rather than per account, because it
+is not the same answer every time: a child may be happy to be named beside a book
+about dinosaurs and want to be quiet about the one they cried at. The public
+shape carries five fields and a test asserts that list exactly, so an added
+`select` cannot widen it by accident.
+
+**Moderation is after the fact, and taking a review down is not a punishment.**
+Reviews publish the moment they are written. A pre-approval queue was considered
+and rejected: a queue nobody works is a feature that silently never ships, and no
+child ever seeing their own words appear is a worse failure than something unkind
+being up for an afternoon. `/desk/reviews` is the compensating control — every
+review, newest first, in full, with one button. Hiding removes a review from the
+public list, from the average, from the count and from the catalogue's own
+aggregate; the database test asserts all four, because a leak in any one of them
+would show a rating the book's own page says does not exist. The author is told
+their review is no longer showing and is never told why — that is a conversation
+to have in person. It still counts as rated, so the reminder does not come back
+to ask a child to rewrite something a grown-up removed.
+
+**The reminder starts at once and stops at sixty days.** "Reminder should go off
+after 2 months" could be read either way; asking a child about a fourteen-day
+loan two months after they returned it is asking about a book nobody remembers,
+so it opens the day the book goes back and closes for good sixty days later. A
+prompt that never expires is not a nudge, it is a debt, and a screen with a
+permanent unfinished task on it is a screen a child stops opening. It names three
+books at most and renders nothing at all when there is nothing to ask — not an
+empty state, because a card congratulating a child for having no homework is
+still a card about homework.
+
+**The average is derived, never stored.** No rating column on `book_title`. A
+cached average would have to be recomputed on write, would drift the first time
+a review was hidden, and would be one more column able to disagree with the
+truth. The shelf gets it from a LATERAL against the indexed (library_id,
+title_id) — once per row of a twenty-four-row page, leaving the outer query's
+shape and ORDER BY untouched — and the book's own page gets it from
+`ratingForTitle`. Both exclude hidden reviews, and both are asserted separately
+because they are separate SQL.
+
+**The count is never optional.** Every surface that renders an average renders
+the number of readers beside it, and the screen-reader sentence says it out loud
+rather than leaving it in brackets. 5.0 from one child and 5.0 from forty look
+identical without it.
+
+**The public catalogue is a setting, not a code change.** `catalogue_visibility`
+has been in `library_settings` since Phase 2 and `requireCatalogueAccess` has
+always read it. Opening the shelf to the public was one dropdown at
+`/admin/settings`, and the only code this needed was the masthead: the Books link
+used to be `readersOnly`, so a home page inviting a visitor to search a catalogue
+they could not reach from the top of the page was a page arguing with itself.
+Borrowing is unchanged and still needs a card — a signed-out visitor gets a
+sentence saying so and a way in, never a disabled button.
+
+**What a stranger can now see, stated plainly.** Every book, its cover, its
+average, and what readers wrote about it under their first names. What they still
+cannot see: who has a book out, who had it last, any child's full name, any
+member code, any flat, or any loan. No page in the catalogue has a field for
+those, which is what makes the claim checkable rather than a promise about
+rendering.

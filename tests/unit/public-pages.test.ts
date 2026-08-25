@@ -329,8 +329,10 @@ describe("the doors, top and bottom", () => {
     const source = code(SHELL);
 
     expect(source).toContain("const DESTINATIONS");
-    // Both navigations read the same filtered list.
-    expect(source.match(/destinationsFor\(signedIn\)/g)?.length).toBe(2);
+    // Both navigations read the same filtered list, with the same two arguments
+    // — the footer asking a narrower question than the masthead is exactly how
+    // the two lists disagreed last time.
+    expect(source.match(/destinationsFor\(signedIn, cataloguePublic\)/g)?.length).toBe(2);
   });
 
   it("offers the joining guide and the donors page from both", () => {
@@ -340,13 +342,26 @@ describe("the doors, top and bottom", () => {
     expect(source).toContain('href: "/donors"');
   });
 
-  it("hides the catalogue doors from somebody who is not signed in", () => {
-    // The catalogue defaults to members-only, and a door that answers "sign in
-    // first" is worse than no door.
+  it("hides a reader's own shelf from somebody who is not signed in", () => {
+    // A door that answers "sign in first" is worse than no door.
     const source = code(SHELL);
 
-    expect(source).toMatch(/href: "\/books", label: "Books", readersOnly: true/);
     expect(source).toMatch(/href: "\/my-books", label: "My books", readersOnly: true/);
+  });
+
+  it("opens the catalogue door to a visitor only when the shelf is public", () => {
+    /*
+     * The one exception to `readersOnly`, and a real one: whether a stranger may
+     * open the catalogue is a library *setting*, not a fact about the session.
+     * A home page inviting a visitor to search a catalogue they cannot reach
+     * from the masthead is a page arguing with itself. See ADR-057.
+     */
+    const source = code(SHELL);
+
+    expect(source).toMatch(/href: "\/books"[\s\S]{0,80}cataloguePublicOnly: true/);
+    // Never a hard-coded yes: the setting is read, and a failure means "no".
+    expect(source).toContain("catalogueIsPubliclyVisible()");
+    expect(source).toMatch(/catalogueIsPubliclyVisible\(\)\.catch\(\(\) => false\)/);
   });
 
   it("scrolls the band rather than wrapping it on a small screen", () => {

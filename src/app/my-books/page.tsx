@@ -6,6 +6,7 @@ import { RenewalRequest } from "@/app/my-books/renewal-request";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DueCountdownPanel } from "@/components/library/due-countdown";
 import { ReadersBoard } from "@/components/library/readers-board";
+import { ReviewReminder } from "@/components/library/review-reminder";
 import { PublicShell } from "@/components/layout/site-shell";
 import { Butterfly } from "@/components/library/library-logo";
 import { ButtonLink } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { formatInTimezone } from "@/lib/dates";
 import { loanCountdown } from "@/lib/due-countdown";
 import { previousMonthWindow } from "@/lib/readers-board";
 import { readersOfTheMonth } from "@/server/services/readers-board-service";
+import { pendingReviewPrompts } from "@/server/services/review-service";
 import { getActor } from "@/server/authz";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import {
@@ -71,6 +73,10 @@ export default async function MyBooksPage() {
   const boardReaders = await readersOfTheMonth();
   const boardMonth = previousMonthWindow(new Date()).label;
 
+  // Books brought back inside the last two months that this child has not rated
+  // yet. Empty is the normal state and renders nothing at all.
+  const reviewPrompts = await pendingReviewPrompts();
+
   return (
     <PublicShell branding={branding}>
       <div className="relative mx-auto w-full max-w-5xl px-5 py-12 sm:px-8">
@@ -95,11 +101,16 @@ export default async function MyBooksPage() {
             You can have {limit === 1 ? "one book" : `${limit} books`} at a time.
           </p>
 
-          <ReadersBoard
-            readers={boardReaders}
-            monthLabel={boardMonth}
-            className="order-last w-full shrink-0 lg:order-none lg:w-[26rem]"
-          />
+          <div className="order-last flex w-full shrink-0 flex-col gap-6 lg:order-none lg:w-[26rem]">
+            {/*
+              The nudge above the board, and both below the greeting on a phone.
+              A child's own unfinished business outranks somebody else's month;
+              neither outranks the sentence telling them how many books they
+              have at home, which is what they opened this page to read.
+            */}
+            <ReviewReminder prompts={reviewPrompts} />
+            <ReadersBoard readers={boardReaders} monthLabel={boardMonth} />
+          </div>
         </div>
 
         {active.length === 0 ? (
@@ -223,6 +234,17 @@ export default async function MyBooksPage() {
               starts a new line here.
             </p>
 
+            <p className="mt-3">
+              <ButtonLink
+                href="/my-reviews"
+                variant="secondary"
+                size="sm"
+                icon={<Icon name="quote" />}
+              >
+                What I thought of them
+              </ButtonLink>
+            </p>
+
             <ul className="mt-6 flex flex-col gap-3">
               {history.map((loan, index) => (
                 // Keyed by code AND position: the same physical copy can appear
@@ -241,7 +263,18 @@ export default async function MyBooksPage() {
                     />
                   </span>
                   <span className="flex flex-1 flex-col">
-                    <span className="text-base font-semibold text-ink">{loan.title}</span>
+                    {/*
+                      A link now, not plain text. A book on this list is the one
+                      a child is most likely to want to say something about, and
+                      before this the only route back to it was searching the
+                      catalogue for a book they had already read.
+                    */}
+                    <Link
+                      href={`/books/${encodeURIComponent(loan.code)}`}
+                      className="text-base font-semibold text-ink no-underline hover:text-primary-deep"
+                    >
+                      {loan.title}
+                    </Link>
                     <span className="text-base text-ink-soft">{loan.authors.join(", ")}</span>
                     <span className="text-base text-ink-soft">
                       Borrowed {formatInTimezone(loan.issuedAt, settings.timezone, "d MMM yyyy")}

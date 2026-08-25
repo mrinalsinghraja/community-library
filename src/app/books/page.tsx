@@ -53,6 +53,9 @@ export default async function BooksPage({
   const categorySlug = read("shelf");
   const ageRaw = read("age");
   const page = Number.parseInt(read("page"), 10) || 1;
+  // Two orderings, chosen from a fixed pair. Anything else in the query string
+  // falls back to newest rather than reaching the SQL.
+  const sort = read("sort") === "loved" ? "loved" : "newest";
 
   const categories = await listCategories().catch(() => []);
   const category = categories.find((entry) => entry.slug === categorySlug);
@@ -63,6 +66,7 @@ export default async function BooksPage({
       search,
       categoryId: category?.id,
       ageGroup: isAgeGroup(ageRaw) ? ageRaw : undefined,
+      sort,
       page,
       pageSize: PAGE_SIZES.reader,
     });
@@ -78,13 +82,14 @@ export default async function BooksPage({
     throw error;
   }
 
-  const filtering = Boolean(search || category || ageRaw);
+  const filtering = Boolean(search || category || ageRaw || sort !== "newest");
 
   /** Keeps the age filter when a shelf chip is tapped, drops the page number. */
   const shelfHref = (slug: string): string => {
     const query = new URLSearchParams();
     if (search) query.set("q", search);
     if (ageRaw) query.set("age", ageRaw);
+    if (sort !== "newest") query.set("sort", sort);
     if (slug) query.set("shelf", slug);
     const string = query.toString();
     return string ? `/books?${string}` : "/books";
@@ -129,7 +134,9 @@ export default async function BooksPage({
               />
             </label>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            {/* Three controls, three columns. Two-up left "Show me" stranded
+                on a row of its own at half width. */}
+            <div className="grid gap-4 sm:grid-cols-3">
               <label className="flex flex-col gap-2">
                 <span className="flex items-center gap-2 text-base font-semibold text-ink">
                   <Icon name="shelf" className="text-accent-ink" />
@@ -158,6 +165,23 @@ export default async function BooksPage({
                       {group.label}
                     </option>
                   ))}
+                </select>
+              </label>
+
+              {/*
+                Two orderings and no more. "Best loved" is the one the ratings
+                earn their keep with; everything else a child might want is
+                already a filter above. A dropdown of six sorts on a page a
+                seven-year-old uses is six ways to get lost.
+              */}
+              <label className="flex flex-col gap-2">
+                <span className="flex items-center gap-2 text-base font-semibold text-ink">
+                  <Icon name="star" className="text-accent-ink" />
+                  Show me
+                </span>
+                <select name="sort" defaultValue={sort} className={FIELD}>
+                  <option value="newest">Newest first</option>
+                  <option value="loved">Best loved first</option>
                 </select>
               </label>
             </div>

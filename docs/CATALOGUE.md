@@ -47,9 +47,15 @@ a code refers to by reading the letter (see `IDENTITY.md` §3 and ADR-023).
 ## 2. What is deliberately not here
 
 ISBN · publisher · publication year · series · volume · **language** ·
-description · tags · keywords · ratings · reviews · reading level · purchase
-price · digital editions · donor phone · donor email · donor address · any
-borrower information.
+description · tags · keywords · reading level · purchase price · digital
+editions · donor phone · donor email · donor address · any borrower information.
+
+**Ratings arrived in ADR-057 and are not on this list any more** — but the
+*column* still is. `book_title` holds no rating, no average and no count; it
+holds a relation to `book_review`, and every average in the application is
+derived at read time from the reviews that are currently visible. A cached
+number would have to be recomputed on every write and would drift the first time
+a librarian hid a review.
 
 These are removed from the schema, not merely hidden. Phase 0 had `language`,
 `publisher`, `isbn13`, `isbn10` and `description` columns on `book_title`;
@@ -364,8 +370,11 @@ code change — which is the whole point of roles being rows.
 
 ## 13. Visibility
 
-`library_settings.catalogue_visibility` — **MEMBER_ONLY** for this deployment,
-unchanged from Phase 0. Only signed-in members browse the shelf.
+`library_settings.catalogue_visibility` — **PUBLIC** for this deployment as of
+ADR-057, at the owner's request. Anybody may search the shelf, read a book's
+page and read what other readers thought of it, with no account. Nobody borrows
+without a library card: a signed-out visitor gets a sentence saying so and a way
+in, never a disabled button.
 
 Read in exactly one place, `requireCatalogueAccess()`, so opening the catalogue
 to the public later is one switch in the database rather than a hunt through
@@ -389,5 +398,12 @@ who has borrowed anything**.
 The URL carries the code printed on the book's own label (`/books/MJCL-B0010`) —
 the thing a child can read off the object in their hand — not a UUID.
 
-**No child's name appears anywhere in this catalogue.** Verified in the browser
-across the browse grid, the detail page and the donors page.
+**No child's name appears anywhere in this catalogue except on a review they
+chose to sign** — and then only a first name, never more. See ADR-057: the
+choice is asked per review rather than per account, `publicByline` is the single
+function that can emit it, and the alternative it returns is "A reader at the
+library". Nothing anywhere connects a name to a *borrowing*: who has a book out
+and who had it last remain invisible, as they always were.
+
+Verified in the browser across the browse grid, the detail page, a book's
+reviews and the donors page.

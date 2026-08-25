@@ -4,10 +4,12 @@ import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Callout } from "@/components/ui/states";
 import { Butterfly, LeafSprig, LibraryLogo, ShelfIllustration } from "@/components/library/library-logo";
+import { CatalogueSearchBand } from "@/components/library/catalogue-search";
 import { PublicShell } from "@/components/layout/site-shell";
 import { WhatsAppButton, WhatsAppHelp } from "@/components/library/whatsapp-help";
 import { DONATE_BOOKS_MESSAGE } from "@/lib/whatsapp";
-import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
+import { catalogueIsPubliclyVisible, getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
+import { browseCatalogue, listCategories } from "@/server/services/catalogue-service";
 import { Icon } from "@/components/ui/icon";
 
 /**
@@ -40,6 +42,22 @@ export default async function HomePage() {
   } catch {
     rules = null;
   }
+
+  /*
+   * The shelf, if a stranger is allowed to see it.
+   *
+   * Both reads are guarded and both are allowed to fail quietly: an unseeded
+   * database, or a library that keeps its catalogue behind the front door,
+   * simply means the front page has no search band and keeps the sign-in call
+   * to action it already had. A home page must render.
+   */
+  const cataloguePublic = await catalogueIsPubliclyVisible().catch(() => false);
+  const [categories, shelf] = cataloguePublic
+    ? await Promise.all([
+        listCategories().catch(() => []),
+        browseCatalogue({ pageSize: 1 }).catch(() => null),
+      ])
+    : [[], null];
 
   return (
     <PublicShell branding={branding}>
@@ -124,6 +142,18 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Finding a book, without an account                                */}
+      {/*                                                                   */}
+      {/* Directly under the hero, above the explanation. Somebody who       */}
+      {/* already knows what a library is came here to see whether it has    */}
+      {/* the book they want, and making them read three cards about         */}
+      {/* borrowing first is answering a question they did not ask.          */}
+      {/* ---------------------------------------------------------------- */}
+      {cataloguePublic ? (
+        <CatalogueSearchBand categories={categories} totalBooks={shelf?.total ?? 0} />
+      ) : null}
 
       {/* ---------------------------------------------------------------- */}
       {/* How it works                                                      */}

@@ -52,7 +52,10 @@ export type IconName =
   | "signOut"
   | "card"
   | "refresh"
-  | "handshake";
+  | "handshake"
+  | "star"
+  | "quote"
+  | "hide";
 
 /** The drawn part of each glyph, on a 24×24 grid. */
 const PATHS: Record<IconName, React.ReactNode> = {
@@ -246,6 +249,29 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <path d="M20 12a8 8 0 1 1-2.4-5.7" />
       <path d="M20 4v4.5h-4.5" />
+    </>
+  ),
+  /*
+   * Outline only. The star row draws its own filled and half-filled shapes,
+   * because a fill is the whole information there and `Icon` paints nothing.
+   * This one is for the places that want a star as furniture — a heading, a
+   * button — rather than as a measurement.
+   */
+  star: (
+    <path d="m12 3.5 2.6 5.3 5.9.9-4.2 4.1 1 5.8-5.3-2.8-5.3 2.8 1-5.8-4.2-4.1 5.9-.9L12 3.5Z" />
+  ),
+  quote: (
+    <>
+      <path d="M9 7c-2.2 0-4 1.8-4 4s1.8 4 4 4c0 2-1 3.5-3 4.5" />
+      <path d="M19 7c-2.2 0-4 1.8-4 4s1.8 4 4 4c0 2-1 3.5-3 4.5" />
+    </>
+  ),
+  hide: (
+    <>
+      <path d="M3 3l18 18" />
+      <path d="M10.6 5.2A9.6 9.6 0 0 1 12 5c5 0 9 4.5 9 7a11 11 0 0 1-2.3 3.4" />
+      <path d="M6.3 6.9C3.9 8.4 3 10.5 3 12c0 2.5 4 7 9 7a9.4 9.4 0 0 0 4.2-1" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
     </>
   ),
   handshake: (

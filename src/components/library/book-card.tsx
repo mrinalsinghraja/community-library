@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { BookCover } from "@/components/library/book-cover";
+import { RatingSummaryLine } from "@/components/ui/star-rating";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ageGroupLabel, statusDefinition } from "@/lib/catalogue";
 import type { ReaderBookCard } from "@/server/services/catalogue-service";
@@ -9,10 +10,16 @@ import { Icon } from "@/components/ui/icon";
 /**
  * A book, as a child sees it.
  *
- * Six things and no more: the cover, the title, who wrote it, which shelf, who
- * it is for, and whether it is here. A card with ten pieces of metadata on it
- * is an inventory row, and a shelf of inventory rows is not somewhere a
- * nine-year-old wants to spend a Saturday.
+ * Seven things and no more: the cover, the title, who wrote it, what readers
+ * made of it, which shelf, who it is for, and whether it is here. A card with
+ * ten pieces of metadata on it is an inventory row, and a shelf of inventory
+ * rows is not somewhere a nine-year-old wants to spend a Saturday.
+ *
+ * The rating earned its place because it changes which book gets picked up, and
+ * it is drawn in the `sm` size — stars, the figure, and the count in brackets —
+ * because at card width the word "ratings" is what pushes the line to wrap. A
+ * book nobody has rated shows nothing at all rather than five grey stars: an
+ * empty row on twenty-four tiles reads as a shelf of bad books.
  *
  * Deliberately absent: the donor (that belongs on the book's own page, where
  * there is room to say thank you properly rather than stamp a name on every
@@ -55,6 +62,13 @@ export function BookCardTile({ book }: { book: ReaderBookCard }) {
             {book.title}
           </h3>
           <p className="line-clamp-1 text-base text-ink-soft">{book.authors.join(", ")}</p>
+
+          {/*
+            `emptyLabel={null}` is the important argument: an unrated book is
+            silent here. Elsewhere "no ratings yet" is worth saying; on a grid of
+            two dozen tiles it would be the most repeated sentence on the page.
+          */}
+          <RatingSummaryLine summary={book.rating} size="sm" emptyLabel={null} />
 
           {/*
             Two facts, one per line. They used to share a line with a middle dot

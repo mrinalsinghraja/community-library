@@ -98,6 +98,16 @@ export const AUDIT_ACTIONS = {
   BOOK_CATEGORY_CHANGED: "book.title.category_changed",
   BOOK_COVER_ADDED: "book.cover.added",
   BOOK_COVER_REPLACED: "book.cover.replaced",
+  /**
+   * A librarian took a reader's review off the book's page, or put it back.
+   *
+   * The row records that it happened and to which review. It deliberately does
+   * NOT carry the review text or the child's name: what was written is still in
+   * `book_review`, and the audit log's job is who decided what, not to keep a
+   * second copy of a child's words in a table nobody deletes from.
+   */
+  REVIEW_HIDDEN: "review.hidden",
+  REVIEW_RESTORED: "review.restored",
   BOOK_COVER_REMOVED: "book.cover.removed",
   BOOK_LABELS_PRINTED: "book.labels.printed",
   DONATION_RECORDED: "donation.recorded",
