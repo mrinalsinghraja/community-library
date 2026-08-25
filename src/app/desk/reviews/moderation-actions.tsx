@@ -1,95 +1,160 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import type { ReviewStatus } from "@prisma/client";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { setReviewHiddenAction, type ReviewFormState } from "@/server/actions/review-actions";
+import {
+  decideReviewAction,
+  deleteReviewAction,
+  type ReviewFormState,
+} from "@/server/actions/review-actions";
 
 /**
- * Take a review down, or put it back.
+ * The desk's answer to one review.
  *
- * Taking one down asks for a reason and a second press; putting one back does
- * not. That asymmetry is on purpose — removing a child's words from a page they
- * were proud of is the consequential direction, and the reason is what lets the
- * librarian who did it explain themselves to a family six weeks later.
+ * Three controls, and their asymmetry is the design:
  *
- * The reason is stored, never published. "A grown-up took this down because…"
- * on a public page would be worse than the review.
+ *   * **Publish** is one press. Saying yes to a child's writing should not be
+ *     the slow path.
+ *   * **Send it back** asks for a note first, because the note is what the
+ *     author reads and rewrites from. A refusal with no words is a machine.
+ *   * **Delete forever** appears only for the Super Admin, only on something
+ *     already published, needs a typed reason and a second press, and says out
+ *     loud that it cannot be undone.
+ *
+ * None of that is the security boundary. `review.moderate` and `review.delete`
+ * are enforced inside the services, so a librarian who forged this form still
+ * cannot delete anything.
  */
 
 const initialState: ReviewFormState = { status: "idle" };
 
 export function ModerationActions({
   reviewId,
-  hidden,
+  status,
   title,
+  canDelete,
 }: {
   reviewId: string;
-  hidden: boolean;
-  /** For the accessible name, so a row of identical buttons is not ambiguous. */
+  status: ReviewStatus;
+  /** For the accessible name, so a column of identical buttons is not ambiguous. */
   title: string;
+  /** True only for the Super Admin. The service checks it again. */
+  canDelete: boolean;
 }) {
-  const [state, action, pending] = useActionState(setReviewHiddenAction, initialState);
-  const [confirming, setConfirming] = useState(false);
+  const [decision, decideAction, deciding] = useActionState(decideReviewAction, initialState);
+  const [removal, removeAction, removing] = useActionState(deleteReviewAction, initialState);
+  const [declining, setDeclining] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  if (hidden) {
-    return (
-      <form action={action} className="flex flex-col gap-1.5">
-        <input type="hidden" name="reviewId" value={reviewId} />
-        <input type="hidden" name="hidden" value="false" />
-        <Button type="submit" variant="secondary" size="sm" disabled={pending}>
-          {pending ? "Restoring…" : "Put it back"}
-          <span className="sr-only"> — {title}</span>
-        </Button>
-        {state.status === "error" ? (
-          <p role="alert" className="text-sm font-semibold text-danger">
-            {state.message}
-          </p>
-        ) : null}
-      </form>
-    );
-  }
-
-  if (!confirming) {
-    return (
-      <Button variant="quiet" size="sm" icon={<Icon name="hide" />} onClick={() => setConfirming(true)}>
-        Take down
-        <span className="sr-only"> — {title}</span>
-      </Button>
-    );
-  }
+  const error = decision.status === "error" ? decision.message : removal.status === "error" ? removal.message : null;
 
   return (
-    <form action={action} className="flex flex-col gap-2">
-      <input type="hidden" name="reviewId" value={reviewId} />
-      <input type="hidden" name="hidden" value="true" />
+    <div className="flex flex-col gap-2">
+      {status === "PENDING" && !declining ? (
+        <>
+          <form action={decideAction}>
+            <input type="hidden" name="reviewId" value={reviewId} />
+            <input type="hidden" name="approve" value="true" />
+            <Button type="submit" size="sm" icon={<Icon name="check" />} disabled={deciding}>
+              {deciding ? "Publishing…" : "Publish"}
+              <span className="sr-only"> — {title}</span>
+            </Button>
+          </form>
 
-      <label className="flex flex-col gap-1 text-sm text-ink-soft">
-        Why (for our records only)
-        <input
-          type="text"
-          name="reason"
-          maxLength={200}
-          className="min-h-10 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-3 text-base"
-          placeholder="Names a person, unkind, off topic…"
-        />
-      </label>
+          <Button variant="quiet" size="sm" onClick={() => setDeclining(true)}>
+            Send it back
+          </Button>
+        </>
+      ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" variant="danger" size="sm" disabled={pending}>
-          {pending ? "Taking down…" : "Take it down"}
+      {status === "PENDING" && declining ? (
+        <form action={decideAction} className="flex flex-col gap-2">
+          <input type="hidden" name="reviewId" value={reviewId} />
+          <input type="hidden" name="approve" value="false" />
+
+          <label className="flex flex-col gap-1 text-sm text-ink-soft">
+            {/*
+              Not "reason" — this is addressed to a child, and it is the only
+              thing they will see. Naming the field after its reader is how the
+              librarian remembers who is going to read it.
+            */}
+            What should they change?
+            <input
+              type="text"
+              name="note"
+              maxLength={200}
+              className="min-h-10 w-56 rounded-[var(--radius-field)] border border-control-border bg-surface px-3 text-base"
+              placeholder="Please write about the book, not your friend…"
+            />
+          </label>
+
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="secondary" size="sm" disabled={deciding}>
+              {deciding ? "Sending…" : "Send it back"}
+            </Button>
+            <Button variant="quiet" size="sm" onClick={() => setDeclining(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : null}
+
+      {/*
+        Published reviews carry no publish/decline control at all. Publication is
+        permanent, and a "decline" button on something already on the shelf would
+        be un-publishing under another name — the service refuses it too.
+      */}
+      {status === "PUBLISHED" && canDelete && !deleting ? (
+        <Button variant="quiet" size="sm" icon={<Icon name="trash" />} onClick={() => setDeleting(true)}>
+          Delete forever
+          <span className="sr-only"> — {title}</span>
         </Button>
-        <Button variant="quiet" size="sm" onClick={() => setConfirming(false)}>
-          Leave it
-        </Button>
-      </div>
+      ) : null}
 
-      {state.status === "error" ? (
-        <p role="alert" className="text-sm font-semibold text-danger">
-          {state.message}
+      {status === "PUBLISHED" && canDelete && deleting ? (
+        <form action={removeAction} className="flex w-56 flex-col gap-2">
+          <input type="hidden" name="reviewId" value={reviewId} />
+
+          <p className="text-sm font-semibold text-danger">
+            This deletes the review permanently. It cannot be undone.
+          </p>
+
+          <label className="flex flex-col gap-1 text-sm text-ink-soft">
+            Why (required, kept in the audit log)
+            <input
+              type="text"
+              name="reason"
+              required
+              maxLength={200}
+              className="min-h-10 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-3 text-base"
+            />
+          </label>
+
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="danger" size="sm" disabled={removing}>
+              {removing ? "Deleting…" : "Delete forever"}
+            </Button>
+            <Button variant="quiet" size="sm" onClick={() => setDeleting(false)}>
+              Keep it
+            </Button>
+          </div>
+        </form>
+      ) : null}
+
+      {status === "REJECTED" ? (
+        <p className="text-sm text-ink-soft">
+          Sent back. The reader can rewrite it, and it will come here again.
         </p>
       ) : null}
-    </form>
+
+      {error ? (
+        <p role="alert" className="text-sm font-semibold text-danger">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }

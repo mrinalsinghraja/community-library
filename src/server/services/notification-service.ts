@@ -11,6 +11,7 @@ import {
   reminderSubject,
 } from "@/lib/notifications";
 import { prisma } from "@/server/db";
+import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
 import { EmailService, TEMPLATE_IDS } from "@/server/lib/email";
 import { getCurrentLibrary } from "@/server/lib/settings";
 
@@ -232,6 +233,35 @@ export async function sendCirculationReminders(
 
     if (outcome.ok) result.sent += 1;
     else result.failed += 1;
+  }
+
+  /*
+   * One row per run, with counts — not one per message. Every individual email
+   * already has its own `email_event` row with its own status; what the audit
+   * log is for is "the library wrote to families today, and here is how it
+   * went". A row per message would bury every human decision under machine
+   * bookkeeping.
+   *
+   * Written only when the run actually sent or failed something, so a nightly
+   * job that finds nothing due leaves no trace. `actorUserId` is null because
+   * nobody pressed anything — inventing a person for a cron job would be worse
+   * than saying so plainly.
+   */
+  if (result.sent > 0 || result.failed > 0) {
+    await recordAudit(prisma, {
+      libraryId: library.id,
+      action: AUDIT_ACTIONS.REMINDERS_SENT,
+      entityType: "loan_notification",
+      actorUserId: null,
+      actorLabel: "Scheduled reminders",
+      metadata: {
+        due: result.due,
+        sent: result.sent,
+        failed: result.failed,
+        alreadySent: result.alreadySent,
+        noRecipient: result.noRecipient,
+      },
+    });
   }
 
   return result;

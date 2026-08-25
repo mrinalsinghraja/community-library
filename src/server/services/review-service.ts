@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { ReviewAttribution } from "@prisma/client";
+import type { ReviewAttribution, ReviewStatus } from "@prisma/client";
 
 import {
   NO_RATINGS,
@@ -40,13 +40,18 @@ import { NotFoundError, RuleViolationError, ValidationError } from "@/server/lib
  *     the reader chose to publish, or the words "A reader at the library" — and
  *     the choice is per review, because it is not the same answer every time.
  *
- *  4. **A librarian can take a review down, and taking it down is not a
- *     punishment.** A hidden review leaves every public list and every average,
- *     but still belongs to its author and still counts as rated: the reminder
- *     does not come back to ask a child to rewrite something a grown-up removed.
+ *  4. **Nothing is published until a grown-up says so.** A review is written
+ *     PENDING and is visible to nobody but its author and the desk. A Librarian
+ *     or the Super Admin approves it onto the book's page, or declines it with a
+ *     note the author can read and rewrite from. Only PUBLISHED reviews reach a
+ *     public list, an average or a count.
  *
- * Moderation is deliberately after the fact. See the note on the model in
- * `prisma/schema.prisma` for why a pre-approval queue was rejected.
+ *  5. **Publication is permanent, with exactly one exception.** Once approved,
+ *     the author cannot edit it and cannot take it down. The Super Admin can
+ *     delete it outright — `review.delete`, held by nobody else, irreversible,
+ *     and audited with enough to account for it afterwards.
+ *
+ * Every one of those transitions writes an audit row. See ADR-058.
  */
 
 // ---------------------------------------------------------------------------
@@ -70,8 +75,9 @@ export interface OwnReview {
   rating: number;
   review: string | null;
   attribution: ReviewAttribution;
-  /** True when a librarian has taken it down. Only the author is told. */
-  hidden: boolean;
+  status: ReviewStatus;
+  /** The librarian's words when they declined it. Null otherwise. */
+  decisionNote: string | null;
   createdAt: Date;
   updatedAt: Date;
   title: string;
@@ -96,9 +102,10 @@ export interface StaffReview {
   rating: number;
   review: string | null;
   attribution: ReviewAttribution;
+  status: ReviewStatus;
   createdAt: Date;
-  hiddenAt: Date | null;
-  hiddenReason: string | null;
+  decidedAt: Date | null;
+  decisionNote: string | null;
   title: string;
   code: string | null;
   /*
@@ -124,7 +131,7 @@ export interface StaffReview {
  */
 export async function ratingForTitle(titleId: string): Promise<RatingSummary> {
   const rows = await prisma.bookReview.aggregate({
-    where: { titleId, hiddenAt: null },
+    where: { titleId, status: "PUBLISHED" },
     _avg: { rating: true },
     _count: { _all: true },
   });
@@ -145,7 +152,9 @@ export async function ratingForTitle(titleId: string): Promise<RatingSummary> {
  */
 export async function reviewsForTitle(titleId: string, take = 50): Promise<PublicReview[]> {
   const rows = await prisma.bookReview.findMany({
-    where: { titleId, hiddenAt: null },
+    // PUBLISHED only. A review waiting for the desk is invisible here, and a
+    // declined one never becomes visible unless its author rewrites it.
+    where: { titleId, status: "PUBLISHED" },
     orderBy: [{ createdAt: "desc" }],
     take,
     select: {
@@ -205,7 +214,8 @@ export async function listOwnReviews(): Promise<OwnReview[] | null> {
       rating: true,
       review: true,
       attribution: true,
-      hiddenAt: true,
+      status: true,
+      decisionNote: true,
       createdAt: true,
       updatedAt: true,
       title: {
@@ -231,7 +241,8 @@ export async function listOwnReviews(): Promise<OwnReview[] | null> {
     rating: row.rating,
     review: row.review,
     attribution: row.attribution,
-    hidden: row.hiddenAt !== null,
+    status: row.status,
+    decisionNote: row.decisionNote,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     title: row.title.title,
@@ -321,12 +332,14 @@ export async function pendingReviewPrompts(now = new Date()): Promise<ReviewProm
  * no control rather than a disabled one.
  */
 export interface OwnReviewState {
+  /** They have borrowed it, so the composer belongs on their screen. */
   canReview: boolean;
   mine: {
     rating: number;
     review: string | null;
     attribution: ReviewAttribution;
-    hidden: boolean;
+    status: ReviewStatus;
+    decisionNote: string | null;
   } | null;
 }
 
@@ -344,21 +357,17 @@ export async function getOwnReviewStateForCode(code: string): Promise<OwnReviewS
     hasBorrowedTitle(actor.userId, copy.titleId),
     prisma.bookReview.findUnique({
       where: { memberUserId_titleId: { memberUserId: actor.userId, titleId: copy.titleId } },
-      select: { rating: true, review: true, attribution: true, hiddenAt: true },
+      select: {
+        rating: true,
+        review: true,
+        attribution: true,
+        status: true,
+        decisionNote: true,
+      },
     }),
   ]);
 
-  return {
-    canReview: borrowed,
-    mine: mine
-      ? {
-          rating: mine.rating,
-          review: mine.review,
-          attribution: mine.attribution,
-          hidden: mine.hiddenAt !== null,
-        }
-      : null,
-  };
+  return { canReview: borrowed, mine };
 }
 
 /** Has this reader ever had a copy of this work in their bag? */
@@ -392,6 +401,13 @@ export interface ReviewInput {
  * Upsert on (member, work): the first time it writes a row, and every time
  * after that it edits the same one. There is no history of revisions and no
  * append — a child changing their mind about a book has one opinion, not two.
+ *
+ * **Until it is published.** A PUBLISHED review is refused here: the author
+ * cannot edit it and cannot rewrite it, because the record of what a reader
+ * thought is the library's and not something that can be quietly changed after
+ * other people have read it. A DECLINED one may be rewritten, which returns it
+ * to PENDING and clears the decision — being told "not this one" is not meant to
+ * be the end of it.
  *
  * The loan is looked up rather than passed in. Which borrowing earned the right
  * to review is the library's business, not the browser's, and taking it from
@@ -453,7 +469,19 @@ export async function submitReview(input: ReviewInput): Promise<void> {
 
   const attribution: ReviewAttribution = input.attribution ?? "FIRST_NAME";
 
-  await prisma.bookReview.upsert({
+  const existing = await prisma.bookReview.findUnique({
+    where: { memberUserId_titleId: { memberUserId: actor.userId, titleId: copy.titleId } },
+    select: { id: true, status: true },
+  });
+
+  if (existing?.status === "PUBLISHED") {
+    throw new RuleViolationError(
+      `User ${actor.userId} tried to edit published review ${existing.id}`,
+      REVIEW_MESSAGES.alreadyPublished,
+    );
+  }
+
+  const review = await prisma.bookReview.upsert({
     where: { memberUserId_titleId: { memberUserId: actor.userId, titleId: copy.titleId } },
     create: {
       libraryId: actor.libraryId,
@@ -465,16 +493,50 @@ export async function submitReview(input: ReviewInput): Promise<void> {
       attribution,
     },
     /*
-     * `hiddenAt` is deliberately not cleared. A child editing a review a
-     * librarian took down does not put it back up — a grown-up made that
-     * decision and only a grown-up reverses it.
+     * Back to PENDING, and the previous decision is wiped. A rewritten review
+     * has not been looked at, and leaving the old note on it would show the
+     * author a refusal of words they have already replaced.
      */
-    update: { rating: input.rating, review: text, attribution },
+    update: {
+      rating: input.rating,
+      review: text,
+      attribution,
+      status: "PENDING",
+      decidedAt: null,
+      decidedById: null,
+      decisionNote: null,
+    },
+    select: { id: true },
+  });
+
+  await recordAudit(prisma, {
+    libraryId: actor.libraryId,
+    action: AUDIT_ACTIONS.REVIEW_SUBMITTED,
+    entityType: "book_review",
+    entityId: review.id,
+    actorUserId: actor.userId,
+    actorLabel: actor.displayName,
+    // The rating, never the words. What was written lives in `book_review`;
+    // the log's job is who did what, not a second copy of a child's writing in
+    // a table nobody deletes from.
+    metadata: {
+      titleId: copy.titleId,
+      rating: input.rating,
+      hasWords: text !== null,
+      rewritten: existing !== null,
+    },
   });
 }
 
-/** A reader taking back what they said. Their row goes; nothing is kept. */
-export async function deleteOwnReview(code: string): Promise<void> {
+/**
+ * A reader taking back what they said — while it is still theirs to take back.
+ *
+ * Allowed only before publication. Once a review is on the book's page it stays
+ * there: other people have read it, and a library whose reviews can be deleted
+ * by their authors has a shelf of opinions that quietly rearranges itself. The
+ * Super Admin is the only one who can remove a published review.
+ */
+export async function withdrawOwnReview(code: string): Promise<void> {
   const actor = await requireActor();
   if (actor.kind !== "MEMBER") {
     throw new RuleViolationError(
@@ -489,8 +551,29 @@ export async function deleteOwnReview(code: string): Promise<void> {
   });
   if (!copy) throw new NotFoundError(`No book with code ${code}`);
 
-  await prisma.bookReview.deleteMany({
-    where: { memberUserId: actor.userId, titleId: copy.titleId },
+  const existing = await prisma.bookReview.findUnique({
+    where: { memberUserId_titleId: { memberUserId: actor.userId, titleId: copy.titleId } },
+    select: { id: true, status: true, rating: true },
+  });
+  if (!existing) return;
+
+  if (existing.status === "PUBLISHED") {
+    throw new RuleViolationError(
+      `User ${actor.userId} tried to withdraw published review ${existing.id}`,
+      REVIEW_MESSAGES.alreadyPublished,
+    );
+  }
+
+  await prisma.bookReview.delete({ where: { id: existing.id } });
+
+  await recordAudit(prisma, {
+    libraryId: actor.libraryId,
+    action: AUDIT_ACTIONS.REVIEW_WITHDRAWN,
+    entityType: "book_review",
+    entityId: existing.id,
+    actorUserId: actor.userId,
+    actorLabel: actor.displayName,
+    metadata: { titleId: copy.titleId, rating: existing.rating, status: existing.status },
   });
 }
 
@@ -499,33 +582,39 @@ export async function deleteOwnReview(code: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
- * Every review in the library, newest first, for the one screen that moderates
- * them.
+ * Every review in the library, for the screen that decides about them.
  *
- * Guarded by `book.edit` rather than by a new permission. Somebody who may
- * change what a book's page says is the same person who may decide what stays
- * on it, and a role model grows a key for every screen if you let it.
+ * Waiting first, then everything else newest-first, because the queue is the
+ * job and the archive is the context. Guarded by `review.moderate` — the
+ * authority to decide, which is exactly the authority to read what is waiting.
+ *
+ * The author's name is here and is not a leak: a librarian already holds
+ * `member.view` and can open that child's page. It is here because moderating
+ * anonymous text is how a librarian ends up unable to have a quiet word with the
+ * child who wrote it — and a quiet word is almost always the right response to
+ * something a nine-year-old typed.
  */
-export async function listReviewsForStaff(options: { onlyWithWords?: boolean } = {}): Promise<
-  StaffReview[]
-> {
-  const actor = await requirePermission("book.edit");
+export async function listReviewsForStaff(): Promise<StaffReview[]> {
+  const actor = await requirePermission("review.moderate");
 
   const rows = await prisma.bookReview.findMany({
-    where: {
-      libraryId: actor.libraryId,
-      ...(options.onlyWithWords ? { review: { not: null } } : {}),
-    },
-    orderBy: [{ createdAt: "desc" }],
+    where: { libraryId: actor.libraryId },
+    /*
+     * PENDING sorts before PUBLISHED before REJECTED by the enum's own order,
+     * which is the order the desk wants: what needs an answer, what went up,
+     * what did not.
+     */
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     take: 200,
     select: {
       id: true,
       rating: true,
       review: true,
       attribution: true,
+      status: true,
       createdAt: true,
-      hiddenAt: true,
-      hiddenReason: true,
+      decidedAt: true,
+      decisionNote: true,
       member: {
         select: { displayName: true, memberProfile: { select: { memberCode: true } } },
       },
@@ -548,9 +637,10 @@ export async function listReviewsForStaff(options: { onlyWithWords?: boolean } =
     rating: row.rating,
     review: row.review,
     attribution: row.attribution,
+    status: row.status,
     createdAt: row.createdAt,
-    hiddenAt: row.hiddenAt,
-    hiddenReason: row.hiddenReason,
+    decidedAt: row.decidedAt,
+    decisionNote: row.decisionNote,
     title: row.title.title,
     code: row.title.copies.at(0)?.copyCode ?? null,
     authorName: row.member.displayName,
@@ -558,48 +648,133 @@ export async function listReviewsForStaff(options: { onlyWithWords?: boolean } =
   }));
 }
 
+/** How many reviews are waiting, for the badge on the desk. */
+export async function countPendingReviews(): Promise<number> {
+  const actor = await getActor();
+  if (!actor?.permissions.has("review.moderate")) return 0;
+
+  return prisma.bookReview.count({
+    where: { libraryId: actor.libraryId, status: "PENDING" },
+  });
+}
+
 /**
- * Take a review down, or put it back.
+ * Put a review on the book's page, or decline it.
  *
- * Audited both ways. Removing a child's words from a public page is the kind of
- * decision that should have a name and a time against it — both for the family
- * who asks why, and for the librarian who did it and needs to be able to say
- * so.
+ * Both directions are audited, and both are one-way in the sense that matters:
+ * approving publishes permanently, and declining is a decision the author is
+ * shown and can answer by rewriting. What this cannot do is un-publish — that
+ * is `deleteReviewForever`, and it belongs to the Super Admin alone.
  */
-export async function setReviewHidden(
+export async function decideReview(
   reviewId: string,
-  hidden: boolean,
-  reason?: string,
+  approve: boolean,
+  note?: string,
 ): Promise<void> {
-  const actor = await requirePermission("book.edit");
+  const actor = await requirePermission("review.moderate");
 
   const review = await prisma.bookReview.findFirst({
     where: { id: reviewId, libraryId: actor.libraryId },
-    select: { id: true, titleId: true },
+    select: { id: true, titleId: true, status: true, rating: true },
   });
   if (!review) throw new NotFoundError(`No review ${reviewId} in library ${actor.libraryId}`);
 
+  if (review.status === "PUBLISHED") {
+    /*
+     * Not an oversight: there is no route from PUBLISHED back to PENDING or
+     * REJECTED. Publication is permanent, and a librarian who could "decline" a
+     * published review would be un-publishing it under another name.
+     */
+    throw new RuleViolationError(
+      `Review ${review.id} is already published and cannot be decided again`,
+      "This review is already on the book's page. Only the Super Admin can remove it now.",
+    );
+  }
+
   await prisma.bookReview.update({
     where: { id: review.id },
-    data: hidden
-      ? {
-          hiddenAt: new Date(),
-          hiddenById: actor.userId,
-          hiddenReason: normaliseReviewText(reason),
-        }
-      : { hiddenAt: null, hiddenById: null, hiddenReason: null },
+    data: {
+      status: approve ? "PUBLISHED" : "REJECTED",
+      decidedAt: new Date(),
+      decidedById: actor.userId,
+      // An approved review carries no note. The note exists to explain a
+      // refusal to its author, and there is nothing to explain about a yes.
+      decisionNote: approve ? null : normaliseReviewText(note),
+    },
   });
 
   await recordAudit(prisma, {
     libraryId: actor.libraryId,
-    action: hidden ? AUDIT_ACTIONS.REVIEW_HIDDEN : AUDIT_ACTIONS.REVIEW_RESTORED,
+    action: approve ? AUDIT_ACTIONS.REVIEW_APPROVED : AUDIT_ACTIONS.REVIEW_DECLINED,
     entityType: "book_review",
     entityId: review.id,
     actorUserId: actor.userId,
     actorLabel: actor.displayName,
-    // No review text and no child's name. What was written is still in the
-    // row; the log's job is who decided what, not to keep a second copy of a
-    // child's words in a table nobody deletes from.
-    metadata: { titleId: review.titleId },
+    metadata: { titleId: review.titleId, rating: review.rating },
+  });
+}
+
+/**
+ * Erase a published review. Super Admin only, and irreversible.
+ *
+ * The single exception to publication being permanent, and it is deliberately
+ * awkward to reach: `review.delete` is held by nobody but the owner of the
+ * library, the same reasoning that keeps `book.delete` and `user.delete` out of
+ * the Librarian role.
+ *
+ * The audit row is the only trace that survives, so unlike every other row in
+ * this file it carries the rating and who wrote it — a deletion nobody can
+ * account for afterwards is worse than having no deletion control at all. It
+ * still does not carry the review text: keeping a copy of the words would
+ * defeat the point of removing them.
+ */
+export async function deleteReviewForever(reviewId: string, reason: string): Promise<void> {
+  const actor = await requirePermission("review.delete");
+
+  const review = await prisma.bookReview.findFirst({
+    where: { id: reviewId, libraryId: actor.libraryId },
+    select: {
+      id: true,
+      titleId: true,
+      rating: true,
+      status: true,
+      member: {
+        select: { displayName: true, memberProfile: { select: { memberCode: true } } },
+      },
+      title: { select: { title: true } },
+    },
+  });
+  if (!review) throw new NotFoundError(`No review ${reviewId} in library ${actor.libraryId}`);
+
+  const explanation = normaliseReviewText(reason);
+  if (!explanation) {
+    throw new ValidationError({ reason: "Please say why this is being deleted." });
+  }
+
+  /*
+   * The audit row is written first and in the same transaction. A deletion that
+   * succeeded while its record failed is exactly the state this control exists
+   * to make impossible.
+   */
+  await prisma.$transaction(async (tx) => {
+    await recordAudit(tx, {
+      libraryId: actor.libraryId,
+      action: AUDIT_ACTIONS.REVIEW_DELETED,
+      entityType: "book_review",
+      entityId: review.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      metadata: {
+        titleId: review.titleId,
+        book: review.title.title,
+        rating: review.rating,
+        statusWhenDeleted: review.status,
+        author: review.member.displayName,
+        authorMemberCode: review.member.memberProfile?.memberCode ?? null,
+        reason: explanation,
+      },
+    });
+
+    await tx.bookReview.delete({ where: { id: review.id } });
   });
 }

@@ -11,66 +11,76 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { formatInTimezone } from "@/lib/dates";
 import { requirePermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
-import { listReviewsForStaff } from "@/server/services/review-service";
+import { listReviewsForStaff, type StaffReview } from "@/server/services/review-service";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Reviews" };
 
 /**
- * What the children wrote, and the one control that takes a review down.
+ * The queue: what children have written and nobody has answered yet.
  *
- * This screen exists because reviews are published the moment they are written.
- * That was a deliberate choice — a pre-approval queue nobody works is a feature
- * that silently never ships — and the price of it is that somebody has to be
- * able to look at the list. This is that list, newest first, with the words in
- * full rather than truncated: a review you cannot read is a review you cannot
- * judge.
+ * This screen changed shape with ADR-058. It used to be an archive with a
+ * take-down button, because reviews published themselves; now nothing reaches a
+ * book's page without passing through here, which makes it the one desk screen
+ * where a delay is visible to a child. Waiting sorts first for that reason, and
+ * the count is on the desk navigation beside the borrow requests.
  *
- * Guarded by `book.edit`. Somebody who may change what a book's page says is the
- * same person who decides what stays on it.
+ * Guarded by `review.moderate` — the authority to decide is exactly the
+ * authority to read what is waiting. **Delete forever is not on that key.** It
+ * needs `review.delete`, which only the Super Admin holds, and the button is not
+ * rendered without it; the service checks again regardless.
  *
  * The author's name is here and is not a leak: a librarian already holds
  * `member.view` and can open that child's page. It is here because moderating
- * anonymous text is how a librarian ends up unable to have a quiet word with
- * the child who wrote it — and a quiet word is almost always the right response
- * to something a nine-year-old typed.
+ * anonymous text is how a librarian ends up unable to have a quiet word with the
+ * child who wrote it — and a quiet word is almost always the right response to
+ * something a nine-year-old typed.
  *
- * "Signed: no name" describes the byline on the public page, not this screen.
- * A child choosing not to be named in front of other readers is not asking to
- * be anonymous to the librarian who knows them.
+ * "Signed: no name" describes the byline on the public page, not this screen. A
+ * child choosing not to be named in front of other readers is not asking to be
+ * anonymous to the librarian who knows them.
  */
 export default async function DeskReviewsPage() {
-  const actor = await requirePermissionForPage("book.edit", {
+  const actor = await requirePermissionForPage("review.moderate", {
     signedOutTo: "/login?next=/desk/reviews",
   });
   const branding = await getBrandingSafe();
   const { settings } = await getCurrentLibrary();
 
   const reviews = await listReviewsForStaff();
-  const withWords = reviews.filter((review) => review.review !== null);
-  const hidden = reviews.filter((review) => review.hiddenAt !== null);
+  const waiting = reviews.filter((review) => review.status === "PENDING");
+  const published = reviews.filter((review) => review.status === "PUBLISHED");
+
+  const canDelete = actor.permissions.has("review.delete");
 
   return (
-    <StaffShell branding={branding} actor={actor} title="Reviews">
+    <StaffShell branding={branding} actor={actor} title="Reviews" pendingReviews={waiting.length}>
       <p className="text-base text-ink-soft">
         {reviews.length === 0
           ? "No one has rated a book yet."
-          : `${reviews.length === 1 ? "1 rating" : `${reviews.length} ratings`}, ${
-              withWords.length === 1 ? "1 with words" : `${withWords.length} with words`
-            }${hidden.length > 0 ? `, ${hidden.length} taken down` : ""}.`}
+          : waiting.length === 0
+            ? `Nothing waiting. ${published.length === 1 ? "1 review is" : `${published.length} reviews are`} on the books' pages.`
+            : `${waiting.length === 1 ? "1 review is" : `${waiting.length} reviews are`} waiting for you.`}
       </p>
 
       {/*
-        Said once, at the top, every time. A librarian opening this screen for
-        the first time in a month needs to know that nothing here is waiting for
-        their approval — the words are already on the shelf.
+        Said once, at the top, every time. A librarian opening this screen needs
+        to know that the queue is the whole gate — a review nobody answers is a
+        review no child ever sees appear, which is the failure mode this design
+        trades for its safety.
       */}
       {reviews.length > 0 ? (
-        <Callout tone="info" title="These are already on the books' pages" className="mt-5">
-          Reviews go up as soon as a reader writes them. Have a read through now and then, and take
-          down anything that names a person, gives away where somebody lives, or is unkind. Taking
-          one down removes it from the book&rsquo;s page and from its stars — the reader is told it
-          is no longer showing, and is never told why.
+        <Callout tone="info" title="Nothing goes up until you say so" className="mt-5">
+          A reader sees their own review straight away and is told it is waiting for you. Publish it
+          and it appears on the book&rsquo;s page and counts towards its stars — permanently, so
+          please read it first. Send it back instead and the reader is shown your note and can
+          rewrite it.
+          {canDelete ? (
+            <>
+              {" "}
+              A published review can only be deleted by you, and deleting is forever.
+            </>
+          ) : null}
         </Callout>
       ) : null}
 
@@ -85,10 +95,11 @@ export default async function DeskReviewsPage() {
               </ButtonLink>
             }
           >
-            When a reader gives a book stars, it appears here — with whatever they wrote about it.
+            When a reader gives a book stars, it appears here — with whatever they wrote about it —
+            and waits for you.
           </EmptyState>
         ) : (
-          <DataTable headers={["Book", "Stars", "What they wrote", "Reader", "When", ""]}>
+          <DataTable headers={["Book", "Stars", "What they wrote", "Reader", "When", "", ""]}>
             {reviews.map((review) => (
               <tr key={review.id} className="border-t-2 border-hairline align-top">
                 <td className="px-3.5 py-2.5 align-top">
@@ -102,16 +113,6 @@ export default async function DeskReviewsPage() {
                   ) : (
                     <span className="font-bold text-ink">{review.title}</span>
                   )}
-                  {review.hiddenAt ? (
-                    <p className="mt-1.5">
-                      <StatusBadge tone="neutral">
-                        <Icon name="hide" /> Taken down
-                      </StatusBadge>
-                    </p>
-                  ) : null}
-                  {review.hiddenReason ? (
-                    <p className="mt-1 text-sm text-ink-soft">{review.hiddenReason}</p>
-                  ) : null}
                 </td>
 
                 <td className="px-3.5 py-2.5 align-top">
@@ -131,6 +132,11 @@ export default async function DeskReviewsPage() {
                   ) : (
                     <p className="text-base text-ink-faint">Stars only</p>
                   )}
+                  {review.decisionNote ? (
+                    <p className="mt-1.5 text-sm text-ink-soft">
+                      Sent back: &ldquo;{review.decisionNote}&rdquo;
+                    </p>
+                  ) : null}
                 </td>
 
                 <td className="px-3.5 py-2.5 align-top">
@@ -150,10 +156,15 @@ export default async function DeskReviewsPage() {
                 </td>
 
                 <td className="px-3.5 py-2.5 align-top">
+                  <ReviewStatusBadge status={review.status} />
+                </td>
+
+                <td className="px-3.5 py-2.5 align-top">
                   <ModerationActions
                     reviewId={review.id}
-                    hidden={review.hiddenAt !== null}
+                    status={review.status}
                     title={review.title}
+                    canDelete={canDelete}
                   />
                 </td>
               </tr>
@@ -162,5 +173,28 @@ export default async function DeskReviewsPage() {
         )}
       </div>
     </StaffShell>
+  );
+}
+
+/** Where a review stands, in a word and never in a colour alone. */
+function ReviewStatusBadge({ status }: { status: StaffReview["status"] }) {
+  if (status === "PUBLISHED") {
+    return (
+      <StatusBadge tone="available">
+        <Icon name="check" /> On the page
+      </StatusBadge>
+    );
+  }
+  if (status === "REJECTED") {
+    return (
+      <StatusBadge tone="neutral">
+        <Icon name="cross" /> Sent back
+      </StatusBadge>
+    );
+  }
+  return (
+    <StatusBadge tone="soon">
+      <Icon name="info" /> Waiting
+    </StatusBadge>
   );
 }

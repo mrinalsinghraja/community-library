@@ -40,11 +40,13 @@ export const DESK_DESTINATIONS: readonly DeskDestination[] = [
   // book.edit, not book.view: every reader holds book.view, and this link must
   // only appear for somebody who can actually manage the collection.
   { href: "/admin/books", label: "Books", permission: "book.edit" },
-  // What readers wrote about the books, and the one control that takes a review
-  // off a public page. `book.edit` on purpose: somebody who may change what a
-  // book's page says is the same person who decides what stays on it, and a
-  // role model grows a key for every screen if you let it.
-  { href: "/desk/reviews", label: "Reviews", permission: "book.edit" },
+  // Reviews waiting to go on a book's page. `review.moderate` is the authority
+  // to decide, and so is exactly the authority to read what is waiting — not
+  // `book.edit`, which is a fact about the collection rather than a judgement
+  // about a child's writing. Deleting a published review is a different key
+  // again (`review.delete`, Super Admin only) and guards a control on this page
+  // rather than the page itself.
+  { href: "/desk/reviews", label: "Reviews", permission: "review.moderate" },
   { href: "/admin/staff", label: "Staff", permission: "user.manage_staff" },
   // What the library did over a period, as opposed to what it is doing now.
   // `report.view` is held by Librarian and Super Admin both.

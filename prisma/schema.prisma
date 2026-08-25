@@ -189,6 +189,19 @@ enum DonorDisplayConsent {
 /// CANCELLED exists for exactly one situation: an issue that should not have
 /// happened, reversed at the desk moments later. It is not a soft delete. The
 /// row stays, the events stay, and the book returns to the shelf.
+/// Where a review stands between being written and being on the shelf.
+///
+/// Every review starts PENDING and is invisible to everybody but its author and
+/// the desk. A librarian or the Super Admin decides. PUBLISHED is permanent —
+/// the author cannot edit it, cannot take it down, and only the Super Admin can
+/// remove it. REJECTED is not an ending: the author may rewrite, which returns
+/// the row to PENDING and clears the decision.
+enum ReviewStatus {
+  PENDING
+  PUBLISHED
+  REJECTED
+}
+
 /// How a reader chose to be credited on their own review.
 ///
 /// Asked once per review rather than once per account, because the answer is
@@ -502,7 +515,7 @@ model AppUser {
   borrowDecisions   BorrowRequest[]       @relation("BorrowRequestDecider")
   auditLogs         AuditLog[]
   bookReviews       BookReview[]          @relation("ReviewAuthor")
-  reviewsHidden     BookReview[]          @relation("ReviewHiddenBy")
+  reviewDecisions   BookReview[]          @relation("ReviewDecider")
   donationsGiven    Donation[]            @relation("DonationDonor")
   donationsRecorded Donation[]            @relation("DonationRecorder")
   mediaUploaded     MediaObject[]
@@ -958,15 +971,24 @@ model Donation {
 /// SetNull, because a loan can be corrected away years later and losing it must
 /// never delete what a child wrote about a book they really did read.
 ///
-/// **Moderation is after the fact, not before it.** A review is published the
-/// moment it is written; `hiddenAt` is a librarian taking one down. Pre-approval
-/// was considered and rejected: a queue nobody works is a feature that silently
-/// never ships, and the failure mode of post-moderation (something unkind is up
-/// for a few hours) is smaller than the failure mode of pre-moderation (no
-/// child ever sees their own words appear). A hidden review leaves the average,
-/// the count and every public list, but still belongs to its author and still
-/// counts as "you have rated this" — hiding is not a punishment that reopens a
-/// reminder.
+/// **Nothing is published until a grown-up says so.** Every review is written
+/// PENDING and is visible to nobody but its author and the desk; a Librarian or
+/// the Super Admin approves it onto the book's page. This reverses the original
+/// design, which published immediately and let a librarian take a review down
+/// afterwards — the owner's decision, and the right one for a library whose
+/// writers are children and whose readers are the open internet. The cost is
+/// real and is named in ADR-058: a queue nobody works is a feature that never
+/// appears, so the desk carries a waiting count the way it does for borrow
+/// requests.
+///
+/// **Publication is permanent.** Once PUBLISHED the author cannot edit it and
+/// cannot take it down: the record of what a reader thought is the library's,
+/// not something that can be quietly rewritten later. The one exception is the
+/// Super Admin, who can delete it outright — `review.delete`, held by nobody
+/// else, audited, and irreversible.
+///
+/// A review in any status counts as "you have rated this", so the reminder does
+/// not come back while a child is waiting for an answer.
 ///
 /// No column holds a full name. The reader's identity is a foreign key, and the
 /// only thing any public surface may derive from it is a first name — or
@@ -985,22 +1007,26 @@ model BookReview {
 
   attribution ReviewAttribution @default(FIRST_NAME)
 
-  hiddenAt     DateTime? @map("hidden_at") @db.Timestamptz(6)
-  hiddenById   String?   @map("hidden_by_id")
-  hiddenReason String?   @map("hidden_reason")
+  status ReviewStatus @default(PENDING)
+
+  decidedAt    DateTime? @map("decided_at") @db.Timestamptz(6)
+  decidedById  String?   @map("decided_by_id")
+  /// Shown to the author when a review is declined, in the librarian's own
+  /// words. A child told "no" and nothing else has been refused by a machine.
+  decisionNote String?   @map("decision_note")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  library  Library   @relation(fields: [libraryId], references: [id], onDelete: Cascade)
-  title    BookTitle @relation(fields: [titleId], references: [id], onDelete: Cascade)
-  member   AppUser   @relation("ReviewAuthor", fields: [memberUserId], references: [id], onDelete: Cascade)
-  loan     Loan?     @relation(fields: [loanId], references: [id], onDelete: SetNull)
-  hiddenBy AppUser?  @relation("ReviewHiddenBy", fields: [hiddenById], references: [id], onDelete: SetNull)
+  library   Library   @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  title     BookTitle @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  member    AppUser   @relation("ReviewAuthor", fields: [memberUserId], references: [id], onDelete: Cascade)
+  loan      Loan?     @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  decidedBy AppUser?  @relation("ReviewDecider", fields: [decidedById], references: [id], onDelete: SetNull)
 
   @@unique([memberUserId, titleId], map: "book_review_one_per_member_title")
   @@index([libraryId, titleId])
-  @@index([libraryId, hiddenAt])
+  @@index([libraryId, status])
   @@index([memberUserId, createdAt])
   @@map("book_review")
 }

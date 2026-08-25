@@ -2272,6 +2272,9 @@ shape carries five fields and a test asserts that list exactly, so an added
 `select` cannot widen it by accident.
 
 **Moderation is after the fact, and taking a review down is not a punishment.**
+*(Superseded by ADR-058 on the same day: the owner chose pre-approval. The
+reasoning below is kept because the trade it names is real and is now the cost
+this library has accepted.)*
 Reviews publish the moment they are written. A pre-approval queue was considered
 and rejected: a queue nobody works is a feature that silently never ships, and no
 child ever seeing their own words appear is a worse failure than something unkind
@@ -2323,3 +2326,83 @@ cannot see: who has a book out, who had it last, any child's full name, any
 member code, any flat, or any loan. No page in the catalogue has a field for
 those, which is what makes the claim checkable rather than a promise about
 rendering.
+
+
+## ADR-058 — A grown-up reads it first, and what goes up stays up
+
+Supersedes the moderation half of ADR-057. Everything else in that decision —
+one opinion per work, the borrowing check, the first-name byline, the derived
+average — is unchanged.
+
+The owner's instruction was four sentences: a Librarian or Super Admin must
+approve before a review goes live; once published it is there forever; only the
+Super Admin may delete one, and there must be a way to; and every activity from
+approving a member to lending a book must be in the audit log.
+
+**Approval is a gate, not a sweep.** Every review is written PENDING and is
+visible to nobody but its author and the desk. It moves no average, appears in
+no count, and is absent from the public list and from the catalogue's own
+LATERAL aggregate — four separate pieces of SQL, asserted separately in
+`tests/database/book-reviews.test.ts`, because a leak in any one of them would
+show a rating the book's own page says does not exist.
+
+ADR-057 rejected exactly this design, and the reason it gave was not wrong: a
+queue nobody works is a feature that silently never ships, and a child who never
+sees their words appear has been failed more quietly than one who saw something
+unkind for an afternoon. That risk is now this library's to carry, so the design
+carries what it can. `/desk/reviews` sorts waiting first. The desk navigation
+shows a count beside Reviews, the same badge borrow requests get. The author is
+told immediately that their review was received and is waiting for a person —
+not left staring at a page that looks like nothing happened.
+
+**Declining is not an ending.** A declined review carries a note in the
+librarian's own words, shown to the author, who can rewrite — which returns the
+row to PENDING and clears the old decision. That is the same shape the desk
+already uses when it turns down a request for a book, and for the same reason: a
+child told "no" and nothing else has been refused by a machine. The note is
+never public.
+
+**Publication is permanent, and the code says so three times.** The author
+cannot edit a PUBLISHED review (`submitReview` refuses), cannot withdraw it
+(`withdrawOwnReview` refuses), and the librarian who approved it cannot decline
+it afterwards (`decideReview` refuses) — there is no route from PUBLISHED back
+to PENDING or REJECTED, because a "decline" on something already on the shelf
+would be un-publishing under another name. The composer is not rendered at all
+for a published review: a greyed-out box full of a child's own words reads as
+broken rather than as finished, so it shows what they said instead.
+
+**One exception, and it belongs to one person.** `review.delete` is a permission
+of its own, held by the Super Admin and deliberately not granted alongside
+`review.moderate` — the same reasoning that keeps `book.delete` and `user.delete`
+out of the Librarian role. It needs a typed reason and a second press, the
+service refuses an empty one, and the audit row is written inside the same
+transaction as the delete: a deletion that succeeded while its record failed is
+precisely the state this control exists to make impossible. That row is the only
+trace left, so unlike every other review audit row it carries the rating, the
+book and who wrote it. It still does not carry the words — keeping a copy of
+them would defeat the point of removing them.
+
+**Audit coverage, checked rather than assumed.** A scan of every exported
+service function that writes to the database found five that mutated without an
+audit row: `submitReview`, `deleteOwnReview`, `storeBrandingImage`,
+`sweepPendingMedia` and `sendCirculationReminders`. All five now write one.
+Everything from registration approval through issue, return, renewal, request
+decisions, member and staff lifecycle, catalogue edits, archival, deletion,
+settings and password changes was already covered.
+
+Three things are deliberately still not audited, and the reason is the same in
+each case: writing them would make the log less useful, not more.
+
+  * **Sessions and tokens.** `createSession` runs on every sign-in and
+    `resolveSession` on every request; token mint and consume must never be
+    logged at all, because a logged token is a leaked token. Sign-in, sign-out
+    and session revocation are already recorded at the service layer, which is
+    the event a person cares about.
+  * **Rate-limit counters.** `login_attempt` is itself the record.
+  * **Per-message and per-file machine work.** The reminder job and the media
+    sweeper write one row per *run* with counts, not one per email or per file.
+    Every message already has its own `email_event`; a row per message would
+    bury every human decision under machine bookkeeping. Both write nothing at
+    all on a run that did nothing, so a quiet night leaves no trace. Neither
+    claims an actor — a cron job is not a person, and inventing one would be
+    worse than saying plainly that nobody pressed anything.

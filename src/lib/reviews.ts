@@ -206,12 +206,34 @@ export const REVIEW_MESSAGES = {
   attributionHint: "Other readers only ever see your first name — never your full name or your flat.",
   submit: "Share what I thought",
   update: "Change what I said",
+  resend: "Send it again",
   saved: "Thank you — other readers can see this now.",
   tooLong: `That is a little long. Please keep it to about ${REVIEW_MAX_WORDS} words.`,
   needRating: "Please choose how many stars first.",
   notBorrowed: "You can rate a book once you have borrowed it.",
-  hidden:
-    "A librarian has taken this one down, so other readers cannot see it. Your rating still counts as done.",
+  /*
+   * The three things a reader is told about their own review, and the tone is
+   * the whole job. Waiting is not a delay to apologise for, it is a person
+   * reading; declined is not a telling-off; published is not a receipt, it is
+   * the good news.
+   */
+  waiting:
+    "Thank you! Our librarian reads every review before it goes on the book's page. Yours will appear once they have.",
+  waitingBadge: "Waiting for the librarian",
+  publishedBadge: "On the book's page",
+  declinedBadge: "Not going up",
+  declined:
+    "Our librarian would like you to have another go at this one. Change it below and send it again.",
+  /**
+   * Said when a reader tries to edit or take back something already published.
+   *
+   * Framed as a fact about the library rather than as a refusal of them: their
+   * words are on the shelf now, the same as a book is.
+   */
+  alreadyPublished:
+    "This one is already on the book's page, so it stays as you wrote it. Ask the librarian if something needs changing.",
+  publishedNote:
+    "Other readers can see this. Reviews stay on the book's page once they go up.",
   /** The byline for a review whose author asked not to be named. */
   anonymousByline: "A reader at the library",
 } as const;

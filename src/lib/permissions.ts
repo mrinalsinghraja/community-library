@@ -51,6 +51,34 @@ export const PERMISSIONS = {
   "book.create": { category: "catalogue", description: "Add a book title or copy" },
   "book.edit": { category: "catalogue", description: "Edit book details" },
   "book.archive": { category: "catalogue", description: "Archive a copy (reversible)" },
+  /**
+   * Decide whether a reader's review goes onto the book's page.
+   *
+   * Separate from `book.edit` on purpose, and the separation is the point.
+   * Editing a book is a fact about the collection; approving a review is a
+   * judgement about a child's writing, made before anybody else can read it.
+   * Both Librarian and Super Admin hold it — the queue has to be worked by
+   * whoever is at the desk, and a moderation queue only one person can clear is
+   * a queue that fills up.
+   */
+  "review.moderate": {
+    category: "catalogue",
+    description: "Approve or decline a reader's review before it is published",
+  },
+  /**
+   * Erase a published review.
+   *
+   * Super Admin only, and deliberately not granted with `review.moderate`.
+   * Publication is permanent by design: the author cannot take a review back
+   * and a librarian cannot quietly un-publish one. This key is the single
+   * exception, it is irreversible, and it is held by the owner of the library
+   * alone — the same reasoning that keeps `book.delete` and `user.delete` out
+   * of the Librarian role.
+   */
+  "review.delete": {
+    category: "catalogue",
+    description: "Permanently delete a published review",
+  },
   "book.delete": { category: "catalogue", description: "Permanently delete a book record" },
   "category.manage": {
     category: "catalogue",
@@ -249,6 +277,10 @@ const LIBRARIAN_PERMISSIONS = [
   "book.create",
   "book.edit",
   "book.archive",
+  // Deciding what a child wrote is desk work. `review.delete` is deliberately
+  // absent: a librarian may decline a review before it is published and may not
+  // erase one after.
+  "review.moderate",
   "category.manage",
   "donation.view",
   "donation.record",

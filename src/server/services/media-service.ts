@@ -137,6 +137,23 @@ export async function storeBrandingImage(params: {
     );
   }
 
+  /*
+   * Audited because it is an administrative change to what every visitor sees.
+   * Written after the SVG refusal above, so a rejected upload leaves no row
+   * claiming a logo was stored.
+   */
+  await recordAudit(prisma, {
+    libraryId: params.libraryId,
+    action: AUDIT_ACTIONS.BRANDING_IMAGE_STORED,
+    entityType: "media_object",
+    entityId: stored.mediaId,
+    actorUserId: params.uploadedById ?? null,
+    // The uploader's name is not in scope here and is not worth another query:
+    // `actorUserId` resolves to the person, and the audit viewer joins it.
+    actorLabel: "Branding upload",
+    metadata: { mimeType: stored.mimeType, bytes: params.bytes.byteLength },
+  });
+
   return stored;
 }
 
@@ -719,6 +736,31 @@ export async function sweepPendingMedia(limit = 200): Promise<MediaSweepResult> 
       deleteAttempts: { gte: MAX_DELETE_ATTEMPTS },
     },
   });
+
+  /*
+   * One row per run, with counts — not one per file, which on a busy sweep
+   * would bury every human decision in the log under a wall of machine
+   * bookkeeping. Written only when something actually happened, so a daily
+   * sweep that finds nothing leaves no trace.
+   *
+   * `actorUserId` is null: this is the scheduled job, and inventing a person
+   * for it would be worse than saying plainly that nobody pressed anything.
+   */
+  if (purged > 0 || failed > 0) {
+    // `audit_log.library_id` is not nullable — every row in this schema is
+    // tenant-scoped from the first migration. This deployment runs one library,
+    // so the sweep is recorded against it.
+    const { library } = await getCurrentLibrary();
+
+    await recordAudit(prisma, {
+      libraryId: library.id,
+      action: AUDIT_ACTIONS.MEDIA_PURGED,
+      entityType: "media_object",
+      actorUserId: null,
+      actorLabel: "Scheduled sweep",
+      metadata: { purged, failed, needsAttention },
+    });
+  }
 
   return { purged, failed, needsAttention };
 }

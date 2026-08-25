@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import type { ReviewAttribution } from "@prisma/client";
+import type { ReviewAttribution, ReviewStatus } from "@prisma/client";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -14,9 +14,10 @@ import {
   countWords,
   ratingLabel,
 } from "@/lib/reviews";
+import { StarVerdict } from "@/components/ui/star-rating";
 import {
-  deleteReviewAction,
   submitReviewAction,
+  withdrawReviewAction,
   type ReviewFormState,
 } from "@/server/actions/review-actions";
 
@@ -40,6 +41,11 @@ import {
  * **The safety line is above the box, not below it.** A rule read after writing
  * is a rule that arrives too late to change what was written.
  *
+ * **A published review is not a form.** Once the desk has approved it there is
+ * nothing to edit and nothing to take down — it is rendered as what the reader
+ * said, and the composer is gone. That is a property of the row rather than of
+ * this component: the service refuses the edit whatever the browser draws.
+ *
  * The only fields that leave the browser are the book's printed code, a number,
  * some words, and a yes/no about being named. Who is writing is decided from
  * the session on the server.
@@ -59,11 +65,12 @@ export function ReviewForm({
     rating: number;
     review: string | null;
     attribution: ReviewAttribution;
-    hidden: boolean;
+    status: ReviewStatus;
+    decisionNote: string | null;
   } | null;
 }) {
   const [state, action, pending] = useActionState(submitReviewAction, initialState);
-  const [removal, removeAction, removing] = useActionState(deleteReviewAction, initialState);
+  const [removal, removeAction, removing] = useActionState(withdrawReviewAction, initialState);
 
   const [rating, setRating] = useState<number>(mine?.rating ?? 0);
   const [text, setText] = useState<string>(mine?.review ?? "");
@@ -82,6 +89,43 @@ export function ReviewForm({
     );
   }
 
+  /*
+   * Published: there is no form here any more.
+   *
+   * Rendering a disabled composer would be worse than rendering none — a greyed
+   * box full of a child's own words reads as something broken rather than as
+   * something finished. This is what they said, shown as they said it.
+   */
+  if (mine?.status === "PUBLISHED") {
+    return (
+      <section aria-labelledby="review-form-heading" className="mt-10">
+        <h2 id="review-form-heading" className="garden-rule inline-block text-2xl">
+          What you said
+        </h2>
+
+        <div className="mt-9 rounded-[var(--radius-card)] bg-success-wash p-5 sm:p-6">
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <StarVerdict rating={mine.rating} className="text-lg" />
+            <span className="text-base font-semibold text-ink">{ratingLabel(mine.rating)}</span>
+            <span className="inline-flex items-center gap-1.5 text-base font-semibold text-success">
+              <Icon name="check" />
+              {REVIEW_MESSAGES.publishedBadge}
+            </span>
+          </p>
+
+          {mine.review ? (
+            <p className="mt-3 text-lg leading-relaxed text-ink">{mine.review}</p>
+          ) : null}
+
+          <p className="mt-3 text-base text-ink-soft">{REVIEW_MESSAGES.publishedNote}</p>
+        </div>
+      </section>
+    );
+  }
+
+  const waiting = mine?.status === "PENDING";
+  const declined = mine?.status === "REJECTED";
+
   return (
     <section aria-labelledby="review-form-heading" className="mt-10">
       <h2 id="review-form-heading" className="garden-rule inline-block text-2xl">
@@ -89,16 +133,32 @@ export function ReviewForm({
       </h2>
 
       {/*
-        Only the author is told their review was taken down, and only here.
-        Nothing on the public list says a review is missing, because a gap
-        labelled "removed" tells every other child that something happened and
-        invites them to guess what.
+        Where it stands, in the two states that are not finished. Waiting is not
+        a delay to apologise for — it is a person reading — and declined is an
+        invitation to have another go rather than a telling-off.
       */}
-      {mine?.hidden ? (
-        <p className="mt-8 flex items-start gap-2 rounded-[var(--radius-card)] bg-surface-sunk px-5 py-4 text-base text-ink">
-          <Icon name="info" className="mt-1 shrink-0 text-ink-soft" />
-          {REVIEW_MESSAGES.hidden}
+      {waiting ? (
+        <p className="mt-8 flex items-start gap-2 rounded-[var(--radius-card)] bg-accent-wash px-5 py-4 text-base text-ink">
+          <Icon name="info" className="mt-1 shrink-0 text-accent-ink" />
+          {REVIEW_MESSAGES.waiting}
         </p>
+      ) : null}
+
+      {declined ? (
+        <div className="mt-8 rounded-[var(--radius-card)] bg-surface-sunk px-5 py-4">
+          <p className="flex items-start gap-2 text-base text-ink">
+            <Icon name="info" className="mt-1 shrink-0 text-ink-soft" />
+            {REVIEW_MESSAGES.declined}
+          </p>
+          {/*
+            The librarian's own words. The same choice the desk already makes
+            when it turns down a request for a book: a child told "no" and
+            nothing else has been refused by a machine.
+          */}
+          {mine?.decisionNote ? (
+            <p className="mt-2 pl-7 text-base text-ink">&ldquo;{mine.decisionNote}&rdquo;</p>
+          ) : null}
+        </div>
       ) : null}
 
       <form action={action} className="mt-8 flex flex-col gap-6">
@@ -264,12 +324,22 @@ export function ReviewForm({
             icon={<Icon name="star" />}
             disabled={pending || rating === 0 || overLimit}
           >
-            {pending ? "Saving…" : mine ? REVIEW_MESSAGES.update : REVIEW_MESSAGES.submit}
+            {pending
+              ? "Saving…"
+              : declined
+                ? REVIEW_MESSAGES.resend
+                : mine
+                  ? REVIEW_MESSAGES.update
+                  : REVIEW_MESSAGES.submit}
           </Button>
 
+          {/*
+            Only ever reachable before publication — a PUBLISHED review returned
+            from the branch above and never gets here.
+          */}
           {mine && !confirmingRemoval ? (
             <Button variant="quiet" size="sm" onClick={() => setConfirmingRemoval(true)}>
-              Take mine down
+              Take mine back
             </Button>
           ) : null}
         </div>
@@ -283,10 +353,10 @@ export function ReviewForm({
         <form action={removeAction} className="mt-4 flex flex-wrap items-center gap-2">
           <input type="hidden" name="code" value={code} />
           <p className="w-full text-base text-ink">
-            Take down your stars and your words for this book?
+            Take back your stars and your words for this book?
           </p>
           <Button type="submit" variant="secondary" size="sm" disabled={removing}>
-            {removing ? "Taking it down…" : "Yes, take it down"}
+            {removing ? "Taking it back…" : "Yes, take it back"}
           </Button>
           <Button variant="quiet" size="sm" onClick={() => setConfirmingRemoval(false)}>
             Keep it

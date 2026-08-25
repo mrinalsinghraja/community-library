@@ -37,6 +37,11 @@ suspend an account and reactivate it, send a fresh activation or reset link, see
 and correct guardian contact details, record a guardian verification, manage a
 child's photograph.
 
+**Reviews** — read every rating and review a child has written, publish one onto
+the book's page, or send it back with a note the author reads and can rewrite
+from. Nothing a reader writes is public until they do this (`review.moderate`,
+ADR-058).
+
 **Registrations** — see the queue and the family's whole submission: the
 child's name, age, flat and picture, the guardian's name, phone and email, when
 it arrived, every consent one line at a time, and how the guardian was verified.
@@ -49,6 +54,7 @@ Admin approval."* See ADR-040.
 | They cannot | Because |
 |---|---|
 | Delete a book, a reader or anybody else | Deletion is the Super Admin's alone — `book.delete` (ADR-039) and `user.delete` (ADR-042). Everything a librarian needs in order to fix a mistake is reversible. |
+| Delete a published review, or take one back down | `review.delete` is the Super Admin's alone (ADR-058). A librarian decides whether a review goes up; once it is up it stays up, and there is no route back through "decline". |
 | Approve or reject a registration | Whether a child joins this library is the owner's decision (ADR-037). The librarian sees the whole submission and no decision buttons (ADR-040). |
 | See the evidence behind a joining decision, months later | Consent records and guardian verification on the reader detail page follow `registration.review`. The card, the flat and the guardian's phone number — what running the library needs — are theirs. |
 | Close a membership (`member.deactivate`) | Ending a membership when a family leaves belongs with whoever approved it. Suspending — reversible — is theirs. |

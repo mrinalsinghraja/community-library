@@ -36,6 +36,7 @@ export function StaffShell({
   overdueLoans,
   pendingRenewals,
   pendingBorrowRequests,
+  pendingReviews,
   title,
   children,
 }: {
@@ -46,6 +47,8 @@ export function StaffShell({
   overdueLoans?: number;
   pendingRenewals?: number;
   pendingBorrowRequests?: number;
+  /** Reviews written and not yet answered. Nothing publishes until they are. */
+  pendingReviews?: number;
   title: string;
   children: ReactNode;
 }) {
@@ -60,6 +63,7 @@ export function StaffShell({
     "/desk/loans": overdueLoans,
     "/desk/requests": pendingBorrowRequests,
     "/desk/renewals": pendingRenewals,
+    "/desk/reviews": pendingReviews,
     "/desk/registrations": pendingRegistrations,
   };
 

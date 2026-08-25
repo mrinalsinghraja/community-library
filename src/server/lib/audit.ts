@@ -96,18 +96,40 @@ export const AUDIT_ACTIONS = {
   BOOK_COPY_STATUS_CHANGED: "book.copy.status_changed",
   BOOK_COPY_CONDITION_CHANGED: "book.copy.condition_changed",
   BOOK_CATEGORY_CHANGED: "book.title.category_changed",
+  /** A logo or hero image was uploaded for the library's own branding. */
+  BRANDING_IMAGE_STORED: "branding.image.stored",
+  /**
+   * The scheduled sweeper deleted media whose retention had run out. One row
+   * per run, with a count — not one per file, which would bury the log.
+   */
+  MEDIA_PURGED: "media.purged",
+  /** One run of the overdue/due-soon reminder job, with what it sent. */
+  REMINDERS_SENT: "notification.reminders.sent",
   BOOK_COVER_ADDED: "book.cover.added",
   BOOK_COVER_REPLACED: "book.cover.replaced",
   /**
-   * A librarian took a reader's review off the book's page, or put it back.
-   *
-   * The row records that it happened and to which review. It deliberately does
-   * NOT carry the review text or the child's name: what was written is still in
-   * `book_review`, and the audit log's job is who decided what, not to keep a
-   * second copy of a child's words in a table nobody deletes from.
+   * A reader wrote a review, or rewrote one that had been declined. Never
+   * carries the text: the words are in `book_review`, and the log's job is who
+   * did what, not to keep a second copy of a child's writing in a table nobody
+   * deletes from.
    */
-  REVIEW_HIDDEN: "review.hidden",
-  REVIEW_RESTORED: "review.restored",
+  REVIEW_SUBMITTED: "review.submitted",
+  /** A reader took back a review that had not been published yet. */
+  REVIEW_WITHDRAWN: "review.withdrawn",
+  /** A librarian or the Super Admin put a review onto the book's page. */
+  REVIEW_APPROVED: "review.approved",
+  /** …or decided it should not go up. The author is told, and may rewrite. */
+  REVIEW_DECLINED: "review.declined",
+  /**
+   * The Super Admin erased a published review. Irreversible, and the one
+   * exception to publication being permanent.
+   *
+   * This row is the only trace left, so unlike the others it carries the rating
+   * and who wrote it — a deletion nobody can account for is worse than no
+   * deletion control at all. It still does NOT carry the review text: keeping a
+   * copy of the words would defeat the point of removing them.
+   */
+  REVIEW_DELETED: "review.deleted",
   BOOK_COVER_REMOVED: "book.cover.removed",
   BOOK_LABELS_PRINTED: "book.labels.printed",
   DONATION_RECORDED: "donation.recorded",

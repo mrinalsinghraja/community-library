@@ -460,15 +460,18 @@ async function queryCopies(
        * A LATERAL against the indexed (library_id, title_id) rather than a
        * GROUP BY over the whole join: this runs once per row of the page, which
        * is twenty-four, and it leaves the outer query's shape and its ORDER BY
-       * exactly as they were. Hidden reviews are excluded here, which is what
-       * makes taking one down move the average as well as the list.
+       * exactly as they were.
+       *
+       * PUBLISHED only. A review waiting for the desk moves no average and
+       * appears in no count — the shelf must never hint that an opinion exists
+       * before a grown-up has read it.
        */
       LEFT JOIN LATERAL (
         SELECT avg(br.rating) AS rating_average,
                count(*)       AS rating_count
           FROM book_review br
          WHERE br.title_id = t.id
-           AND br.hidden_at IS NULL
+           AND br.status = 'PUBLISHED'
       ) r ON TRUE
      WHERE ${where}
      ORDER BY ${order}

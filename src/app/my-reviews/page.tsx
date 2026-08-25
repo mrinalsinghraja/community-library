@@ -153,16 +153,41 @@ export default async function MyReviewsPage() {
                     </span>
                   </p>
 
-                  {review.hidden ? (
-                    <p className="mt-3">
-                      <StatusBadge tone="neutral">
-                        <Icon name="hide" /> Not on the book&rsquo;s page
+                  {/*
+                    Where it stands. This is the only screen that tells a reader
+                    whether their own review is on the shelf, waiting, or has
+                    been sent back — and, when it has, what the librarian asked
+                    them to change.
+                  */}
+                  <p className="mt-3">
+                    {review.status === "PUBLISHED" ? (
+                      <StatusBadge tone="available">
+                        <Icon name="check" /> {REVIEW_MESSAGES.publishedBadge}
                       </StatusBadge>
-                    </p>
+                    ) : review.status === "REJECTED" ? (
+                      <StatusBadge tone="neutral">
+                        <Icon name="info" /> {REVIEW_MESSAGES.declinedBadge}
+                      </StatusBadge>
+                    ) : (
+                      <StatusBadge tone="soon">
+                        <Icon name="info" /> {REVIEW_MESSAGES.waitingBadge}
+                      </StatusBadge>
+                    )}
+                  </p>
+
+                  {review.status === "PENDING" ? (
+                    <p className="mt-2 text-base text-ink-soft">{REVIEW_MESSAGES.waiting}</p>
                   ) : null}
 
-                  {review.hidden ? (
-                    <p className="mt-2 text-base text-ink-soft">{REVIEW_MESSAGES.hidden}</p>
+                  {review.status === "REJECTED" ? (
+                    <>
+                      <p className="mt-2 text-base text-ink-soft">{REVIEW_MESSAGES.declined}</p>
+                      {review.decisionNote ? (
+                        <p className="mt-1 text-base text-ink">
+                          &ldquo;{review.decisionNote}&rdquo;
+                        </p>
+                      ) : null}
+                    </>
                   ) : null}
                 </div>
               </li>

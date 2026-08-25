@@ -50,8 +50,10 @@ ISBN · publisher · publication year · series · volume · **language** ·
 description · tags · keywords · reading level · purchase price · digital
 editions · donor phone · donor email · donor address · any borrower information.
 
-**Ratings arrived in ADR-057 and are not on this list any more** — but the
-*column* still is. `book_title` holds no rating, no average and no count; it
+**Ratings arrived in ADR-057 and are not on this list any more** — and since
+ADR-058 nothing reaches a book's page until a Librarian or the Super Admin
+approves it, publication is permanent, and only the Super Admin can delete a
+published review. But the rating *column* is still on this list. `book_title` holds no rating, no average and no count; it
 holds a relation to `book_review`, and every average in the application is
 derived at read time from the reviews that are currently visible. A cached
 number would have to be recomputed on every write and would drift the first time
@@ -399,7 +401,8 @@ The URL carries the code printed on the book's own label (`/books/MJCL-B0010`) �
 the thing a child can read off the object in their hand — not a UUID.
 
 **No child's name appears anywhere in this catalogue except on a review they
-chose to sign** — and then only a first name, never more. See ADR-057: the
+chose to sign and a grown-up approved** — and then only a first name, never
+more. See ADR-057: the
 choice is asked per review rather than per account, `publicByline` is the single
 function that can emit it, and the alternative it returns is "A reader at the
 library". Nothing anywhere connects a name to a *borrowing*: who has a book out

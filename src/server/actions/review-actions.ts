@@ -5,9 +5,10 @@ import { revalidatePath } from "next/cache";
 import { REVIEW_MESSAGES, isRating } from "@/lib/reviews";
 import { toFriendlyMessage, ValidationError } from "@/server/lib/errors";
 import {
-  deleteOwnReview,
-  setReviewHidden,
+  decideReview,
+  deleteReviewForever,
   submitReview,
+  withdrawOwnReview,
 } from "@/server/services/review-service";
 
 /**
@@ -17,12 +18,17 @@ import {
  * authorization decision is made in this file.** Every service call below
  * resolves the actor from the session and enforces its own rule, so a
  * hand-written POST to one of these endpoints is refused exactly as a hidden
- * button is. In particular, "you must have borrowed this book" is checked in
- * `submitReview` against the loan table — not here, and not in the browser.
+ * button is. In particular:
  *
- * Nothing here trusts the form for identity. The only fields that arrive are
- * the book's printed code, a number of stars, some words and a yes/no about
- * being named. Who is writing is never a form field.
+ *   * "you must have borrowed this book" is checked in `submitReview` against
+ *     the loan table;
+ *   * "a published review cannot be edited or withdrawn" is checked against the
+ *     row's own status, not against whether the browser drew a button;
+ *   * `review.moderate` and `review.delete` are required inside `decideReview`
+ *     and `deleteReviewForever`, and the second is held by the Super Admin
+ *     alone.
+ *
+ * Who is acting is never a form field.
  *
  * NOTE: a "use server" file may export only async functions. Exporting a const
  * from one makes every action in the file fail at module evaluation, and
@@ -49,16 +55,17 @@ function toErrorState(error: unknown): ReviewFormState {
 /**
  * Every surface a rating is visible on.
  *
- * The shelf and the search results carry the average, so a new rating changes
- * pages the reader was not looking at. `/my-books` is here because the reminder
- * card is what sent them, and it has to be one book shorter when they get back.
+ * The shelf and the search results carry the average, so an approval changes
+ * pages nobody was looking at. `/my-books` is here because the reminder card is
+ * what sent the reader, and it has to be one book shorter when they get back.
  */
-function revalidateReviews(code: string): void {
-  revalidatePath(`/books/${encodeURIComponent(code)}`);
+function revalidateReviews(code?: string): void {
+  if (code) revalidatePath(`/books/${encodeURIComponent(code)}`);
   revalidatePath("/books");
   revalidatePath("/my-books");
   revalidatePath("/my-reviews");
   revalidatePath("/desk/reviews");
+  revalidatePath("/desk");
 }
 
 export async function submitReviewAction(
@@ -88,52 +95,76 @@ export async function submitReviewAction(
     });
 
     revalidateReviews(code);
-    return { status: "success", message: REVIEW_MESSAGES.saved };
+    return { status: "success", message: REVIEW_MESSAGES.waiting };
   } catch (error) {
     return toErrorState(error);
   }
 }
 
-export async function deleteReviewAction(
+/** A reader taking back a review the desk has not answered yet. */
+export async function withdrawReviewAction(
   _previous: ReviewFormState,
   formData: FormData,
 ): Promise<ReviewFormState> {
   const code = String(formData.get("code") ?? "");
 
   try {
-    await deleteOwnReview(code);
+    await withdrawOwnReview(code);
     revalidateReviews(code);
-    return { status: "success", message: "Taken down. You can always rate it again." };
+    return { status: "success", message: "Taken back. You can always rate it again." };
   } catch (error) {
     return toErrorState(error);
   }
 }
 
 /**
- * A librarian taking a review off the public page, or putting it back.
+ * A librarian or the Super Admin answering one review.
  *
- * Guarded by `book.edit` inside the service. The reason is optional and is for
- * the library's own record — it is never shown to the child, because "a grown-up
- * removed this" is a conversation to have in person, not a notice on a screen.
+ * The reason is optional on an approval and is shown to the author on a
+ * decline — the same shape as a borrow request the desk turns down. A child
+ * told "no" and nothing else has been refused by a machine.
  */
-export async function setReviewHiddenAction(
+export async function decideReviewAction(
   _previous: ReviewFormState,
   formData: FormData,
 ): Promise<ReviewFormState> {
   try {
-    const hidden = formData.get("hidden") === "true";
-    await setReviewHidden(
+    const approve = formData.get("approve") === "true";
+    await decideReview(
       String(formData.get("reviewId") ?? ""),
-      hidden,
+      approve,
+      String(formData.get("note") ?? ""),
+    );
+
+    revalidateReviews();
+    return {
+      status: "success",
+      message: approve ? "Published on the book's page." : "Sent back to the reader.",
+    };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+/**
+ * The Super Admin erasing a published review. Irreversible.
+ *
+ * The reason is required rather than optional, and the service refuses without
+ * one: this is the only way a published review can ever leave the shelf, and a
+ * deletion nobody can account for afterwards is worse than no control at all.
+ */
+export async function deleteReviewAction(
+  _previous: ReviewFormState,
+  formData: FormData,
+): Promise<ReviewFormState> {
+  try {
+    await deleteReviewForever(
+      String(formData.get("reviewId") ?? ""),
       String(formData.get("reason") ?? ""),
     );
 
-    revalidatePath("/desk/reviews");
-    revalidatePath("/books");
-    return {
-      status: "success",
-      message: hidden ? "Taken down from the book's page." : "Back on the book's page.",
-    };
+    revalidateReviews();
+    return { status: "success", message: "Deleted. This cannot be undone." };
   } catch (error) {
     return toErrorState(error);
   }
