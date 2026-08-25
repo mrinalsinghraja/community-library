@@ -94,19 +94,23 @@ describe("what the card does carry", () => {
     expect(shortRules(null)[0]).not.toMatch(/\d/);
   });
 
-  it("ends on the rule that stops a child hiding a late book", () => {
+  it("ends by sending a child to a person", () => {
+    // The rule that stops a late or damaged book being hidden. It asks them to
+    // speak to somebody; it does not say what will happen when they do.
     const last = shortRules(RULES).at(-1) ?? "";
-    expect(last).toMatch(/tell us/i);
-    expect(last).toMatch(/never a fine/i);
+    expect(last).toMatch(/tell the librarian/i);
   });
 
-  it("never threatens anybody", () => {
-    for (const rule of shortRules(RULES)) {
-      expect(rule).not.toMatch(/penalty|charge|fee|must not|forbidden|banned|punish/i);
-
-      // "Fine" may appear only as the thing that does not happen. A children's
-      // library that mentions fines any other way has lost the argument.
-      if (/fine/i.test(rule)) expect(rule).toMatch(/never a fine|no fine/i);
+  it("says nothing at all about what happens if a rule is broken", () => {
+    /*
+     * Neutral in **both** directions, which is the part that is easy to get
+     * wrong. An earlier version ended "there is never a fine" — kindly meant,
+     * and still a policy printed on an object families keep, covering a wrecked
+     * or lost book as much as a late one. The card asks for the book back and
+     * asks to be told early; the rest is a conversation with a librarian.
+     */
+    for (const rule of [...shortRules(RULES), ...shortRules(null)]) {
+      expect(rule).not.toMatch(/fine|penalty|charge|fee|owe|punish|forbidden|banned|must not/i);
     }
   });
 });

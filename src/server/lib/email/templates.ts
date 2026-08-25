@@ -471,7 +471,7 @@ export function accountReactivated(
  *
  *   • any other child, any other family, any other book
  *   • a count of days late, or any number a family could feel scored by
- *   • a consequence, because there is none — this library charges no fines
+ *   • a consequence — this library does not threaten one, and does not
  *   • a link that does anything. There is no action to take on a screen; the
  *     book comes back to a room, not to a URL, and a reminder carrying a login
  *     link would be one more link for somebody to phish.

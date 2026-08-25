@@ -143,9 +143,22 @@ export default async function RulesPage() {
               </Card>
             </div>
 
+            {/*
+              What happens when something goes wrong, said as a next step rather
+              than as a policy.
+
+              This paragraph used to promise "no fines here, ever". It was kindly
+              meant, and it was still the library writing itself a rule it had
+              not agreed on — published on the page families are pointed at, and
+              covering a lost or wrecked book as much as a book that came back a
+              day late. The library does not threaten anybody and does not need
+              to promise it never will; it needs a child to come and say
+              something early, which is what this now asks for.
+            */}
             <p className="mt-10 text-lg text-ink-soft">
-              There are no fines here, ever. If a book is late we will send a friendly reminder to
-              your family, and that is all.
+              If a book is late, we will send a friendly reminder to your family. If you need
+              longer, or if something has happened to a book, please come and tell the librarian —
+              it is always easier to sort out early, and nobody will be cross with you.
             </p>
 
             {/*

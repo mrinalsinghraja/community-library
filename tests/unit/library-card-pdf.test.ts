@@ -26,7 +26,6 @@ const FACTS: LibraryCardFacts = {
   libraryName: "Mana Jardin Children's Library",
   communityName: "Mana Jardin",
   logoUrl: null,
-  contactPhone: "+91 96633 12707",
   rules: { ageMin: 5, ageMax: 14, borrowingPeriodDays: 14, maxActiveLoans: 2 },
 };
 
@@ -52,9 +51,9 @@ describe("the card as a file", () => {
     }
   });
 
-  it("renders for a library with no settings and no phone", async () => {
+  it("renders for a library with no settings at all", async () => {
     const bytes = await renderLibraryCardPdf(
-      { ...FACTS, rules: null, contactPhone: null, apartment: null, joinedAt: null },
+      { ...FACTS, rules: null, apartment: null, joinedAt: null },
       "Asia/Kolkata",
     );
     expect(isPdf(bytes)).toBe(true);

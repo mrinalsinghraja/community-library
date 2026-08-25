@@ -144,7 +144,7 @@ export function LibraryCard({
         ) : null}
 
         <p className="mt-5 rounded-[var(--radius-field)] bg-accent-wash px-4 py-3 text-base font-bold text-ink">
-          Free. No fees, no fines, no catch.
+          Free. No fees, no catch.
         </p>
       </div>
 
@@ -161,12 +161,6 @@ export function LibraryCard({
             </li>
           ))}
         </ul>
-
-        {facts.contactPhone ? (
-          <p className="mt-3 border-t border-hairline pt-3 text-sm text-ink-soft">
-            Found this card? Please call the library on {facts.contactPhone}.
-          </p>
-        ) : null}
       </div>
     </div>
   );

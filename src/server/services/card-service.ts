@@ -65,7 +65,6 @@ export async function getOwnLibraryCard(): Promise<LibraryCardFacts | null> {
     libraryName: branding.libraryName,
     communityName: branding.communityName,
     logoUrl: branding.logoUrl,
-    contactPhone: branding.contactPhone,
 
     rules,
   };

@@ -17,7 +17,7 @@ import { daysUntilDue, formatInTimezone } from "@/lib/dates";
  * scheduled job can ever leave the library believing something untrue, and a
  * book becomes overdue at midnight without anything having to run.
  *
- * **The library charges no fines, so the words must not imply one.** A child
+ * **Never imply a consequence, and never promise there is none.** A child
  * who is late is not in trouble. Every string below was written to be read by a
  * nine-year-old who already feels bad about it; "YOUR BOOK IS OVERDUE" is
  * exactly the wording this file exists to prevent.
@@ -224,7 +224,8 @@ export function readerLoanBadge(
  *
  * The overdue case names the date and asks, once, kindly. It does not count
  * days, does not scold, and does not mention a consequence, because there is
- * no consequence: this library has no fines and never will.
+ * nothing to threaten a child with, and nothing to promise them either.
+ * What happens next is a conversation with a librarian.
  */
 export function readerDueSentence(
   loan: { status: LoanStatus; dueAt: Date; returnedAt?: Date | null },

@@ -36,7 +36,7 @@ import { Icon } from "@/components/ui/icon";
  * a stat block reading "4" is worse than no stat block at all.
  *
  * So the page argues from the things that are true and are *better* than
- * volume: it is downstairs, it is free with no fines, every book on it was
+ * volume: it is downstairs, it is free to join, every book on it was
  * carried down by a neighbour, and it is at the beginning — which is an
  * invitation rather than an apology. A library of four books that admits it
  * has four books is trustworthy. That is the whole marketing strategy, and it
@@ -136,8 +136,8 @@ export default async function HomePage() {
 
             <p className="mt-6 max-w-xl text-lg text-ink-soft">
               Children choose their own book, take it home, and bring it back when they are done.
-              No fee to join, nothing to pay if a book comes back late, and no test at the end.
-              Reading here is meant to be the good part of the day.
+              No fee to join, no test at the end, and no catch. Reading here is meant to be the
+              good part of the day.
             </p>
 
             <div className="mt-9 flex flex-wrap gap-4">
@@ -178,7 +178,6 @@ export default async function HomePage() {
                 libraryName: branding.libraryName,
                 communityName: branding.communityName,
                 logoUrl: branding.logoUrl,
-                contactPhone: branding.contactPhone,
                 rules,
               }}
             />
@@ -228,8 +227,8 @@ export default async function HomePage() {
             <CardTitle icon={<Icon name="home" />}>Take it home</CardTitle>
             <CardBody>
               {rules
-                ? `Keep it for ${rules.borrowingPeriodDays} days, then bring it back so the next reader can enjoy it. Late? Just bring it down — nothing happens.`
-                : "Keep it for a while, then bring it back so the next reader can enjoy it. Late? Just bring it down — nothing happens."}
+                ? `Keep it for ${rules.borrowingPeriodDays} days, then bring it back so the next reader can enjoy it. Need longer? Just ask the librarian.`
+                : "Keep it for a while, then bring it back so the next reader can enjoy it. Need longer? Just ask the librarian."}
             </CardBody>
           </Card>
         </div>
@@ -251,8 +250,8 @@ export default async function HomePage() {
             <CardTitle icon={<Icon name="renew" />}>A habit, not a task</CardTitle>
             <CardBody>
               A book is a short walk away, so finishing one and starting the next is easy enough to
-              keep doing. Nobody is graded, nobody is tested, and nobody is fined. Children who
-              choose their own books keep reading for longer.
+              keep doing. Nobody is graded and nobody is tested. Children who choose their own
+              books keep reading for longer.
             </CardBody>
           </Card>
 

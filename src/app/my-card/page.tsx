@@ -76,7 +76,6 @@ export default async function MyCardPage() {
               avatarKey: facts.avatarKey,
               libraryName: facts.libraryName,
               communityName: facts.communityName,
-              contactPhone: facts.contactPhone,
               rules: facts.rules,
             }}
           />

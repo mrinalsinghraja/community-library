@@ -41,7 +41,7 @@ export const metadata: Metadata = { title: "My books" };
  * every other guard failed.
  *
  * The wording is the point of this screen as much as the data. This library
- * charges no fines and never will, and a child who is late is not in trouble.
+ * never threatens a consequence, and a child who is late is not in trouble.
  * "Ready to come home 🏠" instead of "OVERDUE", a date instead of a count of
  * days, one polite sentence instead of a warning. All of it lives in
  * `src/lib/circulation.ts` so that no template can invent a harsher version.

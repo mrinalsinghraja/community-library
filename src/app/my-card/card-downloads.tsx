@@ -65,7 +65,6 @@ export interface CardDownloadFacts {
   avatarKey: string | null;
   libraryName: string;
   communityName: string;
-  contactPhone: string | null;
   rules: CardRules | null;
 }
 
@@ -260,11 +259,11 @@ function drawCard(ctx: CanvasRenderingContext2D, facts: CardDownloadFacts) {
   ctx.fill();
   ctx.fillStyle = INK;
   ctx.font = bodyFont(700, 8.5 * SCALE);
-  ctx.fillText("Free. No fees, no fines, no catch.", PAD + 7 * SCALE, y + 9 * SCALE);
+  ctx.fillText("Free. No fees, no catch.", PAD + 7 * SCALE, y + 9 * SCALE);
 
   // ---- House rules along the bottom ---------------------------------------
   const rules = shortRules(facts.rules);
-  const footer = (10 + 8) * SCALE + rules.length * 9.5 * SCALE + (facts.contactPhone ? 14 : 4) * SCALE;
+  const footer = (10 + 8) * SCALE + rules.length * 9.5 * SCALE + 6 * SCALE;
 
   ctx.fillStyle = SUNK;
   ctx.fillRect(0, H - footer, W, footer);
@@ -287,16 +286,5 @@ function drawCard(ctx: CanvasRenderingContext2D, facts: CardDownloadFacts) {
     ctx.font = bodyFont(400, 7.5 * SCALE);
     ctx.fillText(rule, PAD + 8 * SCALE, ruleY, contentWidth - 10 * SCALE);
     ruleY += 9.5 * SCALE;
-  }
-
-  if (facts.contactPhone) {
-    ctx.fillStyle = INK_SOFT;
-    ctx.font = bodyFont(400, 6.5 * SCALE);
-    ctx.fillText(
-      `Found this card? Please call the library on ${facts.contactPhone}.`,
-      PAD,
-      ruleY + 2 * SCALE,
-      contentWidth,
-    );
   }
 }

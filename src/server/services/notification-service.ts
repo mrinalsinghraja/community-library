@@ -18,7 +18,7 @@ import { getCurrentLibrary } from "@/server/lib/settings";
 /**
  * The daily reminder pass.
  *
- * The library charges no fines and has no way to compel anybody. A polite note
+ * The library has no way to compel anybody. A polite note
  * to a parent is, quite literally, the entire mechanism by which books come
  * back — which is why this job's one hard requirement is that a family can
  * trust it. A reminder that arrives every single morning is not a reminder; it

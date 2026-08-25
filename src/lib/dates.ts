@@ -111,7 +111,7 @@ export function formatInTimezone(
 }
 
 /**
- * Friendly, non-punitive phrasing for a due date. The library charges no fines
+ * Friendly, non-punitive phrasing for a due date. The library never threatens
  * and the wording must never imply otherwise.
  */
 export function describeDueDate(

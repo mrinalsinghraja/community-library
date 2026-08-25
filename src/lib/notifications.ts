@@ -23,7 +23,7 @@ import { daysUntilDue, formatInTimezone } from "@/lib/dates";
  * every occurrence belonging to the old one stops being reachable. Nothing has
  * to remember to cancel anything.
  *
- * **3. The library charges no fines, and the words must never imply one.** This
+ * **3. Never imply a consequence, and never promise there is none.** This
  * is a message to a parent about a library book, not a demand. It says which
  * book, which date, and where to bring it. It does not count days, does not
  * threaten, and never suggests a child has done something wrong. The strongest
@@ -42,7 +42,7 @@ import { daysUntilDue, formatInTimezone } from "@/lib/dates";
  *
  * SUSPENDED is on the list and that is deliberate. A paused account is usually
  * paused *because* a book has not come back, and a library that stops asking at
- * exactly that point has removed its own only remedy — it charges no fines, so
+ * exactly that point has removed its own only remedy — it cannot compel, so
  * a polite note is the whole mechanism. ARCHIVED and DEACTIVATED are not:
  * that family has left, and writing to them about a book is either useless or
  * an intrusion. If such an account still holds a book, that is a conversation

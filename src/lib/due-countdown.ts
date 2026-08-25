@@ -14,7 +14,7 @@ import { daysUntilDue, formatInTimezone } from "@/lib/dates";
  * colour he cannot read has told him nothing. Callers must render `unit`
  * whenever they render `value`.
  *
- * Nothing here is punitive. There are no fines in this library and there never
+ * Nothing here is punitive, and nothing here promises immunity either. There
  * will be, so an overdue book counts days the way a calendar counts them —
  * plainly, as a fact, with no adjective attached.
  */

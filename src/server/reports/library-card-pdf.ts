@@ -198,7 +198,7 @@ export async function renderLibraryCardPdf(
   }
 
   // The one line the whole library is about.
-  const freeText = "Free. No fees, no fines, no catch.";
+  const freeText = "Free. No fees, no catch.";
   page.drawRectangle({ x: PAD, y: y - 15, width: contentWidth, height: 18, color: ACCENT_WASH });
   page.drawText(freeText, { x: PAD + 7, y: y - 9, size: 8.5, font: bold, color: INK });
 
@@ -206,7 +206,7 @@ export async function renderLibraryCardPdf(
   const rules = shortRules(facts.rules);
   // 10 top padding + the heading + the rules + a block for the contact line.
   // The previous budget left the contact line's descenders below the page.
-  const footerHeight = 10 + 8 + rules.length * 9.5 + (facts.contactPhone ? 14 : 4);
+  const footerHeight = 10 + 8 + rules.length * 9.5 + 6;
 
   page.drawRectangle({ x: 0, y: 0, width: WIDTH, height: footerHeight, color: SUNK });
   page.drawLine({
@@ -230,16 +230,6 @@ export async function renderLibraryCardPdf(
       color: INK,
     });
     ruleY -= 9.5;
-  }
-
-  if (facts.contactPhone) {
-    page.drawText(safe(`Found this card? Please call the library on ${facts.contactPhone}.`), {
-      x: PAD,
-      y: ruleY - 1,
-      size: 6.5,
-      font: body,
-      color: INK_SOFT,
-    });
   }
 
   return pdf.save();

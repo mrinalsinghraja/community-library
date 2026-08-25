@@ -15,7 +15,7 @@ import type { CountdownTone, DueCountdown } from "@/lib/due-countdown";
  * component and it still reads correctly, which is the test it was built to
  * pass.
  *
- * Red is not a telling-off. This library has no fines, and a book past its date
+ * Red is not a telling-off. Nothing here threatens anybody, and a book past its date
  * is a book that is ready to come home — the colour marks the end of an
  * interval, not the beginning of a punishment.
  */
