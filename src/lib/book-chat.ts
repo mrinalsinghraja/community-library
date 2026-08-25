@@ -120,7 +120,23 @@ export const BOOK_CHAT_MESSAGES = {
    * an explanation of prompt injection.
    */
   offTopic: "I can only talk about books here. Try asking me something about this one!",
-  busy: "Lots of questions right now. Have a read, and try again in a little while.",
+  /**
+   * *This reader* has asked a lot in one hour. Personal, clears on its own, and
+   * says so.
+   */
+  busy: "That is a lot of questions! Have a read, and ask me again in a little while.",
+  /**
+   * The library's whole daily allowance is gone — nothing to do with this
+   * child, and it does not come back until tomorrow.
+   *
+   * The metaphor is the owner's and it is a good one: fuel is a thing a child
+   * already understands running out and refilling, it carries no blame, and it
+   * makes the honest point that somebody is paying for this. The second
+   * sentence matters most — the library is not broken, only the helper is
+   * asleep, and the books are still there.
+   */
+  outOfFuel:
+    "Our helper has used up all its thinking fuel for today. It fills up again tomorrow — the books are still right here in the meantime!",
   failed: "That did not work. Please try again in a moment.",
   /** Shown when the helper is switched off entirely (no key configured). */
   unavailable: "The book helper is having a rest just now.",

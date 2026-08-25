@@ -12,7 +12,7 @@ import { WhatsAppButton, WhatsAppHelp } from "@/components/library/whatsapp-help
 import { DONATE_BOOKS_MESSAGE } from "@/lib/whatsapp";
 import { bookHelperEnabled } from "@/server/lib/ai/groq";
 import { catalogueIsPubliclyVisible, getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
-import { browseCatalogue, listCategories } from "@/server/services/catalogue-service";
+import { listCategories } from "@/server/services/catalogue-service";
 import { Icon } from "@/components/ui/icon";
 
 /**
@@ -76,14 +76,7 @@ export default async function HomePage() {
    * to action it already had. A home page must render.
    */
   const cataloguePublic = await catalogueIsPubliclyVisible().catch(() => false);
-  const [categories, shelf] = cataloguePublic
-    ? await Promise.all([
-        listCategories().catch(() => []),
-        browseCatalogue({ pageSize: 1 }).catch(() => null),
-      ])
-    : [[], null];
-
-  const bookCount = shelf?.total ?? 0;
+  const categories = cataloguePublic ? await listCategories().catch(() => []) : [];
 
   return (
     <PublicShell branding={branding}>
@@ -175,9 +168,13 @@ export default async function HomePage() {
       {/* Somebody who already knows what a library is came here to see      */}
       {/* whether it has anything worth walking down for.                    */}
       {/* ---------------------------------------------------------------- */}
-      {cataloguePublic ? (
-        <CatalogueSearchBand categories={categories} totalBooks={bookCount} />
-      ) : null}
+      {/*
+        The count is deliberately not passed. Same reason as the band further
+        down: while the shelf is still being catalogued the number measures the
+        import, not the library. `CatalogueSearchBand` already writes "every
+        book on our shelves" when it has no figure to quote.
+      */}
+      {cataloguePublic ? <CatalogueSearchBand categories={categories} /> : null}
 
       {/* ---------------------------------------------------------------- */}
       {/* How it works                                                      */}
@@ -224,13 +221,7 @@ export default async function HomePage() {
       <section className="mx-auto max-w-5xl px-5 py-16 sm:px-8">
         <h2 className="garden-rule inline-block text-3xl">Why it is worth walking down for</h2>
 
-        {/*
-          Two, not three. There were three, and the third described the helper —
-          immediately above a panel that shows the helper working. Two rows of
-          three cards also made the two sections above and below read as the
-          same component twice, which is how a page stops being looked at.
-        */}
-        <div className="mt-14 grid gap-6 md:grid-cols-2">
+        <div className="mt-14 grid gap-6 md:grid-cols-3">
           <Card tone="sunk">
             <CardTitle icon={<Icon name="renew" />}>A habit, not a task</CardTitle>
             <CardBody>
@@ -249,6 +240,14 @@ export default async function HomePage() {
             </CardBody>
           </Card>
 
+          <Card tone="sunk">
+            <CardTitle icon={<Icon name="sparkle" />}>Curiosity, answered</CardTitle>
+            <CardBody>
+              A question about a book used to mean waiting until somebody had time. Now every book
+              on our shelves has a helper on its page that answers what a child wants to know about
+              it — free, and in words that suit their age.
+            </CardBody>
+          </Card>
         </div>
 
         {/*
@@ -258,17 +257,26 @@ export default async function HomePage() {
           never advertises something the site is not currently doing.
         */}
         {bookHelperEnabled() ? (
-          <div className="mt-8 grid gap-6 md:grid-cols-[1fr_1.1fr] md:items-center">
+          <div className="mt-10 grid gap-8 md:grid-cols-[1fr_1.1fr] md:items-center">
             <div>
-              <h3 className="text-2xl">Questions do not have to wait</h3>
+              <p className="text-sm font-bold uppercase tracking-[0.16em] text-accent-ink">
+                Something no shelf on its own can do
+              </p>
+              <h3 className="mt-2 text-2xl sm:text-3xl">Every book comes with someone to ask</h3>
+              <p className="mt-4 text-lg text-ink-soft">
+                Children are relentless about the questions a book leaves behind. Who wrote this,
+                and what else did they write? Is it scary? Was any of it real? When was it first
+                published, and what was the world like then? What should I read after this one?
+              </p>
               <p className="mt-3 text-lg text-ink-soft">
-                Children ask things at nine in the evening — who wrote this, is it scary, what
-                should I read after. The helper answers on the spot, about the book they are
-                actually holding, and tells them to ask a librarian when it matters.
+                Every book on our shelves has an AI helper on its page that answers all of that —
+                the story, the author, the history around it, where to go next — pitched at the age
+                the book is shelved for. It is free, it needs no account, and it is awake at nine in
+                the evening when the questions actually arrive.
               </p>
               <p className="mt-4 text-base text-ink-soft">
-                It only talks about books, it never asks a child anything about themselves, and no
-                conversation is kept.
+                It only talks about books, it says plainly when it is unsure, it never asks a child
+                anything about themselves, and no conversation is kept.
               </p>
             </div>
             <HelperPreview />
@@ -291,23 +299,25 @@ export default async function HomePage() {
 
           <div className="relative max-w-2xl">
             {/*
-              Two headings, because the true sentence changes as the shelf
-              fills. "We are just beginning" is the honest and persuasive line
-              at four books and an odd one at two hundred, and a front page that
-              still says it next year is a front page nobody has read.
+              No number here, deliberately.
+
+              An earlier draft printed the real shelf count on the grounds that
+              a public catalogue would expose it anyway. That was wrong for a
+              shelf still being catalogued: the figure on any given morning
+              measures how far through the import somebody has got, not how big
+              the library is, and a front page that says "4 books" the week
+              before forty arrive is misleading in the direction that costs
+              most. The invitation is the point, and it does not need a
+              quantity to land.
             */}
             <h2 className="text-2xl sm:text-3xl">
-              {bookCount === 0
-                ? "We are just beginning"
-                : bookCount < 25
-                  ? `We are just beginning — ${bookCount} ${bookCount === 1 ? "book" : "books"} so far`
-                  : `${bookCount} books on our shelf`}
+              We have just started, and we are looking for your help
             </h2>
 
             <p className="mt-3 text-lg text-ink-soft">
-              Every one of them was given by a family here. The shelf grows the week somebody
-              remembers the picture books their child has outgrown, and it grows again when the
-              next family does the same.
+              Every book on our shelves was given by a family here. The library grows the week
+              somebody remembers the picture books their child has outgrown, and it grows again
+              when the next family does the same — which is the whole plan.
             </p>
 
             <p className="mt-3 text-lg text-ink-soft">

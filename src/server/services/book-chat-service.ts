@@ -9,6 +9,7 @@ import {
   type BookChatTurn,
 } from "@/lib/book-chat";
 import {
+  DAILY_LIMIT_THRESHOLD_SECONDS,
   GroqUnavailableError,
   INJECTION_THRESHOLD,
   bookHelperEnabled,
@@ -50,7 +51,12 @@ import { getBookByCode } from "@/server/services/catalogue-service";
  * she cannot do is borrow it, and that is enforced somewhere else entirely.
  */
 
-export type BookChatFailure = "unavailable" | "off-topic" | "busy" | "failed";
+export type BookChatFailure =
+  | "unavailable"
+  | "off-topic"
+  | "busy"
+  | "out-of-fuel"
+  | "failed";
 
 export type BookChatResult =
   | { ok: true; answer: string }
@@ -166,7 +172,19 @@ export async function askAboutBook(input: AskAboutBookInput): Promise<BookChatRe
     return { ok: true, answer: stripMarkdown(answer) };
   } catch (error) {
     if (error instanceof GroqUnavailableError) {
-      return { ok: false, reason: error.reason === "rate-limited" ? "busy" : "failed" };
+      if (error.reason !== "rate-limited") return { ok: false, reason: "failed" };
+
+      /*
+       * Two different sentences hide behind one status code. Our own per-reader
+       * throttle above is "busy" and clears within the hour; this is Groq's,
+       * and when the wait it asks for is longer than any per-minute window can
+       * be, the day's allowance is spent and the honest answer is "tomorrow".
+       */
+      return {
+        ok: false,
+        reason:
+          error.retryAfterSeconds >= DAILY_LIMIT_THRESHOLD_SECONDS ? "out-of-fuel" : "busy",
+      };
     }
     throw error;
   }

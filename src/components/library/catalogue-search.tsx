@@ -24,11 +24,18 @@ import { Icon } from "@/components/ui/icon";
  */
 export function CatalogueSearchBand({
   categories,
-  totalBooks,
+  totalBooks = 0,
 }: {
   categories: BookCategory[];
-  /** So the invitation can say how much there is. Zero hides the number. */
-  totalBooks: number;
+  /**
+   * So the invitation can say how much there is. Zero — and now the default —
+   * writes "every book on our shelves" instead.
+   *
+   * Optional because a count is only worth quoting once it flatters the shelf.
+   * A library still being catalogued would be advertising the progress of its
+   * own data entry.
+   */
+  totalBooks?: number;
 }) {
   return (
     <section aria-labelledby="find-a-book" className="mx-auto max-w-5xl px-5 pb-6 sm:px-8">

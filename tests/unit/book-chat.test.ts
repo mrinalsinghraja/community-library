@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   BOOK_CHAT_MESSAGES,
@@ -12,6 +12,11 @@ import {
   presetById,
   stripMarkdown,
 } from "@/lib/book-chat";
+import {
+  DAILY_LIMIT_THRESHOLD_SECONDS,
+  GroqUnavailableError,
+  groqAnswer,
+} from "@/server/lib/ai/groq";
 import { buildBookHelperPrompt } from "@/server/lib/ai/book-prompt";
 
 /**
@@ -200,6 +205,93 @@ describe("the answer as a child sees it", () => {
   it("does not eat a lone asterisk or underscore mid-sentence", () => {
     expect(stripMarkdown("The star * marks it")).toBe("The star * marks it");
     expect(stripMarkdown("a_b_c stays")).toBe("a_b_c stays");
+  });
+});
+
+describe("when the day's allowance runs out", () => {
+  /*
+   * Groq answers a burst limit and a day limit with the same 429, and the two
+   * need different sentences: one clears while the child is still on the page,
+   * the other does not clear until tomorrow. `Retry-After` is what separates
+   * them, and an hour is the line because no per-minute window can exceed it.
+   */
+  it("keeps the two rate limits apart at an hour", () => {
+    expect(DAILY_LIMIT_THRESHOLD_SECONDS).toBe(3600);
+  });
+
+  it("blames nobody, and says when it comes back", () => {
+    const message = BOOK_CHAT_MESSAGES.outOfFuel;
+
+    expect(message).toMatch(/tomorrow/i);
+    // The library is not broken — only the helper is asleep.
+    expect(message).toMatch(/books are still/i);
+    // Not the child's fault, and not a fault at all.
+    expect(message).not.toMatch(/error|sorry|failed|problem|wrong/i);
+  });
+
+  it("does not leak the plumbing to a nine-year-old", () => {
+    for (const word of ["quota", "token", "rate limit", "API", "Groq", "429"]) {
+      expect(BOOK_CHAT_MESSAGES.outOfFuel.toLowerCase()).not.toContain(word.toLowerCase());
+    }
+  });
+
+  it("says something different when it is this reader who has asked a lot", () => {
+    // Personal and hourly, versus shared and daily. Same sentence for both
+    // would send a child away for a day over a fifteen-minute wait.
+    expect(BOOK_CHAT_MESSAGES.busy).not.toBe(BOOK_CHAT_MESSAGES.outOfFuel);
+    expect(BOOK_CHAT_MESSAGES.busy).not.toMatch(/tomorrow/i);
+  });
+});
+
+describe("what a 429 actually carries", () => {
+  /*
+   * The whole out-of-fuel feature rests on one header. These stub `fetch` so
+   * the parsing is exercised for real; no request leaves, and the key in the
+   * test environment is a fake.
+   */
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const rateLimited = (headers: Record<string, string>) =>
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 429, headers })),
+    );
+
+  const ask = () => groqAnswer([{ role: "user", content: "hello" }]);
+
+  it("reads Retry-After off a daily limit", async () => {
+    rateLimited({ "retry-after": "7200" });
+
+    await expect(ask()).rejects.toThrow(GroqUnavailableError);
+    await expect(ask().catch((e: GroqUnavailableError) => e.retryAfterSeconds)).resolves.toBe(
+      7200,
+    );
+  });
+
+  it("reads a fractional one, which Groq does send", async () => {
+    rateLimited({ "retry-after": "2.51" });
+
+    await expect(ask().catch((e: GroqUnavailableError) => e.retryAfterSeconds)).resolves.toBe(
+      2.51,
+    );
+  });
+
+  it("treats a missing or unreadable header as a short wait", async () => {
+    // Being wrong towards "try again shortly" costs a reload. Being wrong
+    // towards "come back tomorrow" sends a child away for a day.
+    const cases: Record<string, string>[] = [{}, { "retry-after": "Wed, 21 Oct 2026 07:28:00 GMT" }];
+    for (const headers of cases) {
+      rateLimited(headers);
+      await expect(ask().catch((e: GroqUnavailableError) => e.retryAfterSeconds)).resolves.toBe(0);
+      expect(0).toBeLessThan(DAILY_LIMIT_THRESHOLD_SECONDS);
+    }
+  });
+
+  it("still calls a 429 a rate limit and not a fault", async () => {
+    rateLimited({ "retry-after": "60" });
+    await expect(ask().catch((e: GroqUnavailableError) => e.reason)).resolves.toBe("rate-limited");
   });
 });
 

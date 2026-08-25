@@ -76,6 +76,7 @@ const STATUS: Record<BookChatFailure, number> = {
   unavailable: 503,
   "off-topic": 200,
   busy: 429,
+  "out-of-fuel": 429,
   failed: 502,
 };
 
@@ -83,7 +84,24 @@ const MESSAGE: Record<BookChatFailure, string> = {
   unavailable: BOOK_CHAT_MESSAGES.unavailable,
   "off-topic": BOOK_CHAT_MESSAGES.offTopic,
   busy: BOOK_CHAT_MESSAGES.busy,
+  "out-of-fuel": BOOK_CHAT_MESSAGES.outOfFuel,
   failed: BOOK_CHAT_MESSAGES.failed,
+};
+
+/**
+ * Whether the page should paint this in red.
+ *
+ * Only a genuine fault is an alert. Running out of the day's fuel, being asked
+ * to slow down, and the helper being switched off are all *states* — nobody did
+ * anything wrong, least of all the child — and a red box with a warning icon
+ * would tell a nine-year-old they broke something.
+ */
+const TONE: Record<BookChatFailure, "alert" | "quiet"> = {
+  unavailable: "quiet",
+  "off-topic": "quiet",
+  busy: "quiet",
+  "out-of-fuel": "quiet",
+  failed: "alert",
 };
 
 export async function POST(
@@ -91,7 +109,7 @@ export async function POST(
   { params }: { params: Promise<{ code: string }> },
 ) {
   if (!isSameOrigin(request)) {
-    return NextResponse.json({ error: BOOK_CHAT_MESSAGES.failed }, { status: 403 });
+    return NextResponse.json({ error: BOOK_CHAT_MESSAGES.failed, tone: "alert" }, { status: 403 });
   }
 
   const { code } = await params;
@@ -127,7 +145,7 @@ export async function POST(
     }
 
     return NextResponse.json(
-      { error: MESSAGE[result.reason] },
+      { error: MESSAGE[result.reason], tone: TONE[result.reason] },
       { status: STATUS[result.reason] },
     );
   } catch (error) {

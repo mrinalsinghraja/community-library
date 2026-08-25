@@ -32,11 +32,33 @@ export interface GroqMessage {
 
 /** Distinguishable from a bug so the route can answer "busy" rather than "broken". */
 export class GroqUnavailableError extends Error {
-  constructor(readonly reason: "not-configured" | "rate-limited" | "failed") {
+  constructor(
+    readonly reason: "not-configured" | "rate-limited" | "failed",
+    /**
+     * From `Retry-After` on a 429, in seconds. Zero when the upstream did not
+     * say. This is the only thing separating "everyone try again in a minute"
+     * from "the day's allowance is gone", and those two need different
+     * sentences on a child's screen.
+     */
+    readonly retryAfterSeconds = 0,
+  ) {
     super(`Groq unavailable: ${reason}`);
     this.name = "GroqUnavailableError";
   }
 }
+
+/**
+ * Past this, a 429 is the daily allowance rather than a burst.
+ *
+ * Groq caps requests and tokens both per minute and per day, and answers every
+ * one of them with 429. A minute-limit clears while a child is still on the
+ * page; a day-limit does not clear until tomorrow, and telling a nine-year-old
+ * to "try again shortly" when the true answer is "tomorrow" is a small lie they
+ * will discover by pressing the button eleven more times.
+ *
+ * An hour is the dividing line because no per-minute window can exceed it.
+ */
+export const DAILY_LIMIT_THRESHOLD_SECONDS = 3600;
 
 /**
  * Whether the helper exists at all.
@@ -76,7 +98,17 @@ async function callGroq(body: Record<string, unknown>): Promise<string> {
     throw new GroqUnavailableError("failed");
   }
 
-  if (response.status === 429) throw new GroqUnavailableError("rate-limited");
+  if (response.status === 429) {
+    // `Retry-After` is seconds or an HTTP date; Groq sends seconds, sometimes
+    // fractional. Anything unparseable is treated as a short wait, because
+    // "try tomorrow" is the more annoying thing to be wrong about.
+    const header = response.headers.get("retry-after");
+    const seconds = header ? Number.parseFloat(header) : 0;
+    throw new GroqUnavailableError(
+      "rate-limited",
+      Number.isFinite(seconds) && seconds > 0 ? seconds : 0,
+    );
+  }
 
   if (!response.ok) {
     // Status and model only. An error body from an upstream can echo the

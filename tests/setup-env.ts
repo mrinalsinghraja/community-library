@@ -14,3 +14,5 @@ process.env.DATABASE_URL ??= "postgresql://localhost:5432/library_test?schema=pu
 process.env.NEXT_PUBLIC_APP_URL ??= "http://localhost:3000";
 process.env.APP_TIMEZONE ??= "Asia/Kolkata";
 process.env.EMAIL_PROVIDER ??= "console";
+// The book helper. Obviously fake, and no test may make a real request.
+process.env.GROQ_API_KEY ??= "gsk-test-only-not-a-real-key";

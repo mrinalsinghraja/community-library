@@ -42,7 +42,7 @@ export function BookHelper({ code, title }: { code: string; title: string }) {
   const [thread, setThread] = useState<Exchange[]>([]);
   const [typed, setTyped] = useState("");
   const [asking, setAsking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; tone: "alert" | "quiet" } | null>(null);
   const [usedPresets, setUsedPresets] = useState<string[]>([]);
 
   const nextId = useRef(0);
@@ -64,7 +64,7 @@ export function BookHelper({ code, title }: { code: string; title: string }) {
   async function ask(payload: { presetId?: string; question?: string; shown: string }) {
     if (asking) return;
 
-    setError(null);
+    setNotice(null);
     setAsking(true);
 
     const question: Exchange = { id: nextId.current++, role: "reader", text: payload.shown };
@@ -85,7 +85,7 @@ export function BookHelper({ code, title }: { code: string; title: string }) {
       });
 
       const data = (await response.json().catch(() => null)) as
-        | { answer?: string; error?: string }
+        | { answer?: string; error?: string; tone?: "alert" | "quiet" }
         | null;
 
       if (data?.answer) {
@@ -94,10 +94,13 @@ export function BookHelper({ code, title }: { code: string; title: string }) {
           { id: nextId.current++, role: "helper", text: data.answer as string },
         ]);
       } else {
-        setError(data?.error ?? BOOK_CHAT_MESSAGES.failed);
+        setNotice({
+          text: data?.error ?? BOOK_CHAT_MESSAGES.failed,
+          tone: data?.tone ?? "alert",
+        });
       }
     } catch {
-      setError(BOOK_CHAT_MESSAGES.failed);
+      setNotice({ text: BOOK_CHAT_MESSAGES.failed, tone: "alert" });
     } finally {
       setAsking(false);
     }
@@ -113,7 +116,7 @@ export function BookHelper({ code, title }: { code: string; title: string }) {
 
     const question = normaliseQuestion(typed);
     if (!question) {
-      setError(BOOK_CHAT_MESSAGES.emptyQuestion);
+      setNotice({ text: BOOK_CHAT_MESSAGES.emptyQuestion, tone: "quiet" });
       return;
     }
 
@@ -124,7 +127,7 @@ export function BookHelper({ code, title }: { code: string; title: string }) {
   function startAgain() {
     setThread([]);
     setUsedPresets([]);
-    setError(null);
+    setNotice(null);
     setTyped("");
   }
 
@@ -236,10 +239,26 @@ export function BookHelper({ code, title }: { code: string; title: string }) {
           </Button>
         </form>
 
-        {error ? (
-          <p role="alert" className="mt-3 text-base font-semibold text-danger">
-            {error}
-          </p>
+        {/*
+          Red is reserved for something actually going wrong. Running out of the
+          day's fuel is a state, not a fault — nobody did anything, least of all
+          the child — and a warning box tells a nine-year-old they broke it. So
+          those arrive as a calm note, announced politely rather than asserted.
+        */}
+        {notice ? (
+          notice.tone === "alert" ? (
+            <p role="alert" className="mt-3 text-base font-semibold text-danger">
+              {notice.text}
+            </p>
+          ) : (
+            <p
+              role="status"
+              className="mt-3 flex items-start gap-2 rounded-[var(--radius-field)] bg-surface px-4 py-3 text-base text-ink"
+            >
+              <Icon name="info" className="mt-1 shrink-0 text-ink-soft" />
+              {notice.text}
+            </p>
+          )
         ) : null}
 
         {thread.length > 0 ? (
