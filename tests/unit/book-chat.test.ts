@@ -169,10 +169,29 @@ describe("what a reader may type", () => {
 });
 
 describe("what the reader is told", () => {
-  it("says a computer wrote the answer, without the word AI", () => {
-    expect(BOOK_CHAT_MESSAGES.disclaimer).toMatch(/computer/i);
-    expect(BOOK_CHAT_MESSAGES.disclaimer).toMatch(/wrong/i);
+  it("names the AI, says it can be wrong, and points at a person", () => {
+    /*
+     * This reverses an earlier rule. The first version deliberately avoided the
+     * word "AI" on the grounds that a child does not need to be told about
+     * language models — but a parent reading over their shoulder cannot tell
+     * whether a person or a machine answered, and finding out later is the
+     * version that costs trust. Naming it is the honest option.
+     */
+    expect(BOOK_CHAT_MESSAGES.disclaimer).toMatch(/\bAI\b/);
+    expect(BOOK_CHAT_MESSAGES.disclaimer).toMatch(/mistake/i);
     expect(BOOK_CHAT_MESSAGES.disclaimer).toMatch(/librarian/i);
+  });
+
+  it("calls it the same thing everywhere a reader meets it", () => {
+    // One name. "Helper" in one message and "AI Librarian" in the next reads as
+    // two different things behind the same box.
+    for (const message of [
+      BOOK_CHAT_MESSAGES.heading,
+      BOOK_CHAT_MESSAGES.outOfFuel,
+      BOOK_CHAT_MESSAGES.unavailable,
+    ]) {
+      expect(message).toMatch(/AI Librarian/);
+    }
   });
 
   it("gives one refusal for every reason, so a probe learns nothing from it", () => {

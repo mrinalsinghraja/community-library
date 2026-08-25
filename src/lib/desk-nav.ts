@@ -96,6 +96,7 @@ export const READER_DESTINATIONS: readonly ReaderDestination[] = [
    */
   { href: "/books", label: "Catalogue", cataloguePublicOnly: true },
   { href: "/my-books", label: "My books", membersOnly: true },
+  { href: "/my-card", label: "My card", membersOnly: true },
   { href: "/my-reviews", label: "What I thought", membersOnly: true },
   { href: "/how-to-join", label: "How to join" },
   { href: "/rules", label: "Our rules" },

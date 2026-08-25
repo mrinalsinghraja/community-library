@@ -6,7 +6,7 @@ import { Callout } from "@/components/ui/states";
 import { Butterfly, LeafSprig, LibraryLogo } from "@/components/library/library-logo";
 import { CatalogueSearchBand } from "@/components/library/catalogue-search";
 import { HelperPreview } from "@/components/library/helper-preview";
-import { MembershipCard } from "@/components/library/membership-card";
+import { LibraryCard } from "@/components/library/library-card";
 import { PublicShell } from "@/components/layout/site-shell";
 import { WhatsAppButton, WhatsAppHelp } from "@/components/library/whatsapp-help";
 import { DONATE_BOOKS_MESSAGE } from "@/lib/whatsapp";
@@ -55,8 +55,13 @@ export default async function HomePage() {
   // still renders and says so plainly rather than crashing.
   let rules: { ageMin: number; ageMax: number; borrowingPeriodDays: number; maxActiveLoans: number } | null =
     null;
+  // Only the specimen card needs it, and the specimen carries no dates — but
+  // the card component asks for one, so it gets the library's rather than a
+  // browser's.
+  let timezone = "UTC";
   try {
     const { settings } = await getCurrentLibrary();
+    timezone = settings.timezone;
     rules = {
       ageMin: settings.ageMin,
       ageMax: settings.ageMax,
@@ -153,11 +158,31 @@ export default async function HomePage() {
             </p>
           </div>
 
-          <MembershipCard
-            logoUrl={branding.logoUrl}
-            libraryName={branding.libraryName}
-            rules={rules}
-          />
+          {/*
+            The specimen: the very same component a reader sees on `/my-card`,
+            with the name line left blank. One card, drawn once — what a parent
+            is shown before joining has to be the thing their child is given,
+            and two components would have drifted apart within a month.
+          */}
+          <div className="sm:rotate-[-1.5deg]">
+            <LibraryCard
+              timezone={timezone}
+              facts={{
+                readerName: null,
+                memberCode: null,
+                apartment: null,
+                birthYear: null,
+                joinedAt: null,
+                avatarKey: null,
+                photoMediaId: null,
+                libraryName: branding.libraryName,
+                communityName: branding.communityName,
+                logoUrl: branding.logoUrl,
+                contactPhone: branding.contactPhone,
+                rules,
+              }}
+            />
+          </div>
         </div>
       </section>
 
@@ -244,7 +269,7 @@ export default async function HomePage() {
             <CardTitle icon={<Icon name="sparkle" />}>Curiosity, answered</CardTitle>
             <CardBody>
               A question about a book used to mean waiting until somebody had time. Now every book
-              on our shelves has a helper on its page that answers what a child wants to know about
+              on our shelves has an AI Librarian on its page that answers what a child wants to know about
               it — free, and in words that suit their age.
             </CardBody>
           </Card>
@@ -269,7 +294,7 @@ export default async function HomePage() {
                 published, and what was the world like then? What should I read after this one?
               </p>
               <p className="mt-3 text-lg text-ink-soft">
-                Every book on our shelves has an AI helper on its page that answers all of that —
+                Every book on our shelves has an AI Librarian on its page that answers all of that —
                 the story, the author, the history around it, where to go next — pitched at the age
                 the book is shelved for. It is free, it needs no account, and it is awake at nine in
                 the evening when the questions actually arrive.

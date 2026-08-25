@@ -99,18 +99,35 @@ export function normaliseQuestion(raw: string): string | null {
 }
 
 export const BOOK_CHAT_MESSAGES = {
-  heading: "Ask about this book",
+  /*
+   * "AI Librarian", not "helper".
+   *
+   * The earlier wording avoided naming the technology on the grounds that a
+   * child does not need to be told about language models. That was the wrong
+   * call for the person standing behind the child: a parent scrolling past
+   * "Ask about this book" cannot tell whether a person or a machine is
+   * answering, and finding out later is the version that costs trust. Naming it
+   * is the honest option and it is also the one the library wants credit for.
+   *
+   * "Librarian" carries the role — it only knows about books, and it is not a
+   * friend to confide in.
+   */
+  heading: "Ask a question to our AI Librarian",
   intro: "Press a question, or type your own.",
   placeholder: "Type your question about this book…",
   send: "Ask",
   sending: "Thinking…",
   clear: "Start again",
   /**
-   * Under every answer, every time. Said in the second person and without the
-   * word "AI", because the point is not to name the technology — it is to make
-   * sure a child knows to check with a person.
+   * Under every answer, every time.
+   *
+   * Now names the AI, for the same reason the heading does, and keeps the two
+   * things a child has to take away: it can be wrong, and there is a person to
+   * ask. "Can make mistakes" rather than "may contain errors" — the shortest
+   * true form a nine-year-old reads without stopping.
    */
-  disclaimer: "A computer wrote this answer, so it can get things wrong. Ask a librarian if it matters.",
+  disclaimer:
+    "Answered by AI. AI can make mistakes, so check anything important with a librarian.",
   emptyQuestion: "Type a question first.",
   tooLong: `Please keep it under ${QUESTION_MAX_CHARS} letters.`,
   /**
@@ -136,10 +153,10 @@ export const BOOK_CHAT_MESSAGES = {
    * asleep, and the books are still there.
    */
   outOfFuel:
-    "Our helper has used up all its thinking fuel for today. It fills up again tomorrow — the books are still right here in the meantime!",
+    "Our AI Librarian has used up all its thinking fuel for today. It fills up again tomorrow — the books are still right here in the meantime!",
   failed: "That did not work. Please try again in a moment.",
   /** Shown when the helper is switched off entirely (no key configured). */
-  unavailable: "The book helper is having a rest just now.",
+  unavailable: "Our AI Librarian is having a rest just now.",
 } as const;
 
 /**

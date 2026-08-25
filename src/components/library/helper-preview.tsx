@@ -25,7 +25,7 @@ export function HelperPreview() {
         >
           <Icon name="sparkle" />
         </span>
-        <p className="text-base font-bold text-ink">Ask about this book</p>
+        <p className="text-base font-bold text-ink">Ask a question to our AI Librarian</p>
       </div>
 
       <div className="mt-5 flex flex-col gap-3">
@@ -40,15 +40,15 @@ export function HelperPreview() {
           </p>
           <p className="mt-2.5 flex items-start gap-1.5 text-sm text-ink-soft">
             <Icon name="info" className="mt-0.5 shrink-0" />
-            A computer wrote this answer, so it can get things wrong. Ask a librarian if it
-            matters.
+            Answered by AI. AI can make mistakes, so check anything important with a
+            librarian.
           </p>
         </div>
       </div>
 
       <figcaption className="mt-4 text-sm text-ink-soft">
-        An example. The helper sits on every book&rsquo;s page and answers questions about that
-        book, in words that suit the age the book is shelved for.
+        An example. The AI Librarian sits on every book&rsquo;s page and answers questions about
+        that book, in words that suit the age the book is shelved for.
       </figcaption>
     </figure>
   );
