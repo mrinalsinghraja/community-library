@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { BookHelper } from "@/app/books/[code]/book-helper";
 import { BorrowRequest } from "@/app/books/[code]/borrow-request";
 import { ReviewForm } from "@/app/books/[code]/review-form";
 import { BookReviews } from "@/components/library/book-reviews";
@@ -15,6 +16,7 @@ import { ageGroupLabel, statusDefinition } from "@/lib/catalogue";
 import { getActor } from "@/server/authz";
 import { isAppError } from "@/server/lib/errors";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
+import { bookHelperEnabled } from "@/server/lib/ai/groq";
 import { getBookByCode } from "@/server/services/catalogue-service";
 import { getOwnBorrowStateForCode } from "@/server/services/circulation-service";
 import {
@@ -237,6 +239,18 @@ export default async function BookDetailPage({
 
           </div>
         </div>
+
+        {/*
+          The book helper.
+
+          Between the book's facts and what other readers made of it, because
+          that is where the question occurs: a child has read the title, seen
+          the cover, and wants to know whether this one is for them.
+
+          It renders only when a key is configured — no key, no chat box, and
+          the rest of the page is unchanged. That is also the off switch.
+        */}
+        {bookHelperEnabled() ? <BookHelper code={book.code} title={book.title} /> : null}
 
         {/* ------------------------------------------------------------- */}
         {/* What readers thought                                           */}

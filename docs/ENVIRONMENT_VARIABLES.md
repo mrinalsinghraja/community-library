@@ -99,6 +99,20 @@ breaks onboarding silently, the worst kind of failure.
 | Vercel Production | Vercel → Settings → Environment Variables → Production |
 | CI | Fake values in `.github/workflows/ci.yml` against a throwaway service container. No real secret is needed for CI to pass |
 
+## The book helper (Groq)
+
+| Variable | Required | What it does |
+|---|---|---|
+| `GROQ_API_KEY` | no | Switches the book helper on. Absent, and the chat box does not render on any book page and nothing else changes. |
+| `GROQ_MODEL` | no | Answers the question. Defaults to `openai/gpt-oss-120b`. |
+| `GROQ_GUARD_MODEL` | no | Scores a typed question for prompt injection first. Defaults to `meta-llama/llama-prompt-guard-2-86m`. |
+
+The key is read only inside `server-only` code and never reaches the browser.
+Groq retires models with little notice, so both model names are configuration
+rather than constants — if every question starts failing, check
+`https://api.groq.com/openai/v1/models` and change the variable. No deploy
+needed. Full design in `docs/BOOK_HELPER.md`.
+
 ### Which file a command reads
 
 `next build` and `next start` set `NODE_ENV=production`, and Next.js then reads

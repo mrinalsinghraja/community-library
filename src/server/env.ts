@@ -60,6 +60,31 @@ const serverEnvSchema = z.object({
   // --- Storage --------------------------------------------------------------
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
 
+  // --- The book helper ------------------------------------------------------
+  /**
+   * Groq, used for one thing only: answering a child's question about the book
+   * whose page they have open. Optional by design — with no key the helper does
+   * not render at all and every other part of the library works exactly as
+   * before, which is also how it is switched off in a hurry.
+   *
+   * This value must never reach the browser. It is read here, in `server-only`
+   * code, and the answer travels back over our own route; the key itself never
+   * leaves the server, and no NEXT_PUBLIC_ mirror of it exists.
+   */
+  GROQ_API_KEY: z.string().optional(),
+  /**
+   * Groq retires models with little notice — `llama-3.3-70b-versatile` was gone
+   * by the time this was written. Keeping the name in configuration means the
+   * replacement is a dashboard edit rather than a deploy.
+   */
+  GROQ_MODEL: z.string().default("openai/gpt-oss-120b"),
+  /**
+   * The small classifier that reads a child's free-typed question *before* the
+   * answering model does, and scores how much it looks like an attempt to talk
+   * the helper out of being a librarian. See `docs/BOOK_HELPER.md`.
+   */
+  GROQ_GUARD_MODEL: z.string().default("meta-llama/llama-prompt-guard-2-86m"),
+
   // --- Jobs -----------------------------------------------------------------
   CRON_SECRET: z.string().optional(),
 

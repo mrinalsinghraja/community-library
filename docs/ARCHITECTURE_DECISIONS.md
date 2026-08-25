@@ -2463,3 +2463,85 @@ take an argument describing where the person is standing.
 navigation — so a screen-reader user hearing "Pages navigation" could not tell
 the library's doors from a row of page numbers. Each is now named after what it
 pages through.
+
+## ADR-060 — The book helper answers about the book, and remembers nothing
+
+A child looking at a book's page has one question the catalogue cannot answer:
+*is this one for me?* The cover, the stars and five reviews go some way. "What
+is this book about, and would I like it?" goes further, and no amount of
+cataloguing produces it.
+
+So there is now a small panel on `/books/[code]` that answers that question, and
+a few others, using Groq. Five preset questions on buttons, a box for anything
+else, in the reading age of the shelf the book sits on.
+
+**It is the riskiest thing in this application**, and it is worth saying why in
+one sentence: it is the only feature that answers something nobody wrote in
+advance, on a page anybody on the internet can open, to a reader who may be five
+years old. Everything below follows from that.
+
+### Four facts, and nothing else
+
+The model is handed the title, the authors, the shelf category and the age band
+— from our own database, so it is never asked to work out *which* book is meant
+and cannot answer confidently about a different one. It cannot see the loans,
+the members, the reviews, the donations or the codes. It is told about a book.
+It is told nothing about a person.
+
+The reader's words arrive as a `user` message and are never concatenated into
+the system prompt. A sentence beginning "ignore all previous instructions" is a
+sentence a nine-year-old typed to see what would happen, and it is treated as
+exactly that.
+
+### Nothing is written down
+
+No question, no answer, no audit row, no log line. This is the one decision in
+here that goes against the grain of the rest of the application, where the
+answer to "should this be recorded?" is almost always yes.
+
+Children type things into boxes. Sometimes what they type is about the book and
+sometimes it is about their week. A library that kept that transcript would have
+built something it could not justify keeping, and "for debugging" is not a
+justification. The rate-limit counter records that *a* question came from a
+hashed address, and not what it was. Failures log a status code and a model
+name; an upstream error body can echo the request back, and the request contains
+a child's words.
+
+### The reading age comes from the book, not the child
+
+`AGE_5_7` produces very short sentences and everyday words; `AGE_11_14` a fuller
+vocabulary. The band is the book's, which the library already knows. The
+alternative — asking the child how old they are — would mean collecting a
+birthday in order to pick vocabulary, on a page that requires no sign-in.
+
+### The classifier fails open
+
+Typed questions are scored by `llama-prompt-guard-2-86m` before the answering
+model sees them (0.0006 for "tell me about the author", 0.9996 for "ignore all
+previous instructions"; the threshold is 0.8). Presets skip it — they are our
+own sentences.
+
+When it errors it returns zero and the question proceeds. It is the second lock,
+not the first: the system prompt is what keeps the helper on topic, and a guard
+that breaks the feature when it breaks is a guard somebody eventually removes.
+
+### An instruction is not a guarantee
+
+The prompt asks for plain sentences, and the model complied — and then wrote
+`*Matilda*` anyway, which renders on the page as an asterisk, a word and another
+asterisk. A child reads that as a typing mistake.
+
+The instruction stayed, because it shapes the whole answer and not only the
+marks. `stripMarkdown` now runs afterwards regardless. Where a model's
+cooperation is merely likely and the fix is a regular expression, do both.
+
+### The key is off by structure, not by discipline
+
+`src/server/lib/ai/groq.ts` opens with `import "server-only"`, so it cannot be
+pulled into a client bundle — the build fails rather than shipping the key.
+There is no `NEXT_PUBLIC_` mirror, no key literal anywhere in the tree, and the
+tests assert all three by reading the source. Removing `GROQ_API_KEY` from the
+deployment removes the panel from every book page on the next request; that is
+the off switch, and it is why there is no setting to maintain instead.
+
+`docs/BOOK_HELPER.md` has the seven guards in the order they run.
