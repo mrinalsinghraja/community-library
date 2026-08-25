@@ -3,11 +3,14 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Callout } from "@/components/ui/states";
-import { Butterfly, LeafSprig, LibraryLogo, ShelfIllustration } from "@/components/library/library-logo";
+import { Butterfly, LeafSprig, LibraryLogo } from "@/components/library/library-logo";
 import { CatalogueSearchBand } from "@/components/library/catalogue-search";
+import { HelperPreview } from "@/components/library/helper-preview";
+import { MembershipCard } from "@/components/library/membership-card";
 import { PublicShell } from "@/components/layout/site-shell";
 import { WhatsAppButton, WhatsAppHelp } from "@/components/library/whatsapp-help";
 import { DONATE_BOOKS_MESSAGE } from "@/lib/whatsapp";
+import { bookHelperEnabled } from "@/server/lib/ai/groq";
 import { catalogueIsPubliclyVisible, getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { browseCatalogue, listCategories } from "@/server/services/catalogue-service";
 import { Icon } from "@/components/ui/icon";
@@ -19,9 +22,30 @@ import { Icon } from "@/components/ui/icon";
  * colours — is read from library configuration. There is no literal
  * "Mana Jardin" anywhere in this file, and a lint rule enforces that.
  *
- * The hero leads with the library's own mark rather than a headline, because
- * the mark *is* the headline: three butterflies over a green rule, which is the
- * whole visual argument of the place. The shelf drawing sits opposite it.
+ * ## Who this page is written for
+ *
+ * Not a child. A **parent**, on a phone, who has just been sent a link in the
+ * residents' group and is deciding whether this is real. The children arrive
+ * later and arrive already signed in; this page is the only one on the site
+ * whose job is to persuade rather than to serve.
+ *
+ * ## Why it does not boast
+ *
+ * The shelf has a handful of books on it. A front page with "500 BOOKS · 200
+ * HAPPY READERS" would be a lie that the catalogue disproves in one click, and
+ * a stat block reading "4" is worse than no stat block at all.
+ *
+ * So the page argues from the things that are true and are *better* than
+ * volume: it is downstairs, it is free with no fines, every book on it was
+ * carried down by a neighbour, and it is at the beginning — which is an
+ * invitation rather than an apology. A library of four books that admits it
+ * has four books is trustworthy. That is the whole marketing strategy, and it
+ * is also the community-building one: the honest number is the reason somebody
+ * brings a book down.
+ *
+ * The order of the bands is the order a sceptical parent asks the questions:
+ * what is this and what does it cost → what is on the shelf → what do I do →
+ * why does it matter → what do you do with my child's details → who do I ask.
  */
 
 export default async function HomePage() {
@@ -59,6 +83,8 @@ export default async function HomePage() {
       ])
     : [[], null];
 
+  const bookCount = shelf?.total ?? 0;
+
   return (
     <PublicShell branding={branding}>
       {!branding.configured ? (
@@ -72,24 +98,16 @@ export default async function HomePage() {
       ) : null}
 
       {/* ---------------------------------------------------------------- */}
-      {/* Hero                                                              */}
+      {/* Hero — what this is, what it costs, and the card                  */}
       {/* ---------------------------------------------------------------- */}
       <section className="relative overflow-hidden">
-        {/*
-          The two big wash circles that used to sit here are gone. The garden is
-          drawn once now, behind the whole reader app (`StoryCharacters`), and
-          two ambient systems on one page is one too many — the blobs were
-          reading as smudges under the drawings rather than as anything.
-        */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-0">
           <Butterfly className="drift absolute right-[12%] top-10 w-10 opacity-80 sm:w-14" />
           <LeafSprig className="absolute bottom-6 left-[4%] hidden w-12 opacity-50 md:block" />
         </div>
 
-        <div className="relative mx-auto grid max-w-5xl items-center gap-10 px-5 py-14 sm:px-8 md:grid-cols-[1.15fr_1fr] md:py-20">
+        <div className="relative mx-auto grid max-w-5xl items-center gap-10 px-5 py-14 sm:px-8 md:grid-cols-[1.1fr_1fr] md:py-20">
           <div>
-            {/* The mark leads. On a phone it sits above the words; on a desktop
-                it is the first thing at the top-left of the whole page. */}
             <LibraryLogo
               logoUrl={branding.logoUrl}
               libraryName={branding.libraryName}
@@ -97,31 +115,36 @@ export default async function HomePage() {
               className="mb-7 w-32 sm:w-44"
             />
 
+            {/*
+              The greeting is the eyebrow and the claim is the headline, which
+              is the opposite of how this page used to be set.
+
+              `welcomeMessage` is the administrator's own words and belongs on
+              the page, but "Welcome to our library" is a greeting, and setting
+              a greeting at 42px meant the largest thing on a page whose whole
+              job is persuasion said nothing at all. The sentence a parent
+              actually needs — a library, here, free — is now the h1.
+            */}
             <p className="flex items-start gap-2.5 text-lg font-bold text-accent-ink">
               {/* Ours, not the device's — an Apple butterfly and an Android one
                   are two different drawings, and neither is this library's. */}
               <Butterfly className="mt-0.5 w-6 shrink-0" />
-              <span>Free · Community owned · Run by our young readers</span>
+              <span>{branding.welcomeMessage}</span>
             </p>
 
-            <h1 className="mt-4 text-4xl sm:text-5xl">{branding.welcomeMessage}</h1>
+            <h1 className="mt-4 text-4xl sm:text-5xl">
+              A free library, right here in {branding.communityName}.
+            </h1>
 
             <p className="mt-6 max-w-xl text-lg text-ink-soft">
-              Find a new story. Discover something amazing. Take a book home.
-              {rules ? (
-                <>
-                  {" "}
-                  Readers aged {rules.ageMin} to {rules.ageMax} can borrow{" "}
-                  {rules.maxActiveLoans === 1 ? "a book" : `${rules.maxActiveLoans} books`} at a time
-                  and keep {rules.maxActiveLoans === 1 ? "it" : "them"} for{" "}
-                  {rules.borrowingPeriodDays} days.
-                </>
-              ) : null}
+              Children choose their own book, take it home, and bring it back when they are done.
+              No fee to join, nothing to pay if a book comes back late, and no test at the end.
+              Reading here is meant to be the good part of the day.
             </p>
 
             <div className="mt-9 flex flex-wrap gap-4">
               <ButtonLink href="/join" size="lg" icon={<Icon name="sparkle" />}>
-                Join the library
+                Ask for a library card
               </ButtonLink>
               <ButtonLink href="/login" size="lg" variant="secondary" icon={<Icon name="key" />}>
                 Sign in
@@ -129,30 +152,31 @@ export default async function HomePage() {
             </div>
 
             <p className="mt-5 text-base text-ink-soft">
-              Joining is free. It always will be.{" "}
+              One short form, filled in by a grown-up.{" "}
               <Link href="/how-to-join" className="font-bold text-primary-deep">
-                See what happens after you send the form
+                See what happens next
               </Link>
               .
             </p>
           </div>
 
-          <div className="rounded-[var(--radius-card)] bg-surface p-7 shadow-raise">
-            <ShelfIllustration />
-          </div>
+          <MembershipCard
+            logoUrl={branding.logoUrl}
+            libraryName={branding.libraryName}
+            rules={rules}
+          />
         </div>
       </section>
 
       {/* ---------------------------------------------------------------- */}
       {/* Finding a book, without an account                                */}
       {/*                                                                   */}
-      {/* Directly under the hero, above the explanation. Somebody who       */}
-      {/* already knows what a library is came here to see whether it has    */}
-      {/* the book they want, and making them read three cards about         */}
-      {/* borrowing first is answering a question they did not ask.          */}
+      {/* Second, and before any argument about why libraries are good.     */}
+      {/* Somebody who already knows what a library is came here to see      */}
+      {/* whether it has anything worth walking down for.                    */}
       {/* ---------------------------------------------------------------- */}
       {cataloguePublic ? (
-        <CatalogueSearchBand categories={categories} totalBooks={shelf?.total ?? 0} />
+        <CatalogueSearchBand categories={categories} totalBooks={bookCount} />
       ) : null}
 
       {/* ---------------------------------------------------------------- */}
@@ -166,15 +190,15 @@ export default async function HomePage() {
             <CardTitle icon={<Icon name="reader" />}>Ask to join</CardTitle>
             <CardBody>
               A grown-up fills in one short form. Our librarian says hello and sets up a library
-              card for you.
+              card in your child&rsquo;s name.
             </CardBody>
           </Card>
 
           <Card tone="shelf" className="lift">
-            <CardTitle icon={<Icon name="search" />}>Find a book</CardTitle>
+            <CardTitle icon={<Icon name="search" />}>Choose a book</CardTitle>
             <CardBody>
-              Look through the shelves — stories, comics, space, animals, and plenty more waiting to
-              be discovered.
+              Your child picks it — not us, and not a reading level. Choosing is the part that
+              turns a reader into a regular one.
             </CardBody>
           </Card>
 
@@ -182,69 +206,185 @@ export default async function HomePage() {
             <CardTitle icon={<Icon name="home" />}>Take it home</CardTitle>
             <CardBody>
               {rules
-                ? `Keep it for ${rules.borrowingPeriodDays} days, then bring it back so the next reader can enjoy it.`
-                : "Keep it for a while, then bring it back so the next reader can enjoy it."}
+                ? `Keep it for ${rules.borrowingPeriodDays} days, then bring it back so the next reader can enjoy it. Late? Just bring it down — nothing happens.`
+                : "Keep it for a while, then bring it back so the next reader can enjoy it. Late? Just bring it down — nothing happens."}
             </CardBody>
           </Card>
         </div>
       </section>
 
       {/* ---------------------------------------------------------------- */}
-      {/* Donations — gratitude, never a requirement                        */}
+      {/* Why it is worth walking down for                                  */}
+      {/*                                                                   */}
+      {/* The three arguments that are true here and are not true of a       */}
+      {/* bookshop or a reading app: it is a habit rather than a task, it is */}
+      {/* the neighbours, and there is a helper for the questions a child    */}
+      {/* would otherwise have to stop reading to go and ask.                */}
       {/* ---------------------------------------------------------------- */}
       <section className="mx-auto max-w-5xl px-5 py-16 sm:px-8">
-        <Card tone="primary" className="relative flex flex-col gap-5 overflow-hidden sm:flex-row sm:items-center">
-          <LeafSprig className="pointer-events-none absolute -bottom-2 right-4 w-20 opacity-25" />
-          <LibraryLogo
-            logoUrl={branding.logoUrl}
-            libraryName={branding.libraryName}
-            size={96}
-            priority={false}
-            className="w-16 shrink-0 sm:w-20"
-          />
-          <div className="relative">
-            <h2 className="text-2xl">Every book here is a gift</h2>
-            <p className="mt-2 text-ink-soft">
-              Our shelves are filled by families who wanted to share a story they loved. If you have
-              a book to pass on, we would be delighted — and if you do not, you are just as welcome.
-              Borrowing is never tied to giving.
-            </p>
-            {/*
-              The register first, the offer second. Somebody who has not decided
-              yet is persuaded by the neighbours already on that page, not by a
-              button; somebody who has decided should not have to go through a
-              second page to say so, so the chat is here as well. The offer is
-              the quieter of the two on purpose — this card exists to say thank
-              you, and a loud "give us a book" on the front page turns a
-              gratitude note into a collection tin.
-            */}
-            <div className="mt-4 flex flex-col items-start gap-2.5 sm:flex-row sm:items-center">
-              <ButtonLink href="/donors" variant="secondary" size="sm" icon={<Icon name="heart" />}>
-                Meet our book friends
-              </ButtonLink>
+        <h2 className="garden-rule inline-block text-3xl">Why it is worth walking down for</h2>
 
+        {/*
+          Two, not three. There were three, and the third described the helper —
+          immediately above a panel that shows the helper working. Two rows of
+          three cards also made the two sections above and below read as the
+          same component twice, which is how a page stops being looked at.
+        */}
+        <div className="mt-14 grid gap-6 md:grid-cols-2">
+          <Card tone="sunk">
+            <CardTitle icon={<Icon name="renew" />}>A habit, not a task</CardTitle>
+            <CardBody>
+              A book is a short walk away, so finishing one and starting the next is easy enough to
+              keep doing. Nobody is graded, nobody is tested, and nobody is fined. Children who
+              choose their own books keep reading for longer.
+            </CardBody>
+          </Card>
+
+          <Card tone="sunk">
+            <CardTitle icon={<Icon name="handshake" />}>Built by the neighbours</CardTitle>
+            <CardBody>
+              Every book on the shelf was carried down by a family who lives here, and the library
+              is run by volunteers from the same corridors. Children end up reading the same books
+              as the friends they already play with.
+            </CardBody>
+          </Card>
+
+        </div>
+
+        {/*
+          The helper, drawn rather than described, because "AI assistant" is a
+          phrase every parent has learned to distrust and a two-line exchange is
+          not. Hidden entirely when the helper is switched off, so the page
+          never advertises something the site is not currently doing.
+        */}
+        {bookHelperEnabled() ? (
+          <div className="mt-8 grid gap-6 md:grid-cols-[1fr_1.1fr] md:items-center">
+            <div>
+              <h3 className="text-2xl">Questions do not have to wait</h3>
+              <p className="mt-3 text-lg text-ink-soft">
+                Children ask things at nine in the evening — who wrote this, is it scary, what
+                should I read after. The helper answers on the spot, about the book they are
+                actually holding, and tells them to ask a librarian when it matters.
+              </p>
+              <p className="mt-4 text-base text-ink-soft">
+                It only talks about books, it never asks a child anything about themselves, and no
+                conversation is kept.
+              </p>
+            </div>
+            <HelperPreview />
+          </div>
+        ) : null}
+      </section>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* An honest beginning — the number, and what to do about it          */}
+      {/*                                                                   */}
+      {/* This band replaces the old "every book here is a gift" card. It    */}
+      {/* does the same job — thank the neighbours, ask for nothing — but it */}
+      {/* leads with the real size of the shelf, because that number is the  */}
+      {/* single most persuasive thing on the page for the one reader who    */}
+      {/* has a box of outgrown books in a cupboard.                          */}
+      {/* ---------------------------------------------------------------- */}
+      <section className="mx-auto max-w-5xl px-5 pb-16 sm:px-8">
+        <Card tone="primary" className="relative overflow-hidden">
+          <LeafSprig className="pointer-events-none absolute -bottom-3 right-5 w-24 opacity-25" />
+
+          <div className="relative max-w-2xl">
+            {/*
+              Two headings, because the true sentence changes as the shelf
+              fills. "We are just beginning" is the honest and persuasive line
+              at four books and an odd one at two hundred, and a front page that
+              still says it next year is a front page nobody has read.
+            */}
+            <h2 className="text-2xl sm:text-3xl">
+              {bookCount === 0
+                ? "We are just beginning"
+                : bookCount < 25
+                  ? `We are just beginning — ${bookCount} ${bookCount === 1 ? "book" : "books"} so far`
+                  : `${bookCount} books on our shelf`}
+            </h2>
+
+            <p className="mt-3 text-lg text-ink-soft">
+              Every one of them was given by a family here. The shelf grows the week somebody
+              remembers the picture books their child has outgrown, and it grows again when the
+              next family does the same.
+            </p>
+
+            <p className="mt-3 text-lg text-ink-soft">
+              Giving a book is never a condition of borrowing one. If you have nothing to pass on,
+              your child is exactly as welcome, and nobody will know the difference.
+            </p>
+
+            <div className="mt-6 flex flex-col items-start gap-2.5 sm:flex-row sm:items-center">
               <WhatsAppButton
                 phone={branding.contactPhone}
                 message={DONATE_BOOKS_MESSAGE}
-                variant="quiet"
+                variant="secondary"
                 size="sm"
               >
                 Offer a book on WhatsApp
               </WhatsAppButton>
+
+              <ButtonLink href="/donors" variant="quiet" size="sm" icon={<Icon name="heart" />}>
+                Meet our book friends
+              </ButtonLink>
             </div>
           </div>
         </Card>
       </section>
 
       {/* ---------------------------------------------------------------- */}
+      {/* What we do with your child's details                              */}
+      {/*                                                                   */}
+      {/* The question a parent asks last and decides on first. Every line   */}
+      {/* below is a property the application actually has — none of it is   */}
+      {/* a promise about the future — and each one links to the page that   */}
+      {/* states it in full.                                                 */}
+      {/* ---------------------------------------------------------------- */}
+      <section className="mx-auto max-w-5xl px-5 pb-16 sm:px-8">
+        <div className="rounded-[var(--radius-card)] bg-lavender-wash p-6 sm:p-8">
+          <h2 className="garden-rule inline-block text-2xl sm:text-3xl">
+            What we do with your child&rsquo;s details
+          </h2>
+
+          <ul className="mt-14 grid gap-4 sm:grid-cols-2">
+            {[
+              {
+                icon: "hide" as const,
+                text: "We ask for as little as we can, and a grown-up fills it in — never the child.",
+              },
+              {
+                icon: "camera" as const,
+                text: "A photograph stays private unless you tell us otherwise, and you can change your mind.",
+              },
+              {
+                icon: "quote" as const,
+                text: "If your child writes about a book, a librarian reads it before anyone else does, and it is signed with a first name only — or with no name, if they prefer.",
+              },
+              {
+                icon: "shelf" as const,
+                text: "No advertising, and nothing on the pages children use is tracking them. Even the lettering is served from here rather than fetched from another company.",
+              },
+            ].map((item) => (
+              <li key={item.text} className="flex items-start gap-3">
+                <Icon name={item.icon} className="mt-1 shrink-0 text-primary-deep" />
+                <span className="text-base text-ink">{item.text}</span>
+              </li>
+            ))}
+          </ul>
+
+          <p className="mt-6 text-base text-ink-soft">
+            <Link href="/rules" className="font-bold text-primary-deep">
+              Read our rules in full
+            </Link>{" "}
+            — they are short, and written to be read by a child as well as a grown-up.
+          </p>
+        </div>
+      </section>
+
+      {/* ---------------------------------------------------------------- */}
       {/* Help — a person, reachable where people already are               */}
       {/* ---------------------------------------------------------------- */}
-      {/*
-        Placed after the explanation and before the end of the page, because a
-        parent who is going to need this reaches for it having already read what
-        they were meant to do and found it did not work. Renders nothing at all
-        until the library sets a contact phone.
-      */}
       <section className="mx-auto max-w-5xl px-5 pb-16 sm:px-8">
         <WhatsAppHelp phone={branding.contactPhone} />
       </section>
