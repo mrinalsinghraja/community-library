@@ -189,8 +189,9 @@ describe("child isolation", () => {
     const authz = await actingAs(reader.id);
     const actor = await authz.requireActor();
 
-    // Browse the shelf, see their own books, and ask to keep one longer.
-    // Nothing else — and nothing that decides anything.
+    // Browse the shelf, see their own books, ask to keep one longer, and ask
+    // for their own details to be put right. Nothing else — and every one of
+    // those four decides nothing on its own.
     expect([...actor.permissions].sort()).toEqual([
       "book.view",
       // Version 1: asking for a book. Like the renewal ask, it decides nothing
@@ -198,6 +199,9 @@ describe("child isolation", () => {
       "loan.request",
       "loan.request_renewal",
       "loan.view",
+      // Added with the profile-change flow: a reader proposes, a Super Admin
+      // approves, and nothing about the account moves in between.
+      "profile.request_change",
     ]);
 
     for (const forbidden of [

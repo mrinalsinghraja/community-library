@@ -30,8 +30,19 @@ const CONTEXT: LegalContext = {
   contactEmail: "hello@example.test",
 };
 
+/**
+ * A library that has decided its periods. The unset case has its own tests in
+ * `tests/unit/retention.test.ts`; here the point is that a decided schedule
+ * reaches the page.
+ */
+const RETENTION = {
+  archiveClosedAfterMonths: 24,
+  removePhotoAfterClosedDays: 30,
+  removeGuardianAfterMonths: 36,
+};
+
 const DOCUMENTS: [string, LegalDocument][] = [
-  ["privacy", privacyDocument(CONTEXT)],
+  ["privacy", privacyDocument(CONTEXT, RETENTION)],
   ["terms", termsDocument(CONTEXT)],
   ["accessibility", accessibilityDocument(CONTEXT)],
 ];
@@ -119,7 +130,7 @@ describe("every policy page", () => {
 });
 
 describe("the privacy notice matches what the code does", () => {
-  const text = allText(privacyDocument(CONTEXT));
+  const text = allText(privacyDocument(CONTEXT, RETENTION));
 
   it("says the year of birth is held and a full date is not", () => {
     // ADR-051. The schema holds `birthYear Int` and no date of birth.

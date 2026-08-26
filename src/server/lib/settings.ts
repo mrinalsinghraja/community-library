@@ -4,6 +4,7 @@ import { cache } from "react";
 
 import type { Library, LibrarySettings, Community } from "@prisma/client";
 
+import { UNSET_RETENTION, type RetentionPolicy } from "@/lib/retention";
 import { prisma } from "@/server/db";
 import { NotFoundError } from "@/server/lib/errors";
 
@@ -121,6 +122,26 @@ export async function getBrandingSafe(): Promise<Branding & { configured: boolea
       venueAddress: "the library room",
       configured: false,
     };
+  }
+}
+
+/**
+ * The retention periods, never throwing.
+ *
+ * Same reasoning as `getBrandingSafe`: the privacy notice has to render on a
+ * deployment that is not configured yet, and the honest fallback is the state
+ * every library starts in — nothing decided, nothing erased.
+ */
+export async function getRetentionPolicySafe(): Promise<RetentionPolicy> {
+  try {
+    const settings = await getLibrarySettings();
+    return {
+      archiveClosedAfterMonths: settings.archiveClosedAfterMonths,
+      removePhotoAfterClosedDays: settings.removePhotoAfterClosedDays,
+      removeGuardianAfterMonths: settings.removeGuardianAfterMonths,
+    };
+  } catch {
+    return UNSET_RETENTION;
   }
 }
 

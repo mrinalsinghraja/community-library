@@ -8,14 +8,17 @@ import {
   EDITABLE_BRANDING_FIELDS,
   EDITABLE_SETTING_FIELDS,
   librarySettingsSchema,
+  retentionPolicySchema,
   type BrandingInput,
   type LibrarySettingsInput,
 } from "@/lib/settings-schema";
 import { formatInTimezone } from "@/lib/dates";
+import { retentionIsSet, type RetentionPolicy } from "@/lib/retention";
 import { requirePermission } from "@/server/authz";
 import { prisma } from "@/server/db";
 import { env } from "@/server/env";
 import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
+import { retentionDue } from "@/server/lib/retention";
 import { activeEmailProviderName, EmailService } from "@/server/lib/email";
 import {
   NotFoundError,
@@ -122,6 +125,19 @@ export interface EmailDeliveryView {
   lastSentAt: Date | null;
 }
 
+/** What the retention card shows beside the three fields. */
+export interface RetentionView {
+  policy: RetentionPolicy;
+  /**
+   * What tonight's pass would erase under the periods currently saved.
+   *
+   * Shown so that deciding a period is not a leap in the dark. Zero across the
+   * board is the expected reading in a library that has not closed anybody's
+   * account yet, and it is worth showing rather than hiding.
+   */
+  dueNow: { photos: number; readers: number; guardians: number };
+}
+
 export interface AdminSettingsView {
   libraryName: string;
   communityName: string;
@@ -131,6 +147,7 @@ export interface AdminSettingsView {
   /** Read-only: the wording lives in the code and changing it needs a release. */
   consentVersion: string;
   verificationVersion: string;
+  retention: RetentionView;
 }
 
 export async function getAdminSettings(): Promise<AdminSettingsView> {
@@ -145,6 +162,10 @@ export async function getAdminSettings(): Promise<AdminSettingsView> {
     email: await emailDeliveryView(actor.libraryId, actor.userId),
     consentVersion: settings.consentVersion,
     verificationVersion: settings.guardianVerificationVersion,
+    retention: {
+      policy: settings,
+      dueNow: await retentionDue(actor.libraryId, settings),
+    },
   };
 }
 
@@ -618,4 +639,86 @@ export async function setOverdueReminders(enabled: boolean): Promise<void> {
       },
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// Writing: how long records are kept
+// ---------------------------------------------------------------------------
+
+/**
+ * Sets, changes or clears the three retention periods.
+ *
+ * This is the switch that arms the only destructive scheduled job in the
+ * application, so it is the one settings write that asks for a confirmation on
+ * the way in and records the previous value on the way out.
+ *
+ * Three deliberate asymmetries:
+ *
+ *   • **Clearing needs no confirmation.** Emptying a field means "stop erasing",
+ *     and stopping is never the direction that loses somebody's record.
+ *   • **Shortening is treated as a new decision**, even from an already-set
+ *     value: going from three years to six months brings forward every erasure
+ *     the library has pending, and a Super Admin should mean it.
+ *   • **The audit row carries both values.** A year later, "when did the
+ *     library decide to erase after twelve months, and what was it before?" is
+ *     a question a family may reasonably ask.
+ *
+ * NOT LEGAL ADVICE: whether the periods chosen here are lawful is a question
+ * for somebody qualified. This function enforces the bounds in
+ * `@/lib/retention`, and nothing more.
+ */
+export async function updateRetentionPolicy(
+  raw: unknown,
+  confirmed: boolean,
+): Promise<{ changed: string[] }> {
+  const actor = await requirePermission("settings.edit");
+  const { library, settings } = await loadConfig(actor.libraryId);
+
+  const next = parseOrThrow(retentionPolicySchema, raw);
+  const changes: Prisma.JsonObject = {};
+  const changed: string[] = [];
+  let shortensOrStarts = false;
+
+  for (const field of ["archiveClosedAfterMonths", "removePhotoAfterClosedDays", "removeGuardianAfterMonths"] as const) {
+    const before = settings[field];
+    const after = next[field];
+    if (before === after) continue;
+
+    changed.push(field);
+    changes[field] = { from: before, to: after } as Prisma.JsonObject;
+
+    // Starting from nothing, or bringing an existing deadline forward.
+    if (after !== null && (before === null || after < before)) shortensOrStarts = true;
+  }
+
+  if (changed.length === 0) return { changed: [] };
+
+  if (shortensOrStarts && !confirmed) {
+    throw new ValidationError(
+      {
+        confirm:
+          "Tick the box to confirm. Erasing is permanent, and shortening a period brings forward every record already waiting.",
+      },
+      "Retention change without confirmation",
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.librarySettings.update({
+      where: { libraryId: library.id },
+      data: { ...next, updatedById: actor.userId },
+    });
+
+    await recordAudit(tx, {
+      libraryId: library.id,
+      action: AUDIT_ACTIONS.RETENTION_POLICY_CHANGED,
+      entityType: "library_settings",
+      entityId: library.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      metadata: { changes, nowInForce: retentionIsSet(next) },
+    });
+  });
+
+  return { changed };
 }

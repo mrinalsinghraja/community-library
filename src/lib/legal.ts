@@ -25,6 +25,8 @@
  * ------------------------------------------------------------------------
  */
 
+import { describeRetention, type RetentionPolicy } from "@/lib/retention";
+
 export interface LegalSection {
   heading: string;
   /** Plain paragraphs. */
@@ -67,7 +69,17 @@ function contactSentence(context: LegalContext): string {
 // Privacy
 // ---------------------------------------------------------------------------
 
-export function privacyDocument(context: LegalContext): LegalDocument {
+/**
+ * The retention periods are a second argument rather than part of `LegalContext`
+ * because this is the only one of the four documents that needs them — and
+ * because they must come from the same settings row the nightly erasing pass
+ * reads. A notice promising a schedule the software is not keeping would be the
+ * one failure mode of this page that actually matters.
+ */
+export function privacyDocument(
+  context: LegalContext,
+  retention: RetentionPolicy,
+): LegalDocument {
   return {
     title: "Privacy notice",
     standfirst: `What ${context.libraryName} keeps about your child, why, and how to change or close it.`,
@@ -138,10 +150,12 @@ export function privacyDocument(context: LegalContext): LegalDocument {
       {
         heading: "How long we keep it",
         paragraphs: [
-          "A borrowing record is kept for as long as the library keeps its history, because it is the library's record of where its books went.",
-          "When a reader grows out of the library, or a family leaves the building, the account is closed rather than deleted: they can no longer sign in and can no longer borrow, but the record of which books they borrowed stays, so the library's own history stays honest.",
-          "Accounts are genuinely deleted only when they were created by mistake — a test account, or one entered with the wrong details.",
-          "A grown-up may ask for their child's record to be deleted. Tell a librarian and they will explain exactly what can be removed and what has to stay in the lending history.",
+          "When a reader grows out of the library, or a family leaves the building, the account is closed rather than deleted straight away: they can no longer sign in and can no longer borrow, but the record of which books they borrowed stays, so the library's own history stays honest.",
+          "Accounts are deleted outright only when they were created by mistake — a test account, or one entered with the wrong details.",
+          // Generated from the settings the erasing pass actually runs on, so
+          // this paragraph cannot drift away from what the software does.
+          ...describeRetention(retention),
+          "A grown-up may ask for their child's record to be removed sooner. Tell a librarian and they will explain exactly what can go and what has to stay in the lending history.",
         ],
       },
       {

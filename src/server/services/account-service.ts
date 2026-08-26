@@ -206,10 +206,12 @@ export async function reactivateMember(memberUserId: string): Promise<void> {
  * Closes an account, for a family that has moved away.
  *
  * Deliberately does NOT delete anything. Loan history stays attached and
- * intact — those are the library's own records, not the member's alone. The
- * redaction pass that eventually accompanies ARCHIVED is described in
- * docs/ACCOUNT_LIFECYCLE.md and needs a community-approved retention policy
- * before it can be written.
+ * intact — those are the library's own records, not the member's alone.
+ *
+ * The redaction pass that accompanies ARCHIVED now exists in
+ * `src/server/lib/retention.ts`, but it does nothing until a Super Admin sets a
+ * period: unset means keep indefinitely, so closing an account is still a
+ * closure and not the start of a countdown. See ADR-061.
  */
 export async function deactivateMember(memberUserId: string, internalReason: string): Promise<void> {
   const actor = await requirePermission("member.deactivate");

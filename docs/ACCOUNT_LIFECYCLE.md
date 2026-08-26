@@ -85,21 +85,32 @@ contains no reason-like language.
 - Consent records survive — the evidence that consent was given matters as much
   after an account closes as before.
 
-### The archival step is deliberately not implemented
+### The archival step is built, and switched off
 
-`ARCHIVED` is intended to mean: personal fields on `app_user` and
-`member_profile` redacted, loan history retained and attributed to a stable id.
+`ARCHIVED` means: personal fields on `app_user` and `member_profile` redacted,
+loan history retained and attributed to the reader's own member code. The
+nightly pass in `src/server/lib/retention.ts` does it. See ADR-061.
 
-Writing that requires answers this codebase must not invent:
+**No retention period has been invented.** All three columns are nullable and
+all three are unset, and unset means keep indefinitely — which is exactly what
+this library does today. The pass returns early, the privacy notice says plainly
+that no schedule is in force, and `DEACTIVATED` remains the terminal state in
+practice.
 
-- How long is a departed member's name kept?
-- How long are guardian contact details kept after the last child leaves?
-- What survives for the library's own records, and for how long?
-- What happens on an explicit deletion request?
+The four questions are still the four questions, and they are now a form rather
+than a code change:
 
-**No retention period has been invented.** These need a community decision and,
-given the DPDP Act, a legal one. Until then `DEACTIVATED` is the terminal state
-in practice, and it is reversible.
+- How long is a departed member's name kept? → `archive_closed_after_months`
+- How long is a child's photograph kept? → `remove_photo_after_closed_days`
+- How long are guardian contact details kept after the last child is erased? →
+  `remove_guardian_after_months`
+- What happens on an explicit deletion request? → still a conversation with a
+  librarian; nothing automates it, and the privacy notice says so.
+
+They need a community decision and, given the DPDP Act, a legal one. What has
+changed is that answering them is now typing three numbers into
+`/admin/settings`, and that the answer is written on `/privacy` in the same
+words the software runs on.
 
 ## 6. Guardian contact changes
 

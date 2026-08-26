@@ -10,6 +10,7 @@ import {
   updateBranding,
   updateLibraryLogo,
   updateLibrarySettings,
+  updateRetentionPolicy,
   updateVerificationRequirement,
 } from "@/server/services/settings-service";
 
@@ -105,6 +106,44 @@ export async function updateVerificationAction(
     return {
       status: "success",
       message: changed ? "Saved. New registrations will be held to this." : "Nothing to change.",
+    };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+/**
+ * Saves the three retention periods.
+ *
+ * An empty field is sent through as an empty string and the schema turns it
+ * into `null` — "stop erasing" rather than "erase after zero months", which is
+ * the single worst way this form could be misread.
+ */
+export async function updateRetentionAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const { changed } = await updateRetentionPolicy(
+      {
+        archiveClosedAfterMonths: text(formData, "archiveClosedAfterMonths"),
+        removePhotoAfterClosedDays: text(formData, "removePhotoAfterClosedDays"),
+        removeGuardianAfterMonths: text(formData, "removeGuardianAfterMonths"),
+      },
+      formData.get("confirm") === "on",
+    );
+
+    revalidatePath("/admin/settings");
+    // The privacy notice prints these periods, so it goes stale the moment they
+    // change. Revalidating it here is what stops the page telling a family one
+    // thing while the nightly pass does another.
+    revalidatePath("/privacy");
+
+    return {
+      status: "success",
+      message: changed.length
+        ? "Saved. The nightly pass will work to this from tonight."
+        : "Nothing to change.",
     };
   } catch (error) {
     return toState(error);

@@ -19,6 +19,8 @@
 
 import { z } from "zod";
 
+import { RETENTION_BOUNDS } from "@/lib/retention";
+
 // ---------------------------------------------------------------------------
 // Bounds
 // ---------------------------------------------------------------------------
@@ -162,11 +164,6 @@ export const UNAVAILABLE_FEATURES: readonly UnavailableFeature[] = [
     backedBy: "library_settings.email_enabled",
   },
   {
-    label: "Reports",
-    reason: "Not built yet.",
-    backedBy: "permission report.view",
-  },
-  {
     label: "Overriding a borrowing rule at the desk",
     reason: "Not built yet. The rules above are the rules.",
     backedBy: "permission loan.override_rules",
@@ -245,6 +242,50 @@ export const librarySettingsSchema = z
   });
 
 export type LibrarySettingsInput = z.infer<typeof librarySettingsSchema>;
+
+// ---------------------------------------------------------------------------
+// Retention
+// ---------------------------------------------------------------------------
+
+/**
+ * The three periods, each of which may be left undecided.
+ *
+ * A blank field is `null` and `null` means "keep indefinitely" — it is the
+ * state the library is in today and it must stay expressible, so this is not a
+ * schema where every field is required. `z.literal("")` before the number is
+ * what makes an emptied field mean "stop erasing" rather than "0 months", which
+ * would be the single worst way to misread this form.
+ */
+const period = (bound: { min: number; max: number }, label: string, unit: string) =>
+  z.union([
+    z.literal("").transform(() => null),
+    z.null(),
+    z.coerce
+      .number({ error: `${label} must be a number of ${unit}.` })
+      .int(`${label} must be a whole number of ${unit}.`)
+      .min(bound.min, `${label} must be at least ${bound.min} ${unit} — anything shorter would erase a record before somebody could notice the account was closed by mistake.`)
+      .max(bound.max, `${label} must be at most ${bound.max} ${unit}.`),
+  ]);
+
+export const retentionPolicySchema = z.object({
+  archiveClosedAfterMonths: period(
+    RETENTION_BOUNDS.archiveClosedAfterMonths,
+    "The time before a closed record is erased",
+    "months",
+  ),
+  removePhotoAfterClosedDays: period(
+    RETENTION_BOUNDS.removePhotoAfterClosedDays,
+    "The time before a photograph is deleted",
+    "days",
+  ),
+  removeGuardianAfterMonths: period(
+    RETENTION_BOUNDS.removeGuardianAfterMonths,
+    "The time before a grown-up's details are erased",
+    "months",
+  ),
+});
+
+export type RetentionPolicyInput = z.infer<typeof retentionPolicySchema>;
 
 /** `#rrggbb`. One colour, not a theme builder. */
 export const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;

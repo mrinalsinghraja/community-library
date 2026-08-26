@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { PublicShell } from "@/components/layout/site-shell";
 import { LegalPage } from "@/components/library/legal-page";
 import { privacyDocument } from "@/lib/legal";
-import { getBrandingSafe } from "@/server/lib/settings";
+import { getBrandingSafe, getRetentionPolicySafe } from "@/server/lib/settings";
 
 export const metadata: Metadata = { title: "Privacy notice" };
 
@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Privacy notice" };
 export const dynamic = "force-dynamic";
 
 export default async function PrivacyPage() {
-  const branding = await getBrandingSafe();
+  const [branding, retention] = await Promise.all([getBrandingSafe(), getRetentionPolicySafe()]);
 
   return (
     <PublicShell branding={branding}>
@@ -26,7 +26,7 @@ export default async function PrivacyPage() {
           communityName: branding.communityName,
           venueAddress: branding.venueAddress,
           contactEmail: branding.contactEmail,
-        })}
+        }, retention)}
       />
     </PublicShell>
   );

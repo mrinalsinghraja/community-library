@@ -474,6 +474,17 @@ model LibrarySettings {
   ///
   /// SELF_DECLARED is the DEVELOPMENT default. It means "a box was ticked" and
   /// is not a claim of verification.
+  // Keeping and removing records
+  //
+  // All three are nullable and all three start unset, and unset means "keep
+  // indefinitely" — which is what this library does today. The nightly pass in
+  // src/server/lib/retention.ts finds no work until somebody decides a number,
+  // and the privacy notice says plainly that no schedule is in force. See
+  // docs/ACCOUNT_LIFECYCLE.md §5 and src/lib/retention.ts.
+  archiveClosedAfterMonths   Int? @map("archive_closed_after_months")
+  removePhotoAfterClosedDays Int? @map("remove_photo_after_closed_days")
+  removeGuardianAfterMonths  Int? @map("remove_guardian_after_months")
+
   requiredGuardianVerification GuardianVerificationStrength @default(SELF_DECLARED) @map("required_guardian_verification")
   guardianVerificationVersion  String                       @default("2026-08-v1") @map("guardian_verification_version")
 

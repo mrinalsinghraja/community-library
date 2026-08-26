@@ -4,6 +4,7 @@ import { retireGrownUpReaders, type GrowingUpResult } from "@/server/lib/growing
 import { prisma } from "@/server/db";
 import { pruneExpiredSessions } from "@/server/auth/session-store";
 import { pruneOldLoginAttempts } from "@/server/lib/rate-limit";
+import { runRetentionPass, type RetentionResult } from "@/server/lib/retention";
 import { sweepPendingMedia } from "@/server/services/media-service";
 import {
   sendCirculationReminders,
@@ -38,6 +39,7 @@ export interface MaintenanceResult {
   mediaPurged: number;
   mediaFailed: number;
   mediaNeedsAttention: number;
+  retention: RetentionResult;
   reminders: ReminderRunResult;
 }
 
@@ -87,26 +89,12 @@ export async function runDailyMaintenance(): Promise<MaintenanceResult> {
   ]);
 
   /*
-   * The media sweep is the reconciliation half of the photo lifecycle: it
-   * collects uploads nobody claimed and objects whose immediate deletion
-   * failed. Run last and on its own, because it talks to the object store and
-   * is the only step here that can be slow.
-   *
-   * It is a safety net, not the primary path — removal and replacement already
-   * delete the bytes inline. A day when this does not run leaves a private
-   * photograph in storage slightly longer, which is exactly why it is a daily
-   * job and not a weekly one.
-   */
-  const media = await sweepPendingMedia();
-
-  /*
    * Retiring readers who have grown out of the library.
    *
-   * Not fatal, and after the housekeeping for the same reason the reminders
-   * are: this one closes people's accounts, and if it throws halfway the run
-   * above has already happened and is still worth reporting. A day when this
-   * does not run leaves a reader with a card slightly longer than the range
-   * allows, which is the harmless direction for it to fail in.
+   * Not fatal, and before the erasing below for a reason: an account this pass
+   * closes tonight starts its retention clock tonight rather than tomorrow. A
+   * day when this does not run leaves a reader with a card slightly longer than
+   * the range allows, which is the harmless direction for it to fail in.
    */
   let grownUp: GrowingUpResult;
   try {
@@ -115,6 +103,41 @@ export async function runDailyMaintenance(): Promise<MaintenanceResult> {
     console.error("[maintenance] growing-up pass failed:", error);
     grownUp = { retired: 0, cutoffBirthYear: 0 };
   }
+
+  /*
+   * Erasing what the library has decided not to keep.
+   *
+   * The only destructive step in this job, and it does nothing at all until a
+   * Super Admin has set a period — see src/server/lib/retention.ts. Isolated
+   * like the rest: if it throws, the housekeeping above still happened, and
+   * nothing half-erased is left behind because each row is its own transaction.
+   *
+   * Deliberately BEFORE the media sweep. Retention schedules a child's
+   * photograph for deletion; the sweep is what actually removes the bytes, and
+   * running it afterwards means the face is gone the same night rather than the
+   * next one.
+   */
+  let retention: RetentionResult;
+  try {
+    retention = await runRetentionPass();
+  } catch (error) {
+    console.error("[maintenance] retention pass failed:", error);
+    retention = { photosRemoved: 0, readersArchived: 0, guardiansRedacted: 0, policyUnset: true };
+  }
+
+  /*
+   * The media sweep is the reconciliation half of the photo lifecycle: it
+   * collects uploads nobody claimed, photographs the retention pass has just
+   * scheduled, and objects whose immediate deletion failed. Run late and on its
+   * own, because it talks to the object store and is the only step here that
+   * can be slow.
+   *
+   * It is a safety net for the inline path, not a replacement: removal and
+   * replacement already delete the bytes as they happen. A day when this does
+   * not run leaves a private photograph in storage slightly longer, which is
+   * exactly why it is a daily job and not a weekly one.
+   */
+  const media = await sweepPendingMedia();
 
   /*
    * Reminders last, and never fatal.
@@ -141,6 +164,7 @@ export async function runDailyMaintenance(): Promise<MaintenanceResult> {
     mediaPurged: media.purged,
     mediaFailed: media.failed,
     mediaNeedsAttention: media.needsAttention,
+    retention,
     reminders,
   };
 }

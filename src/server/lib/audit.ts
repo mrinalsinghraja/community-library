@@ -42,6 +42,18 @@ export const AUDIT_ACTIONS = {
   /** One run of the growing-up pass, with a count. */
   GROWN_UP_SWEEP: "user.grown_up.sweep",
 
+  /*
+   * The nightly retention pass. Three actions rather than one, because they
+   * answer three different questions a family might ask a year later, and
+   * because the periods behind them are set separately. No actor and no name in
+   * any of them: an audit row about erasing personal data must not be where the
+   * personal data survives.
+   */
+  RETENTION_PHOTO_REMOVED: "retention.photo.removed",
+  RETENTION_READER_ARCHIVED: "retention.reader.archived",
+  RETENTION_GUARDIAN_REDACTED: "retention.guardian.redacted",
+  RETENTION_POLICY_CHANGED: "retention.policy.changed",
+
   /**
    * A reader asked for their own details to be corrected, and the desk
    * answered.

@@ -4,6 +4,7 @@ import {
   EmailDelivery,
   LibrarySettingsForm,
   ReminderSwitch,
+  RetentionForm,
   UnavailableFeatures,
   VerificationForm,
 } from "@/app/admin/settings/settings-forms";
@@ -77,6 +78,8 @@ export default async function SettingsPage() {
         />
 
         <ReminderSwitch enabled={view.reminders.enabled} canEnable={view.reminders.canEnable} />
+
+        <RetentionForm policy={view.retention.policy} dueNow={view.retention.dueNow} />
 
         <UnavailableFeatures />
       </div>

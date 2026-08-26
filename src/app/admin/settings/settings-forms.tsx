@@ -12,9 +12,11 @@ import {
   UNAVAILABLE_FEATURES,
 } from "@/lib/settings-schema";
 import { STRENGTH_LABELS } from "@/lib/guardian-verification";
+import { RETENTION_BOUNDS, type RetentionPolicy } from "@/lib/retention";
 import {
   sendEmailTestAction,
   setRemindersAction,
+  updateRetentionAction,
   updateSettingsAction,
   updateVerificationAction,
   type ActionState,
@@ -499,6 +501,144 @@ export function UnavailableFeatures() {
           </div>
         ))}
       </dl>
+    </Card>
+  );
+}
+
+/**
+ * How long the library keeps what it knows about a child.
+ *
+ * The one card on this page that can destroy something, so it is the one card
+ * that shows what it would destroy before you press save. Blank means keep
+ * indefinitely — which is the state every library starts in and the state this
+ * one is in today, so blank is offered as a real answer rather than as a
+ * validation failure.
+ */
+export function RetentionForm({
+  policy,
+  dueNow,
+}: {
+  policy: RetentionPolicy;
+  dueNow: { photos: number; readers: number; guardians: number };
+}) {
+  const [state, formAction, pending] = useActionState(updateRetentionAction, INITIAL);
+  const [draft, setDraft] = useState({
+    archiveClosedAfterMonths: policy.archiveClosedAfterMonths?.toString() ?? "",
+    removePhotoAfterClosedDays: policy.removePhotoAfterClosedDays?.toString() ?? "",
+    removeGuardianAfterMonths: policy.removeGuardianAfterMonths?.toString() ?? "",
+  });
+
+  const field = (name: keyof typeof draft) => ({
+    value: draft[name],
+    onChange: (event: { target: { value: string } }) =>
+      setDraft((current) => ({ ...current, [name]: event.target.value })),
+  });
+
+  /*
+   * Asking for confirmation only when the change brings an erasure forward —
+   * starting a period, or shortening one. Clearing a field, or lengthening it,
+   * keeps records for longer and needs no ceremony. Mirrors the same test in
+   * `updateRetentionPolicy`, which is the one that actually enforces it.
+   */
+  const brings = (next: string, before: number | null) => {
+    const value = next.trim() === "" ? null : Number(next);
+    if (value === null || Number.isNaN(value)) return false;
+    return before === null || value < before;
+  };
+  const needsConfirm =
+    brings(draft.archiveClosedAfterMonths, policy.archiveClosedAfterMonths) ||
+    brings(draft.removePhotoAfterClosedDays, policy.removePhotoAfterClosedDays) ||
+    brings(draft.removeGuardianAfterMonths, policy.removeGuardianAfterMonths);
+
+  return (
+    <Card>
+      <h2 className="text-2xl">Keeping and removing records</h2>
+
+      <p className="mt-3 max-w-2xl text-base text-ink-soft">
+        Leave a box empty to keep records indefinitely, which is what the library does now. Fill one
+        in and the nightly pass will start erasing to it. <strong>Erasing cannot be undone.</strong>{" "}
+        A borrowing record always survives — what goes is the name attached to it.
+      </p>
+
+      <p className="mt-3 max-w-2xl rounded-lg bg-accent-wash px-4 py-3 text-base text-ink">
+        This software does not give legal advice. Whether these periods are the right ones, and
+        whether erasing on this schedule is enough, are questions for someone qualified.
+      </p>
+
+      <form action={formAction} className="mt-5 flex flex-col gap-5">
+        <Notice state={state} />
+
+        <Field
+          id="removePhotoAfterClosedDays"
+          label="Delete a child's photograph this many days after their account closes"
+          hint={`Between ${RETENTION_BOUNDS.removePhotoAfterClosedDays.min} and ${RETENTION_BOUNDS.removePhotoAfterClosedDays.max} days, or empty to keep it. ${dueNow.photos} photograph${dueNow.photos === 1 ? "" : "s"} would go tonight.`}
+          error={state.fieldErrors?.removePhotoAfterClosedDays}
+        >
+          <TextInput
+            id="removePhotoAfterClosedDays"
+            name="removePhotoAfterClosedDays"
+            inputMode="numeric"
+            placeholder="Keep indefinitely"
+            {...field("removePhotoAfterClosedDays")}
+          />
+        </Field>
+
+        <Field
+          id="archiveClosedAfterMonths"
+          label="Erase a closed reader's details this many months after their account closes"
+          hint={`Between ${RETENTION_BOUNDS.archiveClosedAfterMonths.min} and ${RETENTION_BOUNDS.archiveClosedAfterMonths.max} months, or empty to keep them. ${dueNow.readers} reader${dueNow.readers === 1 ? "" : "s"} would be erased tonight.`}
+          error={state.fieldErrors?.archiveClosedAfterMonths}
+        >
+          <TextInput
+            id="archiveClosedAfterMonths"
+            name="archiveClosedAfterMonths"
+            inputMode="numeric"
+            placeholder="Keep indefinitely"
+            {...field("archiveClosedAfterMonths")}
+          />
+        </Field>
+
+        <Field
+          id="removeGuardianAfterMonths"
+          label="Erase a grown-up's contact details this many months after their last child is erased"
+          hint={`Between ${RETENTION_BOUNDS.removeGuardianAfterMonths.min} and ${RETENTION_BOUNDS.removeGuardianAfterMonths.max} months, or empty to keep them. ${dueNow.guardians} grown-up${dueNow.guardians === 1 ? "" : "s"} would be erased tonight.`}
+          error={state.fieldErrors?.removeGuardianAfterMonths}
+        >
+          <TextInput
+            id="removeGuardianAfterMonths"
+            name="removeGuardianAfterMonths"
+            inputMode="numeric"
+            placeholder="Keep indefinitely"
+            {...field("removeGuardianAfterMonths")}
+          />
+        </Field>
+
+        {needsConfirm ? (
+          <Field id="confirm" label="Please confirm" error={state.fieldErrors?.confirm}>
+            <label className="flex items-start gap-3 text-base text-ink">
+              <input
+                id="confirm"
+                name="confirm"
+                type="checkbox"
+                className="mt-1 size-6 shrink-0 rounded border-2 border-control-border"
+              />
+              <span>
+                I mean to erase records on this schedule, and I understand it cannot be undone.
+              </span>
+            </label>
+          </Field>
+        ) : null}
+
+        <div>
+          <Button type="submit" size="md" variant="secondary" disabled={pending}>
+            {pending ? "Saving…" : "Save these periods"}
+          </Button>
+        </div>
+      </form>
+
+      <p className="mt-4 text-base text-ink-soft">
+        Whatever is saved here is what the privacy notice tells families, word for word.
+      </p>
     </Card>
   );
 }

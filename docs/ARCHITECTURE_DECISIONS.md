@@ -2545,3 +2545,100 @@ deployment removes the panel from every book page on the next request; that is
 the off switch, and it is why there is no setting to maintain instead.
 
 `docs/BOOK_HELPER.md` has the seven guards in the order they run.
+
+---
+
+## ADR-061 — The retention machinery ships, the retention decision does not
+
+**Status:** Accepted, 26 August 2026.
+
+`docs/ACCOUNT_LIFECYCLE.md` §5 has said since Phase 1 that the archival step is
+deliberately not implemented, because writing it needs four answers this
+codebase must not invent: how long a departed reader's name is kept, how long a
+grown-up's contact details are kept after their last child leaves, what survives
+for the library's own records, and what happens on an explicit request.
+
+That paragraph was right about the answers and wrong about the consequence. It
+left the library with *no* schedule, which is not a neutral state — it is the
+schedule "keep everything forever", chosen by nobody and written down nowhere. A
+privacy notice cannot describe it because there is nothing to describe.
+
+So the pass is now built and the decision is still open. Three nullable columns,
+all unset, and unset means keep indefinitely:
+
+```
+archive_closed_after_months
+remove_photo_after_closed_days
+remove_guardian_after_months
+```
+
+Nothing is destroyed until a Super Admin types a number into
+`/admin/settings`, and the privacy notice says, in as many words, that no
+schedule is in force yet. The library's behaviour on the day this shipped is
+byte-for-byte what it was the day before.
+
+### Why three numbers and not one
+
+A child's photograph is the most sensitive thing here and the least useful to
+the library's own records. There is no argument for holding a face for as long
+as a lending history, and one number would have forced exactly that. The
+photograph clock runs in days; the other two run in months.
+
+The grown-up's clock is counted from **the children**, not from the grown-up: a
+parent whose younger child is still borrowing keeps their details however long
+ago the elder one left. The library still needs to be able to reach them.
+
+### What erasing means
+
+Fields, never rows. `loan.member_user_id` is `onDelete: Restrict` and that is
+correct — a loan is the library's own record of where a book went, and deleting
+the borrower would take the ledger with it. So the row survives and the person
+in it does not: name, email, username, password hash, closure reason, flat,
+avatar, staff notes and photograph all go.
+
+Two things stay, and both are compromises worth naming:
+
+* **The member code**, which becomes the display name. It is already printed
+  against every loan that reader ever took out, and a history attributed to
+  "Former reader" four times over is a history nobody can read.
+* **The birth year**, because the column is required and a year on its own —
+  with no name, no flat and no way to sign in — identifies nobody.
+
+Whether that line is in the right place is a question for the legal review this
+document's siblings are already waiting on. It is written down rather than
+assumed, which is the point.
+
+### Why the pass is boring on purpose
+
+It is the only destructive scheduled job in the application, so:
+
+* it acts on an **allowlist** of statuses, like every other gate here — a status
+  added next year does nothing until somebody puts it on a list;
+* a redacted row carries a `@removed.invalid` address, which is what stops the
+  pass rewriting the same family every night;
+* a guardian whose children have no archival date is **skipped**, not guessed at;
+* each row is its own transaction, so a failure halfway leaves no half-erased
+  family;
+* every step writes an audit row with **no actor and no name** — an audit trail
+  about erasing personal data must not be where the personal data survives;
+* it runs **before** the media sweep, so a photograph scheduled tonight is gone
+  tonight rather than tomorrow.
+
+### The screen shows what it would do
+
+The settings card prints, beside each field, how many photographs, readers and
+grown-ups tonight's pass would erase under the periods currently saved. Deciding
+a period should not be a leap in the dark. Shortening a period, or setting one
+for the first time, needs a ticked confirmation; clearing one never does,
+because stopping is not the direction that loses somebody's record.
+
+### The notice is generated, not written
+
+`describeRetention` turns the same three numbers into the paragraphs on
+`/privacy`. There is no second copy of the schedule in prose to fall out of step
+with the code, and saving the form revalidates the page.
+
+Days are printed as days. Collapsing thirty into "a month" reads better and
+promises something different — the pass counts exact days, and a month is 28, 30
+or 31 of them. On a page a family may one day hold the library to, the number
+that is counted is the number that is printed.
