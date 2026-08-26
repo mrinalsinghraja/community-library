@@ -4,6 +4,7 @@ import { PageHeading, PublicShell } from "@/components/layout/site-shell";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Callout } from "@/components/ui/states";
 import { BORROW_REQUEST_MESSAGES } from "@/lib/circulation";
+import { visitVenueSentence } from "@/lib/visits";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { Icon } from "@/components/ui/icon";
 import type { IconName } from "@/components/ui/icon";
@@ -23,7 +24,7 @@ export const dynamic = "force-dynamic";
 /**
  * The library's rules, in a child's language.
  *
- * Nine of them, short enough to read standing up. Not terms and conditions:
+ * Short enough to read standing up. Not terms and conditions:
  * nobody has to agree to this page, there is nothing to accept, and a child who
  * breaks one of these is not in trouble — they are a child who has a book under
  * their bed.
@@ -34,7 +35,12 @@ export const dynamic = "force-dynamic";
  * written without a number, it takes the number from `settings`; if it can, it
  * does not mention one.
  *
- * Rule 2 is the one this page exists for. The books are objects on shelves in a
+ * Rule 1 is the one a family checks first and the one a renting family used to
+ * have to ask about: the library is for the children of this building, and
+ * owning or renting the flat makes no difference to that. Leaving it to
+ * inference made the asking itself the barrier.
+ *
+ * Rule 3 is the one this page exists for. The books are objects on shelves in a
  * room, and the catalogue is not a shop: finding a book here does not mean
  * taking it home. That sentence lives in `BORROW_REQUEST_MESSAGES` so that the
  * rules page, the book page and the child's own shelf all say it the same way.
@@ -53,6 +59,13 @@ export default async function RulesPage() {
 
   const rules: { icon: IconName; title: string; body: string }[] = settings
     ? [
+        {
+          icon: "home",
+          title: "Who the library is for",
+          body:
+            settings.eligibilityNote ??
+            "The library is for the children who live in this community.",
+        },
         {
           icon: "book",
           title: "Books are for everyone",
@@ -110,7 +123,7 @@ export default async function RulesPage() {
     <PublicShell branding={branding}>
       <div className="mx-auto w-full max-w-4xl px-5 py-14 sm:px-8">
         <PageHeading title="Our simple rules">
-          Nine of them, and none of them are complicated.
+          Short, and none of them are complicated.
         </PageHeading>
 
         {!settings ? (
@@ -134,11 +147,20 @@ export default async function RulesPage() {
               ))}
 
               <Card tone="shelf" className="lift">
-                <CardTitle icon={<Icon name="home" />}>10. Where the library is</CardTitle>
+                <CardTitle icon={<Icon name="calendar" />}>
+                  {rules.length + 1}. Where the library is, and when
+                </CardTitle>
                 <CardBody>
-                  Our shelves live in the {branding.communityName} yoga room. Please follow the
-                  usual house rules of the building while you are there — it is everybody&rsquo;s
-                  room, and the library is a guest in it.
+                  {/*
+                    The address in full, because this is the line somebody reads
+                    out to a neighbour, and then the instruction that makes it
+                    useful. A room without an opening time is a locked door.
+                  */}
+                  Our shelves live at{" "}
+                  <strong>{settings.venueAddress ?? settings.venueName}</strong>.{" "}
+                  {visitVenueSentence(settings.venueName)} Please follow the usual house rules of
+                  the building while you are there — it is everybody&rsquo;s room, and the library
+                  is a guest in it.
                 </CardBody>
               </Card>
             </div>

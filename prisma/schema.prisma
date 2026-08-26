@@ -274,6 +274,14 @@ enum AnnouncementAudience {
   STAFF
 }
 
+/// A visiting time either stands or has been called off. There is no "deleted":
+/// a slot readers have already seen must go on being visible, saying that it is
+/// not happening, rather than vanishing and leaving a family at a locked door.
+enum VisitSlotStatus {
+  OPEN
+  CANCELLED
+}
+
 enum EmailStatus {
   QUEUED
   SENT
@@ -336,6 +344,7 @@ model Library {
   loginAttempts         LoginAttempt[]
   mediaObjects          MediaObject[]
   codeSequences         CodeSequence[]
+  visitSlots            VisitSlot[]
 
   @@index([communityId])
   @@map("library")
@@ -417,6 +426,20 @@ model LibrarySettings {
   // Contact and policy copy
   contactEmail           String? @map("contact_email")
   contactPhone           String? @map("contact_phone")
+
+  /// Where the books physically are, in the words the community uses for it.
+  ///
+  /// Three fields and not one, because they are read in three different
+  /// sentences: `venueName` drops into "come to the ___", `venueAddress` is
+  /// what somebody would write on a note to a neighbour, and `eligibilityNote`
+  /// answers "may my child join?" in the library's own voice. Composing any of
+  /// them from the other two produced text that read like a form letter.
+  ///
+  /// All three are configuration, never literals in src/ — a second community
+  /// deploying this code has a different room and a different front door.
+  venueName       String  @default("library room") @map("venue_name")
+  venueAddress    String? @map("venue_address")
+  eligibilityNote String? @map("eligibility_note")
   rulesMarkdown          String? @map("rules_markdown")
   donationPolicyMarkdown String? @map("donation_policy_markdown")
 
@@ -1353,6 +1376,47 @@ model Announcement {
 
   @@index([libraryId, audience, publishedAt])
   @@map("announcement")
+}
+
+/// One session of the library room being open.
+///
+/// A calendar date and two clock times, both in the library's own timezone —
+/// deliberately NOT an instant. "Saturday, 4:00 to 5:00" is a fact about a room
+/// in a building; it does not shift when a family opens the app from abroad,
+/// and storing it as a timestamp would make it do exactly that.
+///
+/// Cancelling sets the status and keeps the row. A reader who has already read
+/// "Saturday at four" must see that same Saturday marked off, not find it
+/// quietly missing.
+model VisitSlot {
+  id        String @id @default(uuid(7))
+  libraryId String @map("library_id")
+
+  /// The calendar date, in the library's timezone. Never converted.
+  slotDate DateTime @map("slot_date") @db.Date
+  /// Whole minutes past local midnight. 1020 is 5:00 pm.
+  startMinute Int @map("start_minute")
+  endMinute   Int @map("end_minute")
+
+  status VisitSlotStatus @default(OPEN)
+  /// A short line from the desk, shown to readers as written. Optional.
+  note   String?
+
+  cancelledReason String?   @map("cancelled_reason")
+  cancelledAt     DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelledById   String?   @map("cancelled_by_id")
+
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  library Library @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+
+  /// One slot per start time per day. Re-running the same bulk creation is then
+  /// a no-op rather than a second copy of every time on the card.
+  @@unique([libraryId, slotDate, startMinute])
+  @@index([libraryId, slotDate])
+  @@map("visit_slot")
 }
 
 /// Delivery log so "did the guardian get the activation link?" is answerable.

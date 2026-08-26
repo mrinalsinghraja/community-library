@@ -56,6 +56,11 @@ export const DESK_DESTINATIONS: readonly DeskDestination[] = [
   // again (`review.delete`, Super Admin only) and guards a control on this page
   // rather than the page itself.
   { href: "/desk/reviews", label: "Reviews", permission: "review.moderate" },
+  // When the room is open. `visit.manage` is Librarian and Super Admin both —
+  // the person who will be standing behind the desk is the person who says when.
+  { href: "/desk/visits", label: "Visiting times", permission: "visit.manage" },
+  // What the library says to every family at once. Super Admin alone.
+  { href: "/desk/board", label: "Notice board", permission: "announcement.manage" },
   { href: "/admin/staff", label: "Staff", permission: "user.manage_staff" },
   // What the library did over a period, as opposed to what it is doing now.
   // `report.view` is held by Librarian and Super Admin both.

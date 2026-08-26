@@ -166,6 +166,24 @@ export const AUDIT_ACTIONS = {
   BORROW_REQUEST_CANCELLED: "borrow_request.cancelled",
   BORROW_REQUEST_REFUSED: "borrow_request.refused",
 
+  // Opening times and the notice board.
+  //
+  // Creation is one row per submission with a count, not one per slot: a
+  // librarian putting up every Saturday for three months is one decision, and
+  // thirteen rows for it would bury the log for no gain. A cancellation is one
+  // row each, because each one is a family's Saturday.
+  VISIT_SLOTS_CREATED: "visit_slot.created",
+  VISIT_SLOT_CANCELLED: "visit_slot.cancelled",
+  /**
+   * Something was said to every family at once.
+   *
+   * The metadata carries the heading, which is the point of the row: "what did
+   * the library tell everyone, and when" is a question the owner will one day
+   * be asked, and the answer must not depend on whether the notice is still up.
+   */
+  ANNOUNCEMENT_POSTED: "announcement.posted",
+  ANNOUNCEMENT_WITHDRAWN: "announcement.withdrawn",
+
   // Configuration
   SETTINGS_UPDATED: "settings.updated",
   BRANDING_UPDATED: "branding.updated",

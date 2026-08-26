@@ -68,6 +68,10 @@ export interface Branding {
   welcomeMessage: string;
   contactEmail: string | null;
   contactPhone: string | null;
+  /** The room, short form: "come to the ___". */
+  venueName: string;
+  /** The room, as somebody would write it on a note to a neighbour. */
+  venueAddress: string;
 }
 
 export const getBranding = cache(async (): Promise<Branding> => {
@@ -83,6 +87,10 @@ export const getBranding = cache(async (): Promise<Branding> => {
     welcomeMessage: settings.welcomeMessage ?? `Welcome to ${library.name} 📚`,
     contactEmail: settings.contactEmail,
     contactPhone: settings.contactPhone,
+    venueName: settings.venueName,
+    // Falls back to the short name rather than to nothing: a footer that omits
+    // the address entirely is worse than one that says only "the Yoga Room".
+    venueAddress: settings.venueAddress ?? settings.venueName,
   };
 });
 
@@ -109,6 +117,8 @@ export async function getBrandingSafe(): Promise<Branding & { configured: boolea
       welcomeMessage: "Welcome to the children's library 📚",
       contactEmail: null,
       contactPhone: null,
+      venueName: "library room",
+      venueAddress: "the library room",
       configured: false,
     };
   }

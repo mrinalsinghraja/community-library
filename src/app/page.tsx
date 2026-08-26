@@ -55,6 +55,13 @@ export default async function HomePage() {
   // still renders and says so plainly rather than crashing.
   let rules: { ageMin: number; ageMax: number; borrowingPeriodDays: number; maxActiveLoans: number } | null =
     null;
+  /*
+   * Where the room is and who may use it — both configuration, both read here
+   * so the front page says exactly what the rules page says. A parent sent this
+   * link asks two questions before any other: is my child allowed, and where do
+   * I go. Neither answer is worth making them hunt for.
+   */
+  let venue: { name: string; address: string; eligibility: string | null } | null = null;
   // Only the specimen card needs it, and the specimen carries no dates — but
   // the card component asks for one, so it gets the library's rather than a
   // browser's.
@@ -68,8 +75,14 @@ export default async function HomePage() {
       borrowingPeriodDays: settings.borrowingPeriodDays,
       maxActiveLoans: settings.maxActiveLoans,
     };
+    venue = {
+      name: settings.venueName,
+      address: settings.venueAddress ?? settings.venueName,
+      eligibility: settings.eligibilityNote,
+    };
   } catch {
     rules = null;
+    venue = null;
   }
 
   /*
@@ -139,6 +152,26 @@ export default async function HomePage() {
               No fee to join, no test at the end, and no catch. Reading here is meant to be the
               good part of the day.
             </p>
+
+            {/*
+              The address, in the hero, in the display face.
+              
+              It is the shortest true argument this page has. Everything else
+              here is a claim a parent has to take on trust; "it is in the room
+              downstairs" is a thing they can check on their way past, and it is
+              the whole reason a library in a building beats one across town.
+            */}
+            {venue ? (
+              <p className="mt-5 flex items-start gap-2.5 text-lg text-ink">
+                <Icon name="home" className="mt-1 shrink-0 text-primary-deep" />
+                <span>
+                  <strong className="font-display">{venue.address}</strong>
+                  {venue.eligibility ? (
+                    <span className="block text-base text-ink-soft">{venue.eligibility}</span>
+                  ) : null}
+                </span>
+              </p>
+            ) : null}
 
             <div className="mt-9 flex flex-wrap gap-4">
               <ButtonLink href="/join" size="lg" icon={<Icon name="sparkle" />}>
@@ -230,6 +263,18 @@ export default async function HomePage() {
                 ? `Keep it for ${rules.borrowingPeriodDays} days, then bring it back so the next reader can enjoy it. Need longer? Just ask the librarian.`
                 : "Keep it for a while, then bring it back so the next reader can enjoy it. Need longer? Just ask the librarian."}
             </CardBody>
+            {/*
+              Where the exchange physically happens, on the card about the
+              exchange. A signed-in reader gets the actual dates on their own
+              page; this says the times exist and are published, which is what a
+              parent deciding whether to join needs to know.
+            */}
+            {venue ? (
+              <CardBody className="mt-2.5 text-base text-ink-soft">
+                Collecting and returning happen at the {venue.name}, at the times shown on your
+                child&rsquo;s own page each week.
+              </CardBody>
+            ) : null}
           </Card>
         </div>
       </section>

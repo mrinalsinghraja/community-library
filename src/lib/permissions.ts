@@ -157,9 +157,42 @@ export const PERMISSIONS = {
     category: "reports",
     description: "Export a list you can already see, as a spreadsheet or a PDF",
   },
+  /**
+   * Put a notice on the board every reader sees, or take one down.
+   *
+   * Super Admin only, by the owner's decision. The board is the one surface in
+   * this application that speaks to every family at once and is not about a
+   * book — the same property that makes it useful makes it the wrong thing to
+   * hand out widely. A librarian who needs something said asks for it to be
+   * posted, which is a conversation and takes a minute.
+   */
   "announcement.manage": {
     category: "operations",
-    description: "Not yet implemented — nothing in the application reads this",
+    description: "Post a notice to every reader's page, or take one down",
+  },
+  /**
+   * Put up the times the library room is open.
+   *
+   * Held by Librarian and Super Admin both: this is the desk saying when it
+   * will be standing behind it, and the person who will be there is the person
+   * who should be able to say so.
+   */
+  "visit.manage": {
+    category: "operations",
+    description: "Set the times readers can come to the library room",
+  },
+  /**
+   * Call off a time that readers have already been shown.
+   *
+   * Deliberately NOT on `visit.manage`, and the split is the point. Adding a
+   * time is an offer; cancelling one is breaking an offer a family has already
+   * read and may have planned a Saturday around. Only the Super Admin does
+   * that, which is the same shape as every other undo-a-published-thing key in
+   * this application.
+   */
+  "visit.cancel": {
+    category: "operations",
+    description: "Cancel a visiting time readers have already been shown",
   },
 
   // --- Administration -------------------------------------------------------
@@ -216,11 +249,9 @@ export const DORMANT_PERMISSIONS = [
   // meaning — which is the rule this comment block asks for. It now guards the
   // export of every desk listing.
   //
-  // `announcement.manage` was seeded in Phase 0 and still guards nothing: there
-  // are no announcements. It is named on the settings screen under "Not
-  // available yet" for the same reason the others are — a permission that looks
-  // like a capability and is not one is a promise the software will not keep.
-  "announcement.manage",
+  // `announcement.manage` left it the same way, in the change that built the
+  // notice board. It had sat here since Phase 0 looking like a capability and
+  // being none.
   // Joined the list in Version 1, when the role editor was removed. There are
   // exactly three assignable roles and one Super Admin; the only role the staff
   // screen grants is Librarian, at creation. Nothing reads this key, and the
@@ -293,7 +324,12 @@ const LIBRARIAN_PERMISSIONS = [
   "loan.override_rules",
   "loan.mark_lost",
   "report.view",
-  "announcement.manage",
+  // The desk says when the desk is open. `visit.cancel` is deliberately absent:
+  // breaking a time families have already read is the Super Admin's, the same
+  // way un-publishing anything else here is.
+  "visit.manage",
+  // `announcement.manage` is deliberately absent — see the key's own note. The
+  // notice board reaches every family at once and belongs to the owner.
 ] as const satisfies readonly PermissionKey[];
 
 /**

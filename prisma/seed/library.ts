@@ -22,6 +22,7 @@ export async function seedLibrary(
 
   if (existing) {
     console.log(`  • library "${config.library.slug}" already exists — leaving its settings alone`);
+    await backfillVenueCopy(prisma, existing.id, config);
     await seedRoles(prisma, existing.id);
     await seedCategories(prisma, existing.id, config);
     await seedCodeSequences(prisma, existing.id);
@@ -57,6 +58,52 @@ export async function seedLibrary(
 
   return { libraryId: library.id };
 }
+
+/**
+ * Fills in venue copy that has never been set, and nothing else.
+ *
+ * The rest of this function deliberately leaves an existing library's settings
+ * alone: re-running the seed must not undo what an administrator has since
+ * changed. These three columns are the one case where that rule does not apply,
+ * because they did not exist until the migration that added them — a NULL here
+ * is not a choice somebody made, it is a column that arrived empty.
+ *
+ * So the test is "has anybody ever set this", not "does it differ from the
+ * config". Once a Super Admin has typed a room name on the branding screen this
+ * does nothing, for ever.
+ */
+async function backfillVenueCopy(
+  prisma: PrismaClient,
+  libraryId: string,
+  config: LibraryConfigInput,
+): Promise<void> {
+  const settings = await prisma.librarySettings.findUnique({
+    where: { libraryId },
+    select: { venueName: true, venueAddress: true, eligibilityNote: true },
+  });
+  if (!settings) return;
+
+  const data: {
+    venueName?: string;
+    venueAddress?: string;
+    eligibilityNote?: string;
+  } = {};
+
+  // The platform default, which means nobody has named the room yet. A library
+  // that has genuinely chosen to call its room "the library room" writes the
+  // same string, and this changes nothing for them either.
+  if (settings.venueName === PLATFORM_DEFAULT_VENUE_NAME) data.venueName = config.settings.venueName;
+  if (settings.venueAddress === null) data.venueAddress = config.settings.venueAddress;
+  if (settings.eligibilityNote === null) data.eligibilityNote = config.settings.eligibilityNote;
+
+  if (Object.keys(data).length === 0) return;
+
+  await prisma.librarySettings.update({ where: { libraryId }, data });
+  console.log(`  ✓ filled in ${Object.keys(data).join(", ")} (never set before)`);
+}
+
+/** Must match the column default in schema.prisma. */
+const PLATFORM_DEFAULT_VENUE_NAME = "library room";
 
 /**
  * Roles and their permission grants.

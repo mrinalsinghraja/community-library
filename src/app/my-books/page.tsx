@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 import { RenewalRequest } from "@/app/my-books/renewal-request";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DueCountdownPanel } from "@/components/library/due-countdown";
+import { MessageBoard } from "@/components/library/message-board";
 import { ReadersBoard } from "@/components/library/readers-board";
+import { VisitTimes } from "@/components/library/visit-times";
 import { ReviewReminder } from "@/components/library/review-reminder";
 import { PublicShell } from "@/components/layout/site-shell";
 import { Butterfly } from "@/components/library/library-logo";
@@ -17,7 +19,9 @@ import { BORROW_REQUEST_MESSAGES, readerDueSentence, readerLoanBadge } from "@/l
 import { formatInTimezone } from "@/lib/dates";
 import { loanCountdown } from "@/lib/due-countdown";
 import { previousMonthWindow } from "@/lib/readers-board";
+import { currentNotice } from "@/server/services/announcement-service";
 import { readersOfTheMonth } from "@/server/services/readers-board-service";
+import { listVisitWeek } from "@/server/services/visit-service";
 import { pendingReviewPrompts } from "@/server/services/review-service";
 import { getActor } from "@/server/authz";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
@@ -50,7 +54,11 @@ export const metadata: Metadata = { title: "My books" };
  * queue position, no "back on Tuesday" for a book somebody else has — the
  * catalogue says a book is being read and stops there.
  */
-export default async function MyBooksPage() {
+export default async function MyBooksPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string }>;
+}) {
   const branding = await getBrandingSafe();
   const actor = await getActor();
   if (!actor) redirect("/login?next=/my-books");
@@ -77,11 +85,25 @@ export default async function MyBooksPage() {
   // yet. Empty is the normal state and renders nothing at all.
   const reviewPrompts = await pendingReviewPrompts();
 
+  // The notice board and the week's opening times. Both are about the library
+  // rather than about this child, which is why they sit above the shelf and not
+  // inside it — and why the week travels in the URL: "next week" has to be a
+  // page a parent can be sent, not a piece of state that dies on refresh.
+  const notice = await currentNotice();
+  const { week: weekParam } = await searchParams;
+  const week = await listVisitWeek(Number.parseInt(weekParam ?? "0", 10) || 0);
+
   return (
     <PublicShell branding={branding}>
       <div className="relative mx-auto w-full max-w-5xl px-5 py-12 sm:px-8">
         <Butterfly className="drift pointer-events-none absolute right-4 top-8 w-10 opacity-70 sm:w-12" />
         <h1 className="garden-rule inline-block text-4xl">My books</h1>
+
+        {/*
+          The board first, because a notice is only worth posting if it is read
+          before the thing the reader came for.
+        */}
+        <MessageBoard notice={notice} className="mt-8" />
 
         {/*
           The board sits beside the greeting on a wide screen and beneath it on
@@ -109,6 +131,13 @@ export default async function MyBooksPage() {
               have at home, which is what they opened this page to read.
             */}
             <ReviewReminder prompts={reviewPrompts} />
+            {/*
+              Anchored, because the week links jump back to this card rather
+              than to the top of a page the reader has already scrolled past.
+            */}
+            <div id="visit-times" className="scroll-mt-6">
+              <VisitTimes week={week} venueName={settings.venueName} />
+            </div>
             <ReadersBoard readers={boardReaders} monthLabel={boardMonth} />
           </div>
         </div>

@@ -395,7 +395,7 @@ export const BORROW_REQUEST_MESSAGES = {
    * leaves it when a librarian says so.
    */
   collectionNote:
-    "Books stay in the library room until the librarian hands one over. Please do not take a book home before then.",
+    "Books stay in the library room until the librarian hands one over. Come at one of the visiting times shown on your own page to collect a book or bring one back.",
 } as const;
 
 /** What a child is told about their own request for a book, if they have one. */

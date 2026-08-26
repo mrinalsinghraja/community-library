@@ -6,6 +6,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { Callout } from "@/components/ui/states";
+import { visitVenueSentence } from "@/lib/visits";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 
 export const metadata: Metadata = { title: "How to join" };
@@ -82,7 +83,9 @@ export default async function HowToJoinPage() {
     },
     {
       title: "Come and borrow a book",
-      body: "Sign in to see what is on the shelves. Books are borrowed in person: find one you like, then ask the librarian in the room to issue it. The shelf is real, and so is the librarian.",
+      body: settings
+        ? `Sign in to see what is on the shelves, and the times the library room is open that week. Books are borrowed in person: find one you like, then ask the librarian in the room to issue it. ${visitVenueSentence(settings.venueAddress ?? settings.venueName)}`
+        : "Sign in to see what is on the shelves. Books are borrowed in person: find one you like, then ask the librarian in the room to issue it. The shelf is real, and so is the librarian.",
     },
   ];
 
@@ -96,8 +99,14 @@ export default async function HowToJoinPage() {
 
         {ages ? (
           <Callout tone="info" className="mt-8">
-            The library is for children aged {ages}. A parent or guardian fills the form in — not
-            the child.
+            {/*
+              Who may join, before how to join. A family who is not eligible
+              should find that out here rather than after filling in a form and
+              waiting two days for somebody to tell them — and a renting family
+              should not have to ask, which is why the answer names them.
+            */}
+            {settings?.eligibilityNote ? <>{settings.eligibilityNote} </> : null}
+            It is for children aged {ages}. A parent or guardian fills the form in — not the child.
           </Callout>
         ) : null}
 

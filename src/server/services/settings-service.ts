@@ -377,6 +377,11 @@ export async function updateBranding(raw: unknown): Promise<{ changed: string[] 
     donationPolicyMarkdown: blankToNull(input.donationPolicyMarkdown),
     contactEmail: blankToNull(input.contactEmail),
     contactPhone: blankToNull(input.contactPhone),
+    // The one field that cannot be emptied — every sentence that names the room
+    // falls back to it, and "come to the ." is worse than an unchanged value.
+    venueName: input.venueName?.trim() || settings.venueName,
+    venueAddress: blankToNull(input.venueAddress),
+    eligibilityNote: blankToNull(input.eligibilityNote),
   } satisfies Record<(typeof EDITABLE_BRANDING_FIELDS)[number], string | null>;
 
   const changes = diffOf(

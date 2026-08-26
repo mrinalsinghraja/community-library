@@ -117,6 +117,9 @@ export const EDITABLE_BRANDING_FIELDS = [
   "donationPolicyMarkdown",
   "contactEmail",
   "contactPhone",
+  "venueName",
+  "venueAddress",
+  "eligibilityNote",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -162,11 +165,6 @@ export const UNAVAILABLE_FEATURES: readonly UnavailableFeature[] = [
     label: "Reports",
     reason: "Not built yet.",
     backedBy: "permission report.view",
-  },
-  {
-    label: "Announcements",
-    reason: "Not built yet.",
-    backedBy: "permission announcement.manage",
   },
   {
     label: "Overriding a borrowing rule at the desk",
@@ -311,6 +309,33 @@ export const brandingSchema = z.object({
     .string()
     .trim()
     .max(30, "That is too long for a phone number.")
+    .optional(),
+  /*
+   * Where the library room is, and who may use it.
+   *
+   * On the branding screen rather than the settings screen because these are
+   * words the library writes about itself, not rules the software enforces —
+   * the same reason the welcome message and the rules text live there.
+   *
+   * `venueName` is the only one that cannot be emptied: every page that names
+   * the room falls back to it, so a blank would leave a sentence reading "come
+   * to the ." The service keeps the previous value rather than refusing the
+   * whole form over it.
+   */
+  venueName: z
+    .string()
+    .trim()
+    .max(60, "Keep the room's name short — it goes inside a sentence.")
+    .optional(),
+  venueAddress: z
+    .string()
+    .trim()
+    .max(120, "That is longer than an address anyone would read out.")
+    .optional(),
+  eligibilityNote: z
+    .string()
+    .trim()
+    .max(240, "One or two sentences. A family reads this before they read anything else.")
     .optional(),
 });
 

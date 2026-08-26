@@ -38,6 +38,9 @@ export default async function BrandingPage() {
               donationPolicyMarkdown: settings.donationPolicyMarkdown ?? "",
               contactEmail: settings.contactEmail ?? "",
               contactPhone: settings.contactPhone ?? "",
+              venueName: settings.venueName,
+              venueAddress: settings.venueAddress ?? "",
+              eligibilityNote: settings.eligibilityNote ?? "",
             }}
           />
 

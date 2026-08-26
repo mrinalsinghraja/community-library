@@ -39,6 +39,9 @@ export interface BrandingFormValues {
   donationPolicyMarkdown: string;
   contactEmail: string;
   contactPhone: string;
+  venueName: string;
+  venueAddress: string;
+  eligibilityNote: string;
 }
 
 /**
@@ -136,6 +139,56 @@ export function BrandingForm({ values }: { values: BrandingFormValues }) {
             <TextInput id="contactPhone" name="contactPhone" defaultValue={values.contactPhone} />
           </Field>
         </div>
+
+        {/*
+          Where the room is and who may use it.
+          
+          Two boxes for the room and not one, because the two are read in
+          different sentences: the short name drops into "come to the ___" on a
+          child's page, and the address is what somebody writes on a note to a
+          neighbour. Deriving either from the other produced text that read like
+          a form letter.
+        */}
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            id="venueName"
+            label="The room, short"
+            hint="Goes inside a sentence: “come to the …”."
+            error={errors.venueName}
+          >
+            <TextInput id="venueName" name="venueName" maxLength={60} defaultValue={values.venueName} />
+          </Field>
+
+          <Field
+            id="venueAddress"
+            label="The room, in full"
+            hint="What you would write on a note to a neighbour."
+            error={errors.venueAddress}
+          >
+            <TextInput
+              id="venueAddress"
+              name="venueAddress"
+              maxLength={120}
+              defaultValue={values.venueAddress}
+            />
+          </Field>
+        </div>
+
+        <Field
+          id="eligibilityNote"
+          label="Who the library is for"
+          hint="Shown on the front page, the joining page and the rules. One or two sentences."
+          error={errors.eligibilityNote}
+        >
+          <textarea
+            id="eligibilityNote"
+            name="eligibilityNote"
+            defaultValue={values.eligibilityNote}
+            rows={2}
+            maxLength={240}
+            className="w-full rounded-[var(--radius-field)] border border-control-border bg-surface p-4 text-lg"
+          />
+        </Field>
 
         <div>
           <Button type="submit" size="md" disabled={pending} icon={<Icon name="save" />}>

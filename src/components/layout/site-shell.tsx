@@ -238,6 +238,11 @@ export async function SiteFooter({ branding }: { branding: Branding }) {
             never sold. Joining costs nothing, and donating a book is never a condition of
             membership.
           </p>
+          {/*
+            The address in the footer of every page, because this is where a
+            person looks for it once they have decided to come.
+          */}
+          <p className="font-bold text-ink">{branding.venueAddress}</p>
         </div>
 
         {/*

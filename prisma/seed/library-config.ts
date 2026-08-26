@@ -42,6 +42,9 @@ export interface LibraryConfigInput {
     primaryColor: string;
     secondaryColor: string;
     welcomeMessage: string;
+    venueName: string;
+    venueAddress: string;
+    eligibilityNote: string;
     timezone: string;
     consentVersion: string;
   };
@@ -116,6 +119,24 @@ export const MANA_JARDIN: LibraryConfigInput = {
     primaryColor: "#1F6F5C",
     secondaryColor: "#E4572E",
     welcomeMessage: "Welcome to Mana Jardin Children's Library 📚",
+    /*
+     * Where the books physically are, and who the library is for.
+     *
+     * Three strings and not one, because they are read in three different
+     * sentences and composing any of them from the others produced text that
+     * read like a form letter: `venueName` drops into "come to the ___",
+     * `venueAddress` is what somebody would write on a note to a neighbour, and
+     * `eligibilityNote` answers "may my child join?" in the library's own voice.
+     *
+     * The eligibility line names owners and tenants explicitly. A library that
+     * says only "residents" is a library a renting family has to ask about, and
+     * the asking is the barrier — so the answer is on the page before the
+     * question forms.
+     */
+    venueName: "Yoga Room",
+    venueAddress: "Yoga Room, Mana Jardin Apartment",
+    eligibilityNote:
+      "The library is for children who live at Mana Jardin Apartment — whether your family owns your flat or rents it.",
     timezone: "Asia/Kolkata",
     consentVersion: CONSENT_VERSION_VALUE,
   },
