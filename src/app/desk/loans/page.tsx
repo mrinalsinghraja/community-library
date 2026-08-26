@@ -305,6 +305,22 @@ export default async function DeskLoansPage({
                         {formatInTimezone(loan.returnedAt, settings.timezone)}
                       </p>
                     ) : null}
+                    {/*
+                      The reader has said this one is on its way. It changes
+                      nothing about the loan — the row still reads "Out" above,
+                      because the book is still out. It is here so a librarian
+                      knows what to expect through the door, and so a book
+                      promised a fortnight ago and never brought is visible.
+                    */}
+                    {loan.status === "ACTIVE" && loan.returnAnnouncedAt ? (
+                      <p className="mt-1 flex items-start gap-1.5 text-base text-accent-ink">
+                        <Icon name="returnBook" className="mt-1 shrink-0" />
+                        <span>
+                          Coming back &mdash; reader said so on{" "}
+                          {formatInTimezone(loan.returnAnnouncedAt, settings.timezone)}
+                        </span>
+                      </p>
+                    ) : null}
                   </td>
 
                   <td className="px-3.5 py-2.5 align-top">

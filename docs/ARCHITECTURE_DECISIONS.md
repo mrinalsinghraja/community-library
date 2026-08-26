@@ -2642,3 +2642,70 @@ Days are printed as days. Collapsing thirty into "a month" reads better and
 promises something different — the pass counts exact days, and a month is 28, 30
 or 31 of them. On a page a family may one day hold the library to, the number
 that is counted is the number that is printed.
+
+---
+
+## ADR-062 — The reader announces, the desk returns
+
+**Status:** Accepted, 26 August 2026.
+
+The first loan went out and the reader's own page had no way to say anything
+about giving the book back. The obvious fix — a "Return" button on
+`/my-books` — is the wrong one, and the reason is worth writing down.
+
+A return is not a state change a reader can truthfully make. `returnBook` sets
+the copy to AVAILABLE, records a condition, and writes `returned_by_id`. If a
+child pressed it from their sofa:
+
+* the catalogue would offer a book that is still in their school bag, and the
+  next family would come for it and find nothing;
+* the condition review — the step that decides AVAILABLE from DAMAGED, and the
+  only moment anybody looks at the book — would be skipped entirely;
+* `returned_by_id` means "the librarian who took it back". It would name a
+  nine-year-old.
+
+The database already refuses to let this go wrong quietly: an invariant enforces
+"on loan implies BORROWED" in **both** directions, so the loan and the copy
+cannot be moved independently. Any reader-side return would have had to move
+both, which is precisely the thing a reader has no standing to assert.
+
+So the reader **announces** and the desk **returns**. `loan.return_announced_at`
+is a note on the loan, nothing else — the loan stays ACTIVE, the copy stays
+BORROWED, the due date does not move, and a librarian records the real return
+with the book in their hands.
+
+### Why it is not a request
+
+Borrowing and renewing are requests: they have a `*_request` table, a PENDING
+state, a desk queue and a decision. A return has none of those, because **it
+cannot be declined.** A child bringing a book back is not asking permission. So
+there is no third request table, no queue to answer, and no way for a librarian
+to leave a child waiting on an answer to a question they did not ask.
+
+That also decides the wording. Nothing on the reader's screen says "returned" —
+it says the library *knows* the book is coming. The difference matters at the
+exact moment a child closes the laptop and the book is still on the table.
+
+### Saying it twice is not an error
+
+A second announcement is a no-op that keeps the first timestamp. Overwriting it
+would move the desk's sense of how long a book has been promised, which is the
+only thing this date is for: a book announced a fortnight ago and never brought
+in is worth seeing.
+
+Withdrawing is free and unconditional. A child who turns out not to be finished
+should not have to ask anybody.
+
+### What the desk sees
+
+One line on **Books out**, under a row that still reads "Out" — because the book
+is still out. It changes no filter, no count and no status. It tells a librarian
+what to expect through the door, and it makes a promise that was never kept
+visible without accusing anybody of anything.
+
+### Deployment note
+
+This adds the forty-seventh permission, `loan.announce_return`, to the MEMBER
+role. Permissions are data: the platform seed upserts the catalogue and the
+library seed reconciles each role against `ROLE_DEFINITIONS`. Neither runs on
+deploy, so both are a manual step in production — see `docs/SETUP.md`.

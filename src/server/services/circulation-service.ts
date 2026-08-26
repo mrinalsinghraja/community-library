@@ -13,6 +13,7 @@ import {
   CIRCULATION_MESSAGES,
   LOAN_PAGE_SIZES,
   RENEWAL_REQUEST_MESSAGES,
+  RETURN_ANNOUNCEMENT_MESSAGES,
   loanCondition,
   memberMayBorrow,
   type LoanFilter,
@@ -151,6 +152,13 @@ export interface StaffLoanRow {
   returnedAt: Date | null;
   renewalCount: number;
   condition: CopyCondition;
+  /**
+   * When the reader said this one is coming back, if they have.
+   *
+   * A note from the child, not a fact about where the book is. The row still
+   * reads "Out" and the Return button still does the real work.
+   */
+  returnAnnouncedAt: Date | null;
 }
 
 export interface StaffLoanEvent {
@@ -192,6 +200,15 @@ export interface ReaderLoanCard {
   canAskToKeep: boolean;
   /** Why not, in the child's own words. Null when they can ask. */
   askBlockedReason: string | null;
+  /**
+   * When this reader told the library the book is coming back, if they have.
+   *
+   * Not a return. The book is still theirs and still due on the same day until
+   * a librarian takes it in.
+   */
+  returnAnnouncedAt: Date | null;
+  /** True when "I'm bringing this back" should be offered on this book. */
+  canAnnounceReturn: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -1024,7 +1041,8 @@ async function lockOwnActiveLoanByCode(
   const [loan] = await tx.$queryRaw<LockedLoanRow[]>`
     SELECT l.id, l.copy_id, c.copy_code, l.member_user_id,
            u.display_name AS reader_name, u.status AS reader_status,
-           t.title, l.status, l.issued_at, l.due_at, l.renewal_count
+           t.title, l.status, l.issued_at, l.due_at, l.renewal_count,
+           l.return_announced_at
       FROM loan l
       JOIN book_copy c ON c.id = l.copy_id
       JOIN book_title t ON t.id = c.title_id
@@ -1143,6 +1161,133 @@ export async function requestRenewal(input: { code: string }): Promise<{ title: 
     }
     throw error;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Telling the library a book is coming back
+// ---------------------------------------------------------------------------
+
+/**
+ * A reader says they have finished with a book.
+ *
+ * **This does not return the book, and it is important that it cannot.** The
+ * copy stays BORROWED, the loan stays ACTIVE, and the due date does not move.
+ * All it writes is a note on the loan saying the reader has told the library.
+ *
+ * A child marking a book "returned" from their sofa would put a copy back on
+ * the shelf that is still in their bag: the catalogue would offer it to
+ * somebody else, the condition review that decides AVAILABLE from DAMAGED would
+ * be skipped, and `returned_by_id` — which means "the librarian who took it
+ * back" — would name a nine-year-old. So the reader announces and the desk
+ * confirms, which is also what actually happens in the room.
+ *
+ * Unlike borrowing and renewing, there is nothing here to decide. A child
+ * bringing a book back cannot be refused, so there is no request table, no
+ * PENDING state and no queue to answer — only a note the desk can see. See
+ * ADR-062.
+ */
+export async function announceReturn(input: { code: string }): Promise<{ title: string }> {
+  const actor = await requirePermission("loan.announce_return");
+
+  // A librarian has no shelf of their own. Not-found rather than
+  // not-authorized: there is nothing here for them, and the desk has the real
+  // return button.
+  if (actor.kind !== "MEMBER") {
+    throw new NotFoundError(`User ${actor.userId} is not a member and has no loans of their own`);
+  }
+
+  const code = input.code.trim();
+  if (!code) {
+    throw new RuleViolationError(
+      "Return announced without a book code",
+      RETURN_ANNOUNCEMENT_MESSAGES.notYours,
+    );
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const loan = await lockOwnActiveLoanByCode(tx, actor, code);
+    if (!loan) {
+      // One sentence for every miss: no such book, somebody else's book, a
+      // book already brought back. A child probing codes learns nothing.
+      throw new RuleViolationError(
+        `No active loan of ${code} for member ${actor.userId}`,
+        RETURN_ANNOUNCEMENT_MESSAGES.notYours,
+      );
+    }
+
+    /*
+     * Saying it twice is not an error worth showing a child. The first notice
+     * stands — overwriting the timestamp would move the desk's sense of how
+     * long a book has been promised, which is the one thing this date is for.
+     */
+    if (loan.return_announced_at) {
+      return { title: loan.title };
+    }
+
+    await tx.loan.update({
+      where: { id: loan.id },
+      data: { returnAnnouncedAt: new Date(), returnAnnouncedById: actor.userId },
+    });
+
+    await recordAudit(tx, {
+      libraryId: actor.libraryId,
+      action: AUDIT_ACTIONS.RETURN_ANNOUNCED,
+      entityType: "loan",
+      entityId: loan.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      metadata: { copyCode: loan.copy_code, dueAt: loan.due_at.toISOString() },
+    });
+
+    return { title: loan.title };
+  });
+}
+
+/**
+ * A reader changes their mind and keeps reading.
+ *
+ * Clears the note and nothing else. The loan was never altered, so there is
+ * nothing to put back — and a child who is not finished after all should not
+ * have to ask anybody's permission to carry on reading.
+ */
+export async function withdrawReturnAnnouncement(input: { code: string }): Promise<void> {
+  const actor = await requirePermission("loan.announce_return");
+  if (actor.kind !== "MEMBER") {
+    throw new NotFoundError(`User ${actor.userId} is not a member and has no loans of their own`);
+  }
+
+  const code = input.code.trim();
+  if (!code) {
+    throw new RuleViolationError(
+      "Return announcement withdrawn without a book code",
+      RETURN_ANNOUNCEMENT_MESSAGES.noneToCancel,
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const loan = await lockOwnActiveLoanByCode(tx, actor, code);
+    if (!loan || !loan.return_announced_at) {
+      throw new RuleViolationError(
+        `No announced return of ${code} for member ${actor.userId}`,
+        RETURN_ANNOUNCEMENT_MESSAGES.noneToCancel,
+      );
+    }
+
+    await tx.loan.update({
+      where: { id: loan.id },
+      data: { returnAnnouncedAt: null, returnAnnouncedById: null },
+    });
+
+    await recordAudit(tx, {
+      libraryId: actor.libraryId,
+      action: AUDIT_ACTIONS.RETURN_ANNOUNCEMENT_WITHDRAWN,
+      entityType: "loan",
+      entityId: loan.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      metadata: { copyCode: loan.copy_code },
+    });
+  });
 }
 
 /** The child's version of a refusal: what to do, never which rule. */
@@ -1443,6 +1588,7 @@ interface LockedLoanRow {
   issued_at: Date;
   due_at: Date;
   renewal_count: number;
+  return_announced_at: Date | null;
 }
 
 /**
@@ -1465,7 +1611,8 @@ async function lockActiveLoan(
   const [loan] = await tx.$queryRaw<LockedLoanRow[]>`
     SELECT l.id, l.copy_id, c.copy_code, l.member_user_id,
            u.display_name AS reader_name, u.status AS reader_status,
-           t.title, l.status, l.issued_at, l.due_at, l.renewal_count
+           t.title, l.status, l.issued_at, l.due_at, l.renewal_count,
+           l.return_announced_at
       FROM loan l
       JOIN book_copy c ON c.id = l.copy_id
       JOIN book_title t ON t.id = c.title_id
@@ -1507,6 +1654,7 @@ interface LoanListRow {
   returned_at: Date | null;
   renewal_count: number;
   condition: CopyCondition;
+  return_announced_at: Date | null;
 }
 
 export interface LoanQuery {
@@ -1580,7 +1728,8 @@ export async function listLoansForStaff(query: LoanQuery = {}): Promise<Page<Sta
            coalesce(m.member_code, '') AS member_code, l.member_user_id,
            c.id AS copy_id, c.copy_code, c.condition,
            t.title, t.authors, t.cover_media_id,
-           l.issued_at, l.due_at, l.returned_at, l.renewal_count
+           l.issued_at, l.due_at, l.returned_at, l.renewal_count,
+           l.return_announced_at
       FROM loan l
       JOIN book_copy c ON c.id = l.copy_id
       JOIN book_title t ON t.id = c.title_id
@@ -1617,6 +1766,7 @@ function toStaffLoanRow(row: LoanListRow): StaffLoanRow {
     returnedAt: row.returned_at,
     renewalCount: row.renewal_count,
     condition: row.condition,
+    returnAnnouncedAt: row.return_announced_at,
   };
 }
 
@@ -1734,6 +1884,7 @@ export async function listOwnLoans(): Promise<{
       dueAt: true,
       returnedAt: true,
       renewalCount: true,
+      returnAnnouncedAt: true,
       /*
        * The child's own most recent ask about this book, and only theirs — this
        * is a nested read of rows belonging to a loan already filtered to
@@ -1798,6 +1949,14 @@ export async function listOwnLoans(): Promise<{
     renewalState,
     canAskToKeep: loan.status === "ACTIVE" && renewalState === "none" && askBlockedReason === null,
     askBlockedReason,
+    returnAnnouncedAt: loan.returnAnnouncedAt,
+    /*
+     * Offered on any book they still hold, including a late one and one they
+     * have asked to keep. Bringing a book back is the one thing a reader can
+     * always do, and a screen that hid the button on an overdue book would be
+     * hiding it exactly when the library most wants it pressed.
+     */
+    canAnnounceReturn: loan.status === "ACTIVE" && loan.returnAnnouncedAt === null,
     /*
      * The donor's thank-you, exactly as it appears on the book's own page.
      *

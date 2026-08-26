@@ -195,6 +195,14 @@ export const AUDIT_ACTIONS = {
   // The refusal is here for the same reason `loan.issue.refused` is — an
   // approval that the rules turned down is the interesting one.
   RENEWAL_REQUESTED: "renewal_request.created",
+
+  /*
+   * A reader saying a book is coming back, and changing their mind about it.
+   * Audited because it is the only write a child makes against a loan, and
+   * "she told us on Tuesday" is worth being able to check.
+   */
+  RETURN_ANNOUNCED: "loan.return_announced",
+  RETURN_ANNOUNCEMENT_WITHDRAWN: "loan.return_announcement_withdrawn",
   RENEWAL_REQUEST_APPROVED: "renewal_request.approved",
   RENEWAL_REQUEST_DECLINED: "renewal_request.declined",
   RENEWAL_REQUEST_CANCELLED: "renewal_request.cancelled",

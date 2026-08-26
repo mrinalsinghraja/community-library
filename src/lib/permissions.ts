@@ -152,6 +152,19 @@ export const PERMISSIONS = {
     category: "circulation",
     description: "Ask a librarian to keep a book you have borrowed for longer",
   },
+  /**
+   * Tell the library a book is coming back.
+   *
+   * Named `announce` and not `request` because there is nothing to decide: a
+   * child bringing a book back cannot be refused. And named neither `return`
+   * nor `close` because it does not end the loan — the book is still at their
+   * home, the copy is still BORROWED, and a librarian records the real return
+   * with it in their hands. See ADR-062.
+   */
+  "loan.announce_return": {
+    category: "circulation",
+    description: "Tell the library you are bringing a book back",
+  },
   "loan.correct": {
     category: "circulation",
     description: "Repair a loan that went wrong — cancel a mis-issue, or close a loan the system missed",
@@ -395,6 +408,9 @@ const MEMBER_PERMISSIONS = [
   // the date or the record until a librarian decides — which is the whole
   // reason it is a request and not a renewal.
   "loan.request_renewal",
+  // Saying a book is on its way back. Changes no record of where the book is —
+  // it puts a note on the desk's list so the librarian expects it.
+  "loan.announce_return",
   // Asking for a correction changes nothing until somebody approves it, which
   // is exactly the shape of the two keys above.
   "profile.request_change",
@@ -586,6 +602,7 @@ const READER_WORDING: Record<string, string> = {
   "loan.view": "See the books you have at home and when they are due",
   "loan.request": "Ask a librarian for a book you have found",
   "loan.request_renewal": "Ask to keep a book you are still reading for longer",
+  "loan.announce_return": "Tell the library when you are bringing a book back",
   "profile.request_change": "Ask for your own details to be put right",
 };
 

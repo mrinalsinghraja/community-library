@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { ReturnAnnouncement } from "@/app/my-books/return-announcement";
 import { RenewalRequest } from "@/app/my-books/renewal-request";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DueCountdownPanel } from "@/components/library/due-countdown";
@@ -448,6 +449,19 @@ function ActiveBookCard({
           canAsk={loan.canAskToKeep}
           blockedReason={loan.askBlockedReason}
           renewalPeriodDays={renewalPeriodDays}
+        />
+
+        {/*
+          Telling the library it is coming back. Deliberately below the ask, and
+          deliberately not a "Return" button: this writes a note and nothing
+          else. The book is still theirs, still due on the same day, and still
+          BORROWED until a librarian takes it in at the desk.
+        */}
+        <ReturnAnnouncement
+          code={loan.code}
+          title={loan.title}
+          announced={loan.returnAnnouncedAt !== null}
+          canAnnounce={loan.canAnnounceReturn}
         />
       </div>
 

@@ -189,11 +189,15 @@ describe("child isolation", () => {
     const authz = await actingAs(reader.id);
     const actor = await authz.requireActor();
 
-    // Browse the shelf, see their own books, ask to keep one longer, and ask
-    // for their own details to be put right. Nothing else — and every one of
-    // those four decides nothing on its own.
+    // Browse the shelf, see their own books, ask to keep one longer, say one is
+    // coming back, and ask for their own details to be put right. Nothing else
+    // — and not one of those decides anything on its own.
     expect([...actor.permissions].sort()).toEqual([
       "book.view",
+      // Saying a book is on its way back. The only reader key that is not a
+      // request, because a child bringing a book back cannot be refused — and
+      // still not a mutation: the copy stays BORROWED until the desk takes it.
+      "loan.announce_return",
       // Version 1: asking for a book. Like the renewal ask, it decides nothing
       // — no copy moves and no loan exists until a librarian answers.
       "loan.request",

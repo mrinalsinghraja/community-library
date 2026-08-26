@@ -3,9 +3,14 @@
 import { revalidatePath } from "next/cache";
 
 import { isCondition } from "@/lib/catalogue";
-import { BORROW_REQUEST_MESSAGES, RENEWAL_REQUEST_MESSAGES } from "@/lib/circulation";
+import {
+  BORROW_REQUEST_MESSAGES,
+  RENEWAL_REQUEST_MESSAGES,
+  RETURN_ANNOUNCEMENT_MESSAGES,
+} from "@/lib/circulation";
 import { toFriendlyMessage, ValidationError } from "@/server/lib/errors";
 import {
+  announceReturn,
   cancelLoan,
   cancelOwnBorrowRequest,
   cancelOwnRenewalRequest,
@@ -16,6 +21,7 @@ import {
   requestBorrow,
   requestRenewal,
   returnBook,
+  withdrawReturnAnnouncement,
 } from "@/server/services/circulation-service";
 
 /**
@@ -174,6 +180,38 @@ export async function cancelRenewalRequestAction(
     await cancelOwnRenewalRequest({ code: String(formData.get("code") ?? "") });
     revalidateCirculation();
     return { status: "success", message: RENEWAL_REQUEST_MESSAGES.cancelled };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+/**
+ * A reader says a book is coming back.
+ *
+ * Same shape as the renewal ask above and for the same reason: the code is the
+ * only input, and a code belonging to somebody else's loan finds nothing.
+ */
+export async function announceReturnAction(
+  _previous: CirculationFormState,
+  formData: FormData,
+): Promise<CirculationFormState> {
+  try {
+    await announceReturn({ code: String(formData.get("code") ?? "") });
+    revalidateCirculation();
+    return { status: "success", message: RETURN_ANNOUNCEMENT_MESSAGES.done };
+  } catch (error) {
+    return toErrorState(error);
+  }
+}
+
+export async function withdrawReturnAnnouncementAction(
+  _previous: CirculationFormState,
+  formData: FormData,
+): Promise<CirculationFormState> {
+  try {
+    await withdrawReturnAnnouncement({ code: String(formData.get("code") ?? "") });
+    revalidateCirculation();
+    return { status: "success", message: RETURN_ANNOUNCEMENT_MESSAGES.keptBack };
   } catch (error) {
     return toErrorState(error);
   }

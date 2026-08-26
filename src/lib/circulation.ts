@@ -350,6 +350,23 @@ export const RENEWAL_REQUEST_MESSAGES = {
   cancelled: "That is fine — we have taken your question away.",
 } as const;
 
+/**
+ * A reader saying a book is on its way back.
+ *
+ * Deliberately never says "returned". The book is in a bag by the front door;
+ * the library has not got it yet, and telling a child otherwise would be the
+ * one sentence on this screen that turns out to be untrue when they arrive.
+ */
+export const RETURN_ANNOUNCEMENT_MESSAGES = {
+  invitation: "Finished with this one? Tell the library it is coming back.",
+  announced: "You told the library this one is coming back. Bring it to the library room and a librarian will take it in.",
+  done: "Thank you — bring it along and a librarian will take it in.",
+  alreadyAnnounced: "You have already told the library about this book.",
+  notYours: "We could not find that book on your shelf.",
+  noneToCancel: "There is nothing to change for this book.",
+  keptBack: "That is fine — this one is on your shelf again.",
+} as const;
+
 /** What a child is told about their own request, if they have one open. */
 export type ReaderRenewalState = "none" | "pending" | "approved" | "declined";
 

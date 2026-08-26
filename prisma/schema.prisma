@@ -561,6 +561,7 @@ model AppUser {
   loansIssued       Loan[]                @relation("LoanIssuedBy")
   loansReturned     Loan[]                @relation("LoanReturnedBy")
   loansCancelled    Loan[]                @relation("LoanCancelledBy")
+  loansReturnAnnounced Loan[]             @relation("LoanReturnAnnouncedBy")
   loanEvents        LoanEvent[]
   renewalRequests   RenewalRequest[]      @relation("RenewalRequester")
   renewalDecisions  RenewalRequest[]      @relation("RenewalDecider")
@@ -1103,6 +1104,15 @@ model Loan {
   dueAt         DateTime  @map("due_at") @db.Timestamptz(6)
   returnedAt    DateTime? @map("returned_at") @db.Timestamptz(6)
   returnedById  String?   @map("returned_by_id")
+
+  /// The reader said they are bringing this one back.
+  ///
+  /// A notice, not a return. The book is still out and the copy is still
+  /// BORROWED until a librarian has it in their hands and records its
+  /// condition — a child cannot put a book back on the shelf from their sofa.
+  /// See ADR-062.
+  returnAnnouncedAt   DateTime? @map("return_announced_at") @db.Timestamptz(6)
+  returnAnnouncedById String?   @map("return_announced_by_id")
   cancelledAt   DateTime? @map("cancelled_at") @db.Timestamptz(6)
   cancelledById String?   @map("cancelled_by_id")
   renewalCount  Int       @default(0) @map("renewal_count")
@@ -1113,6 +1123,7 @@ model Loan {
   issuedBy    AppUser? @relation("LoanIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
   returnedBy  AppUser? @relation("LoanReturnedBy", fields: [returnedById], references: [id], onDelete: SetNull)
   cancelledBy AppUser? @relation("LoanCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  returnAnnouncedBy AppUser? @relation("LoanReturnAnnouncedBy", fields: [returnAnnouncedById], references: [id], onDelete: SetNull)
 
   events          LoanEvent[]
   renewalRequests RenewalRequest[]
@@ -1123,6 +1134,8 @@ model Loan {
   @@index([libraryId, status, dueAt])
   @@index([memberUserId, status])
   @@index([copyId])
+  /// Partial in the migration: only announced loans are ever looked up this way.
+  @@index([libraryId, returnAnnouncedAt])
   @@map("loan")
 }
 
