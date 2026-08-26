@@ -199,6 +199,20 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
  * The green rule from the masthead is repeated at the very bottom, closing the
  * page the same way the header opens it.
  */
+/**
+ * The policy links, in the order a person looks for them.
+ *
+ * A module constant rather than inline JSX so `tests/unit/legal.test.ts` can
+ * assert that every href here is a route that exists — a footer link to a page
+ * nobody built is the specific failure this row is supposed to prevent.
+ */
+export const LEGAL_LINKS: readonly { href: string; label: string }[] = [
+  { href: "/privacy", label: "Privacy notice" },
+  { href: "/terms", label: "Terms of use" },
+  { href: "/accessibility", label: "Accessibility" },
+  { href: "/contact", label: "Contact us" },
+] as const;
+
 export async function SiteFooter({ branding }: { branding: Branding }) {
   const whatsapp = whatsAppLink(branding.contactPhone, JOIN_HELP_MESSAGE);
 
@@ -310,6 +324,41 @@ export async function SiteFooter({ branding }: { branding: Branding }) {
               A neighbour replies, not a robot — please allow a little time.
             </li>
           </ul>
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* The legal row                                                       */}
+      {/*                                                                     */}
+      {/* Its own band under a rule, in smaller type, the way every portal a   */}
+      {/* parent already trusts arranges it. These four are not destinations   */}
+      {/* the library wants anybody to visit — they are the ones somebody      */}
+      {/* looks for when they have a reason to, and not finding them is itself */}
+      {/* an answer about how seriously a site takes children's data.          */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="border-t border-hairline">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-6 text-base text-ink-soft sm:px-8 md:flex-row md:items-center md:justify-between">
+          <nav aria-label="Policies">
+            <ul className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              {LEGAL_LINKS.map((item) => (
+                <li key={item.href} className="list-none">
+                  <Link href={item.href} className="text-ink-soft no-underline hover:text-accent-ink">
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          {/*
+            No "all rights reserved". The library owns a shelf of donated books
+            and a piece of software; claiming rights over the page a family
+            reads to find out what is held about their child would set exactly
+            the wrong tone in the smallest type on the site.
+          */}
+          <p className="text-ink-faint">
+            © {new Date().getFullYear()} {branding.libraryName}. Free to join, run by neighbours.
+          </p>
         </div>
       </div>
 

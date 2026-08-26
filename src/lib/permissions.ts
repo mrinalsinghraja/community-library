@@ -547,6 +547,94 @@ export function roleLabel(key: string): string {
 }
 
 /** What that role is for, in one sentence. Same fallback rule. */
+/**
+ * The categories, in the order a person would read them, with the words a
+ * volunteer would use rather than the words the database uses.
+ *
+ * Exists because `/account` used to print raw permission keys — `loan.issue`,
+ * `member.deactivate` — in a monospace column on the page a librarian lands on
+ * after signing in. That is a debugging view, and it was the first thing a
+ * volunteer (or a curious nine-year-old) saw of the software. The keys are
+ * still the truth; this is how the truth is said out loud.
+ */
+export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
+  registrations: "New members",
+  members: "Readers and their families",
+  catalogue: "The books",
+  donations: "Donated books",
+  circulation: "Lending and returning",
+  operations: "Running the room",
+  reports: "Reports",
+  administration: "Settings and staff",
+};
+
+/**
+ * The same permissions, said to the child who holds them.
+ *
+ * The descriptions in `PERMISSIONS` are written for whoever assigns a role, and
+ * that is the wrong voice on a nine-year-old's own page. `loan.view` reads
+ * "See loans — your own, or the desk's", which is accurate for a librarian and
+ * simply untrue for a reader: they have no desk.
+ *
+ * A key with no entry here falls back to the staff sentence rather than
+ * disappearing. A new member permission then looks slightly formal on a child's
+ * screen, which is visible and gets fixed — where a silent omission would leave
+ * a page claiming a reader can do less than they can.
+ */
+const READER_WORDING: Record<string, string> = {
+  "book.view": "Look through every book in the library",
+  "loan.view": "See the books you have at home and when they are due",
+  "loan.request": "Ask a librarian for a book you have found",
+  "loan.request_renewal": "Ask to keep a book you are still reading for longer",
+  "profile.request_change": "Ask for your own details to be put right",
+};
+
+/** One readable sentence for a permission, or null when the key is unknown. */
+export function permissionDescription(key: string): string | null {
+  const found = (PERMISSIONS as Record<string, { description?: string } | undefined>)[key];
+  return found?.description ?? null;
+}
+
+/** Which group a permission belongs in, for grouping on screen. */
+export function permissionCategory(key: string): string | null {
+  const found = (PERMISSIONS as Record<string, { category?: string } | undefined>)[key];
+  return found?.category ?? null;
+}
+
+/**
+ * A person's permissions, grouped and worded for reading.
+ *
+ * Dormant permissions are dropped rather than labelled "not in use yet". A
+ * heading of "What you can do" over a promise the software does not keep is
+ * worse than a shorter, true list — and the place to notice a seeded-but-unused
+ * key is the audit screen, not the page a volunteer lands on.
+ */
+export function describeCapabilities(
+  permissions: readonly string[],
+  voice: "staff" | "reader" = "staff",
+): { category: string; label: string; items: string[] }[] {
+  const groups = new Map<string, string[]>();
+
+  for (const key of [...permissions].sort()) {
+    if (isDormantPermission(key as PermissionKey)) continue;
+    const category = permissionCategory(key);
+    const description =
+      (voice === "reader" ? READER_WORDING[key] : undefined) ?? permissionDescription(key);
+    if (!category || !description) continue;
+    const bucket = groups.get(category) ?? [];
+    bucket.push(description);
+    groups.set(category, bucket);
+  }
+
+  return Object.keys(PERMISSION_CATEGORY_LABELS)
+    .filter((category) => groups.has(category))
+    .map((category) => ({
+      category,
+      label: PERMISSION_CATEGORY_LABELS[category],
+      items: groups.get(category) ?? [],
+    }));
+}
+
 export function roleDescription(key: string): string | null {
   return ROLE_DEFINITIONS.find((role) => role.key === key)?.description ?? null;
 }

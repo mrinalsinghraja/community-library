@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { LEGAL_LINKS } from "@/components/layout/site-shell";
 import { LibraryLogo } from "@/components/library/library-logo";
 import { cn } from "@/lib/cn";
 import type { PermissionKey } from "@/lib/permissions";
@@ -197,6 +198,30 @@ export async function StaffShell({
         <h1 className="garden-rule inline-block text-3xl">{title}</h1>
         <div className="mt-8">{children}</div>
       </main>
+
+      {/*
+        The policy row, quietly, at the foot of the desk as well.
+
+        The desk deliberately has no marketing footer — it is a working tool and
+        a volunteer scrolling to the bottom of a loan list does not need to be
+        told the library is free. But a librarian is also a person whose own
+        details this software holds, and "where is the privacy notice" should
+        have the same answer on every screen of the site rather than only on the
+        ones a child can see.
+      */}
+      <footer className="mt-12 border-t border-hairline">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-5 py-5 text-base text-ink-faint sm:px-8">
+          {LEGAL_LINKS.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="text-ink-soft no-underline hover:text-accent-ink"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </footer>
     </div>
   );
 }

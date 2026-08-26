@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { MemberAvatar } from "@/components/library/avatar";
@@ -9,7 +10,7 @@ import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Callout } from "@/components/ui/states";
 import { formatInTimezone } from "@/lib/dates";
-import { isDormantPermission, roleDescription, roleLabel } from "@/lib/permissions";
+import { describeCapabilities, roleDescription, roleLabel } from "@/lib/permissions";
 import { signOutAction } from "@/server/actions/auth-actions";
 import { getActor } from "@/server/authz";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
@@ -17,7 +18,7 @@ import { getOwnAccountSummary, getOwnMemberCard } from "@/server/services/accoun
 import { getOwnProfile } from "@/server/services/profile-change-service";
 import { ProfileForm } from "@/app/account/profile-form";
 import { ageStage, LIFECYCLE_MESSAGES } from "@/lib/account-lifecycle";
-import { Icon } from "@/components/ui/icon";
+import { Icon, type IconName } from "@/components/ui/icon";
 
 export const metadata: Metadata = { title: "My library" };
 
@@ -57,7 +58,19 @@ export default async function AccountPage() {
   const growingUp =
     memberBirthYear !== null &&
     ageStage(memberBirthYear, settings.ageMax, new Date().getUTCFullYear()) === "lastYear";
-  const permissions = [...actor.permissions].sort();
+  /*
+   * What this person can do, in sentences.
+   *
+   * This used to be `[...actor.permissions].sort()` rendered as a monospace
+   * column of keys — `loan.request_renewal` and friends — on the page every
+   * signed-in person lands on. It read as a debugging view because that is
+   * what it was: this page's original job was proving the RBAC model resolved.
+   * The model still resolves; it no longer has to be shouted at a child.
+   */
+  const capabilities = describeCapabilities(
+    [...actor.permissions],
+    actor.kind === "MEMBER" ? "reader" : "staff",
+  );
 
   /*
    * Staff get the desk's shell, readers get the reader's.
@@ -72,7 +85,7 @@ export default async function AccountPage() {
   const Shell = actor.kind === "STAFF" ? StaffShell : PublicShell;
 
   return (
-    <Shell branding={branding} actor={actor} title="My account">
+    <Shell branding={branding} actor={actor} title="My library">
       <div className="mx-auto w-full max-w-4xl px-5 py-14 sm:px-8">
         <div className="flex items-center gap-4">
           {/*
@@ -92,7 +105,14 @@ export default async function AccountPage() {
             size={72}
           />
           <div>
-            <p className="text-lg font-bold text-accent-ink">Signed in</p>
+            {/*
+              The eyebrow says where you are, not that you are authenticated.
+              "Signed in" is a status the masthead already carries; on the page
+              itself it was the loudest thing above a child's own name.
+            */}
+            <p className="text-lg font-bold text-accent-ink">
+              {actor.kind === "STAFF" ? "Library staff" : "My library"}
+            </p>
             <h1 className="mt-1 text-4xl">Hello, {actor.displayName}! 👋</h1>
           </div>
         </div>
@@ -119,20 +139,62 @@ export default async function AccountPage() {
           </Callout>
         ) : null}
 
-        <div className="mt-10 grid gap-6 md:grid-cols-2">
+        {/* ---------------------------------------------------------------- */}
+        {/* The doors, first                                                  */}
+        {/*                                                                   */}
+        {/* A person who has just signed in is going somewhere. This card used */}
+        {/* to be three buttons at the very bottom of the page, under the      */}
+        {/* password panel and a column of permission keys — so the one thing  */}
+        {/* everybody wanted was the last thing they could reach.              */}
+        {/* ---------------------------------------------------------------- */}
+        <nav aria-label="Where to next" className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {actor.kind === "STAFF" ? (
+            <QuickDoor
+              href="/desk"
+              icon="staff"
+              title="The library desk"
+              body="Issue and take back books, answer asks, and see what is waiting today."
+            />
+          ) : (
+            <QuickDoor
+              href="/my-books"
+              icon="shelf"
+              title="My books"
+              body="What you have at home, when each one is due, and what to read next."
+            />
+          )}
+          <QuickDoor
+            href="/books"
+            icon="search"
+            title="Find a book"
+            body="Every book on our shelves. Search, or sort by what readers love most."
+          />
+          {actor.kind === "MEMBER" ? (
+            <QuickDoor
+              href="/my-card"
+              icon="card"
+              title="My library card"
+              body="Your card, ready to show at the desk or print at home."
+            />
+          ) : (
+            <QuickDoor
+              href="/admin/books"
+              icon="book"
+              title="The book list"
+              body="Add a book, edit its details, or print a fresh label."
+            />
+          )}
+        </nav>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Who the library thinks you are                                    */}
+        {/* ---------------------------------------------------------------- */}
+        <div className="mt-8 grid gap-6 md:grid-cols-2">
           <Card tone="shelf">
             <CardTitle icon={<Icon name="card" />}>Your account</CardTitle>
             <CardBody>
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                <dt className="font-bold text-ink">Kind</dt>
-                <dd>{actor.kind === "STAFF" ? "Library staff" : "Reader"}</dd>
-
-                {/*
-                  The name, not the database key. This is the screen that tells
-                  a volunteer what they are, and SUPER_ADMIN is an identifier
-                  being shouted at somebody rather than an answer.
-                */}
-                <dt className="font-bold text-ink">Roles</dt>
+                <dt className="font-bold text-ink">You are</dt>
                 <dd className="flex flex-wrap gap-2">
                   {actor.roleKeys.length > 0 ? (
                     actor.roleKeys.map((role) => (
@@ -145,8 +207,17 @@ export default async function AccountPage() {
                   )}
                 </dd>
 
-                <dt className="font-bold text-ink">Signing in</dt>
-                <dd>{account.email ?? account.username ?? "Ask a librarian"}</dd>
+                {/*
+                  A reader signs in with the code printed on their card, so that
+                  is what this says. It used to fall through to "Ask a
+                  librarian" for every child, because children hold neither an
+                  email address nor a username — the field was answering a staff
+                  question on a child's page.
+                */}
+                <dt className="font-bold text-ink">You sign in with</dt>
+                <dd>
+                  {profile?.memberCode ?? account.email ?? account.username ?? "Ask a librarian"}
+                </dd>
               </dl>
 
               {actor.roleKeys.length > 0 ? (
@@ -167,32 +238,40 @@ export default async function AccountPage() {
           <Card tone="shelf">
             <CardTitle icon={<Icon name="key" />}>What you can do</CardTitle>
             <CardBody>
-              <p className="mb-3">
-                These come from your roles in the database and are re-read on every request —
-                nothing is cached in your browser.
-              </p>
-              {permissions.length > 0 ? (
-                <ul className="grid gap-1.5 code text-base">
-                  {permissions.map((permission) => (
-                    <li key={permission}>
-                      {permission}
-                      {/*
-                       * A few of these keys are seeded and read by nothing.
-                       * This is the only screen that shows them, and a heading
-                       * of "What you can do" above an inert permission is a
-                       * promise the software does not keep — so it says so.
-                       */}
-                      {isDormantPermission(permission) ? (
-                        <span className="ml-2 font-sans text-sm text-ink-soft">
-                          — not in use yet
-                        </span>
-                      ) : null}
-                    </li>
+              {/*
+                Sentences grouped by what they are about, from the same
+                `PERMISSIONS` table the server checks — so this cannot drift
+                from what the software will actually let this person do. It
+                just says it in English.
+              */}
+              {capabilities.length > 0 ? (
+                <div className="flex flex-col gap-4">
+                  {capabilities.map((group) => (
+                    <div key={group.category}>
+                      <h3 className="text-base font-bold uppercase tracking-[0.1em] text-ink-soft">
+                        {group.label}
+                      </h3>
+                      <ul className="mt-1.5 flex flex-col gap-1">
+                        {group.items.map((item) => (
+                          <li key={item} className="flex items-start gap-2 text-base">
+                            <span aria-hidden="true" className="mt-1 text-accent-ink">
+                              <Icon name="check" />
+                            </span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   ))}
-                </ul>
+                </div>
               ) : (
-                <p>No permissions.</p>
+                <p>Nothing yet. A librarian can give this account what it needs.</p>
               )}
+
+              <p className="mt-4 border-t border-hairline pt-3 text-base text-ink-soft">
+                This comes from your roles and is re-read on every request — nothing about what you
+                are allowed to do is kept in your browser.
+              </p>
             </CardBody>
           </Card>
         </div>
@@ -253,41 +332,7 @@ export default async function AccountPage() {
           </CardBody>
         </Card>
 
-        <div className="mt-10 flex flex-wrap gap-3">
-          {/*
-            The administrator's way back to their own library.
-            
-            This page renders the public shell, so before this existed somebody
-            signing in as the owner landed here with no door to the desk at all
-            and had to know the URL. Guarded by the same permission that guards
-            the page it opens — a librarian and a reader do not hold it.
-          */}
-          {actor.permissions.has("user.manage_staff") ? (
-            <ButtonLink href="/admin/staff" size="lg" icon={<Icon name="staff" />}>
-              Staff
-            </ButtonLink>
-          ) : null}
-          {actor.kind === "MEMBER" ? (
-            <ButtonLink href="/my-books" size="lg" icon={<Icon name="shelf" />}>
-              My books
-            </ButtonLink>
-          ) : null}
-          {/* One primary action per row: Staff takes it when there is one. */}
-          <ButtonLink
-            href="/books"
-            variant={
-              actor.kind === "MEMBER" || actor.permissions.has("user.manage_staff")
-                ? "secondary"
-                : "primary"
-            }
-            size="lg"
-            icon={<Icon name="search" />}
-          >
-            Find a book
-          </ButtonLink>
-        </div>
-
-        <div className="mt-6">
+        <div className="mt-10 border-t border-hairline pt-6">
           <form action={signOutAction}>
             <Button type="submit" variant="quiet" size="lg" icon={<Icon name="signOut" />}>
               Sign out
@@ -300,5 +345,44 @@ export default async function AccountPage() {
         </div>
       </div>
     </Shell>
+  );
+}
+
+/**
+ * One door out of this page.
+ *
+ * A card rather than a button because the label alone is not enough: "My
+ * books" and "Find a book" are both true of half the site, and a volunteer
+ * signing in for the first time needs the sentence under the heading more than
+ * the heading. The whole card is the link, so there is no small target.
+ */
+function QuickDoor({
+  href,
+  icon,
+  title,
+  body,
+}: {
+  href: string;
+  icon: IconName;
+  title: string;
+  body: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="lift group flex h-full flex-col gap-2 rounded-[var(--radius-card)] bg-surface p-5 no-underline shadow-lift"
+    >
+      <span className="flex size-11 items-center justify-center rounded-full bg-accent-wash text-accent-ink">
+        <Icon name={icon} />
+      </span>
+      <span className="font-display text-xl font-bold text-ink group-hover:text-accent-ink">
+        {title}
+      </span>
+      <span className="text-base text-ink-soft">{body}</span>
+      <span className="mt-auto flex items-center gap-1.5 pt-2 text-base font-bold text-primary-deep">
+        Open
+        <Icon name="arrowRight" />
+      </span>
+    </Link>
   );
 }
