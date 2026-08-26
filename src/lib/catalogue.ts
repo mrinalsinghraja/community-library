@@ -57,6 +57,29 @@ export function isAgeGroup(value: unknown): value is AgeGroup {
   return AGE_GROUP_VALUES.includes(value as AgeGroup);
 }
 
+/**
+ * The band as a reader should read it: a recommendation, never a permission.
+ *
+ * **No book in this library is restricted by age, and nothing in the code
+ * enforces one.** The whole collection is for children, the membership range in
+ * `library_settings` is who may join, and the band on a book says who it was
+ * written for — an eight-year-old may borrow a book banded 11–14 and a
+ * thirteen-year-old may borrow a picture book, and neither needs to ask.
+ *
+ * This wording exists because the bare label did not say that. "8–10 years" on
+ * a badge beside "On the shelf" reads like a condition of borrowing, and a
+ * child who reads ahead of their years would be the one to believe it.
+ */
+export function ageGroupSuggestion(value: AgeGroup): string {
+  const found = AGE_GROUPS.find((group) => group.value === value);
+  if (!found) throw new Error(`Unknown age group: ${value}`);
+  return found.value === "ALL_AGES" ? "Good for any age" : `Best for ${found.label}`;
+}
+
+/** Said once, in full, wherever a child might mistake the band for a rule. */
+export const AGE_BAND_NOTE =
+  "This is a suggestion, not a rule. Anyone may borrow any book in our library.";
+
 // ---------------------------------------------------------------------------
 // Condition
 // ---------------------------------------------------------------------------

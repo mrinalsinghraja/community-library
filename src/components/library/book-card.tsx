@@ -3,7 +3,7 @@ import Link from "next/link";
 import { BookCover } from "@/components/library/book-cover";
 import { RatingSummaryLine } from "@/components/ui/star-rating";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { ageGroupLabel, statusDefinition } from "@/lib/catalogue";
+import { ageGroupSuggestion, statusDefinition } from "@/lib/catalogue";
 import type { ReaderBookCard } from "@/server/services/catalogue-service";
 import { Icon } from "@/components/ui/icon";
 
@@ -90,7 +90,7 @@ export function BookCardTile({ book }: { book: ReaderBookCard }) {
             </span>
             <span className="flex items-center gap-1.5">
               <Icon name="age" className="text-ink-faint" />
-              {ageGroupLabel(book.ageGroup)}
+              {ageGroupSuggestion(book.ageGroup)}
             </span>
           </div>
         </div>

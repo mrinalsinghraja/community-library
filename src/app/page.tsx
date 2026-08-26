@@ -351,6 +351,70 @@ export default async function HomePage() {
             <HelperPreview />
           </div>
         ) : null}
+
+        {/*
+          What the AI Librarian does, in three, for the parent reading this
+          before their child ever will.
+
+          Written to answer the three questions a careful parent actually has
+          about an AI aimed at their nine-year-old — what does it do, what does
+          it know about my child, and what stops it going somewhere it should
+          not — rather than to list features. The third card is the one that
+          matters and it is deliberately not softened: the limits are the
+          selling point.
+        */}
+        {bookHelperEnabled() ? (
+          <div className="mt-16">
+            <h3 className="garden-rule inline-block text-2xl sm:text-3xl">
+              What the AI Librarian does
+            </h3>
+
+            <div className="mt-12 grid gap-6 md:grid-cols-3">
+              <Card>
+                <CardTitle icon={<Icon name="quote" />}>Answers, on the book&rsquo;s own page</CardTitle>
+                <CardBody>
+                  Tap a book and ask. What is it about, is it frightening, was any of it real, who
+                  else did the author write for? Answers come back in two or three sentences, in
+                  words that suit the age the book is shelved for — so a six-year-old and a
+                  thirteen-year-old asking the same question get different answers.
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardTitle icon={<Icon name="sparkle" />}>Suggests what to read next</CardTitle>
+                <CardBody>
+                  Once a child has borrowed a few books, their own page can show three suggestions
+                  drawn from what they have actually read and enjoyed, each with a line saying why.
+                  Every one is a book this library physically holds — never a title we would have to
+                  send a family away to buy.
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardTitle icon={<Icon name="key" />}>Knows books, not children</CardTitle>
+                <CardBody>
+                  It is told what a child has read. It is never told who they are — no name, no age,
+                  no flat, no contact detail leaves this library. It talks about books and declines
+                  everything else, says &ldquo;I am not sure&rdquo; rather than inventing an answer,
+                  and never asks a child anything about themselves. Conversations are not kept.
+                </CardBody>
+              </Card>
+            </div>
+
+            {/*
+              The honest caveat, in print, at the end of the section that sells
+              the thing. A parent who finds the limitation themselves later
+              trusts the rest of the page less; a parent who is told it here has
+              been given the measure of how the whole site talks to them.
+            */}
+            <p className="mt-8 max-w-3xl text-base text-ink-soft">
+              It is a computer, and computers get things wrong. The AI Librarian is there to help a
+              child pick a book and satisfy a passing curiosity — not to do their homework, and not
+              to replace the librarian in the room, who is the one who knows both the shelves and
+              your child.
+            </p>
+          </div>
+        ) : null}
       </section>
 
       {/* ---------------------------------------------------------------- */}

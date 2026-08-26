@@ -297,7 +297,7 @@ export interface CatalogueQuery {
   pageSize?: number;
 }
 
-export type CatalogueSort = "newest" | "title" | "author" | "code" | "loved";
+export type CatalogueSort = "newest" | "title" | "author" | "code" | "loved" | "borrowed";
 
 /**
  * Sort is chosen from a fixed list and never interpolated from user input.
@@ -321,6 +321,22 @@ const SORT_SQL: Record<CatalogueSort, Prisma.Sql> = {
    * be whichever book happened to get a single enthusiastic review.
    */
   loved: Prisma.sql`r.rating_average DESC NULLS LAST, r.rating_count DESC, lower(t.title) ASC`,
+  /*
+   * Most borrowed first.
+   *
+   * Counted per work and not per copy, for the same reason the rating is: three
+   * copies of one book are one book as far as "what is popular here" goes, and
+   * a library that bought two copies of a title would otherwise push it up this
+   * list for a reason that has nothing to do with children wanting it.
+   *
+   * Cancelled loans do not count — a loan that was issued by mistake and undone
+   * the same minute is not evidence anybody read anything. Returned and still-out
+   * loans both do.
+   *
+   * `coalesce` rather than `NULLS LAST`: a book nobody has borrowed has a real
+   * answer, and it is zero.
+   */
+  borrowed: Prisma.sql`coalesce(l.loan_count, 0) DESC, lower(t.title) ASC`,
 };
 
 /**
@@ -396,6 +412,7 @@ interface CopyRow {
   /** Null when nobody has rated the work. Postgres returns numeric as string. */
   rating_average: string | number | null;
   rating_count: bigint;
+  loan_count: bigint;
 }
 
 /**
@@ -448,7 +465,8 @@ async function queryCopies(
            d.donated_at    AS donated_at,
            d.display_consent AS display_consent,
            r.rating_average AS rating_average,
-           coalesce(r.rating_count, 0) AS rating_count
+           coalesce(r.rating_count, 0) AS rating_count,
+           coalesce(l.loan_count, 0) AS loan_count
       FROM book_copy c
       JOIN book_title t ON t.id = c.title_id
       JOIN book_category cat ON cat.id = t.category_id
@@ -473,6 +491,28 @@ async function queryCopies(
          WHERE br.title_id = t.id
            AND br.status = 'PUBLISHED'
       ) r ON TRUE
+      /*
+       * How often this work has gone home, counted across every copy of it.
+       *
+       * Joined through book_copy rather than read off the copy in hand: the
+       * question a reader is asking with "most borrowed" is about the book, and
+       * the library's second copy of it should not split the answer in two.
+       *
+       * CANCELLED is excluded. An issue undone by the desk a minute later is a
+       * correction, not a reading, and counting it would let a mistake make a
+       * book look popular.
+       *
+       * No borrower, no dates, no loan ids leave this subquery — only a number.
+       * Which child read what is nobody's business but theirs, and a count that
+       * cannot name anyone is what makes this safe to show on a public shelf.
+       */
+      LEFT JOIN LATERAL (
+        SELECT count(*) AS loan_count
+          FROM loan ln
+          JOIN book_copy lc ON lc.id = ln.copy_id
+         WHERE lc.title_id = t.id
+           AND ln.status <> 'CANCELLED'
+      ) l ON TRUE
      WHERE ${where}
      ORDER BY ${order}
      LIMIT ${pageSize} OFFSET ${(safePage - 1) * pageSize}

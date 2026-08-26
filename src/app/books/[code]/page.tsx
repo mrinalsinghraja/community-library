@@ -12,7 +12,7 @@ import { PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { RatingSummaryLine } from "@/components/ui/star-rating";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { ageGroupLabel, statusDefinition } from "@/lib/catalogue";
+import { AGE_BAND_NOTE, ageGroupSuggestion, statusDefinition } from "@/lib/catalogue";
 import { getActor } from "@/server/authz";
 import { isAppError } from "@/server/lib/errors";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
@@ -153,11 +153,24 @@ export default async function BookDetailPage({
               <StatusBadge tone="neutral">
                 <span aria-hidden="true">{book.categoryIcon ?? "📚"}</span> {book.categoryName}
               </StatusBadge>
-              <StatusBadge tone="neutral">{ageGroupLabel(book.ageGroup)}</StatusBadge>
+              {/*
+                "Best for 8–10 years", not "8–10 years". The bare label sat
+                beside the status badge and read as a condition of borrowing,
+                which it has never been — see AGE_BAND_NOTE below and
+                `ageGroupSuggestion`.
+              */}
+              <StatusBadge tone="neutral">{ageGroupSuggestion(book.ageGroup)}</StatusBadge>
               <StatusBadge tone={status.tone}>
                 <span aria-hidden="true">{status.mark}</span> {status.readerLabel}
               </StatusBadge>
             </div>
+
+            {/*
+              Said in print, not only in a tooltip. A child reading above or
+              below their years is exactly the child who would otherwise put a
+              book back, and a title attribute does not exist on a phone.
+            */}
+            <p className="mt-2 text-base text-ink-faint">{AGE_BAND_NOTE}</p>
 
             {/*
               What to do next, in one sentence, in a panel that changes colour

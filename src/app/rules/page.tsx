@@ -71,6 +71,26 @@ export default async function RulesPage() {
           title: "Books are for everyone",
           body: "Look after the books so the next reader can enjoy them too. Every book on our shelves is waiting for somebody else after you.",
         },
+        /*
+         * Said out loud, as a rule, because the absence of a rule is invisible.
+         * The catalogue prints "Best for 8–10 years" on books, and a child who
+         * reads ahead of or behind their years is exactly the one who would
+         * quietly put a book back rather than ask. There has never been an age
+         * check in the borrowing code and there is not one now — see
+         * `AGE_BAND_NOTE` and `ageGroupSuggestion` in src/lib/catalogue.ts.
+         */
+        {
+          icon: "age",
+          title: "Any book, any reader",
+          /*
+           * No example band in this sentence, deliberately. Every other rule on
+           * this page renders its numbers from library settings, and
+           * `public-pages.test.ts` enforces that by refusing any digit here —
+           * a rule that quotes "8–10" would be a second copy of the catalogue's
+           * vocabulary, kept in prose, going stale the first time a band moves.
+           */
+          body: "Some books say what age they were written for. That is only a suggestion to help you choose. You may borrow any book in the library, whatever your age — read ahead, or go back to an old favourite. Nobody will stop you.",
+        },
         {
           icon: "shelf",
           title: "Browse first, borrow through the librarian",

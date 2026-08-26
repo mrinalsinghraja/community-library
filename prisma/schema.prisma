@@ -363,6 +363,7 @@ model Library {
   codeSequences         CodeSequence[]
   visitSlots            VisitSlot[]
   profileChanges        ProfileChangeRequest[]
+  recommendations       ReaderRecommendation[]
 
   @@index([communityId])
   @@map("library")
@@ -557,6 +558,7 @@ model AppUser {
   auditLogs         AuditLog[]
   bookReviews       BookReview[]          @relation("ReviewAuthor")
   profileChanges    ProfileChangeRequest[] @relation("ProfileChangeSubject")
+  recommendations   ReaderRecommendation?
   profileDecisions  ProfileChangeRequest[] @relation("ProfileChangeDecider")
   reviewDecisions   BookReview[]          @relation("ReviewDecider")
   donationsGiven    Donation[]            @relation("DonationDonor")
@@ -1559,4 +1561,59 @@ model MediaObject {
   @@index([libraryId, purpose])
   @@index([pendingDeletionAt])
   @@map("media_object")
+}
+
+/// What the AI Librarian last suggested to one reader, and what it was looking
+/// at when it decided.
+///
+/// Stored rather than computed on every page load for three reasons. It costs a
+/// network round trip to a model that can take ten seconds; the answer does not
+/// change between Tuesday and Wednesday if the reader has not borrowed anything
+/// in between; and a shared free tier spent on re-deriving an unchanged answer
+/// is a tier that runs out before the evening, when children actually open the
+/// site.
+///
+/// One row per reader — `memberUserId` is unique — because there is only ever a
+/// current suggestion. History is not kept: a list of what a child was nudged
+/// towards last March is a profile of a nine-year-old, and nothing in this
+/// library needs one.
+///
+/// Deliberately holds NO prompt, no model reply and no question text. It holds
+/// the ids of books this library owns and one sentence per book, which is all
+/// the page renders.
+model ReaderRecommendation {
+  id           String @id @default(uuid(7))
+  libraryId    String @map("library_id")
+  /// Unique: the current suggestion, replaced in place, never appended to.
+  memberUserId String @unique @map("member_user_id")
+
+  /// `[{ "titleId": "...", "why": "..." }]`, in the order they are shown.
+  ///
+  /// Title ids and not copy codes: the suggestion is about a work, and the copy
+  /// that happens to be free changes between the model answering and the child
+  /// reading. Every id is checked against the catalogue on the way out, so a
+  /// book that has since been archived quietly disappears from the list rather
+  /// than 404-ing a child who tapped it.
+  picks Json
+
+  /// One line naming what the suggestion was drawn from, e.g. the two books the
+  /// reader finished most recently. Written by the model, shown to the reader,
+  /// and the reason this does not feel like an advert.
+  basis String
+
+  /// Fingerprint of the reading history this was generated from.
+  ///
+  /// Not a security device — a plain digest of the loan ids that fed it. When
+  /// it stops matching, the reader has borrowed or returned something since,
+  /// and the suggestion is stale. Comparing this is cheaper than asking a model
+  /// whether its own answer is still current.
+  historySignature String @map("history_signature")
+
+  generatedAt DateTime @default(now()) @map("generated_at") @db.Timestamptz(6)
+
+  library Library @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  member  AppUser @relation(fields: [memberUserId], references: [id], onDelete: Cascade)
+
+  @@index([libraryId, generatedAt])
+  @@map("reader_recommendation")
 }

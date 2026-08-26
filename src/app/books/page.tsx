@@ -7,7 +7,7 @@ import { Butterfly, LeafSprig } from "@/components/library/library-logo";
 import { PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
-import { AGE_GROUPS, PAGE_SIZES, isAgeGroup } from "@/lib/catalogue";
+import { AGE_BAND_NOTE, AGE_GROUPS, PAGE_SIZES, isAgeGroup } from "@/lib/catalogue";
 import { isAppError } from "@/server/lib/errors";
 import { getBrandingSafe } from "@/server/lib/settings";
 import { browseCatalogue, listCategories } from "@/server/services/catalogue-service";
@@ -53,9 +53,15 @@ export default async function BooksPage({
   const categorySlug = read("shelf");
   const ageRaw = read("age");
   const page = Number.parseInt(read("page"), 10) || 1;
-  // Two orderings, chosen from a fixed pair. Anything else in the query string
-  // falls back to newest rather than reaching the SQL.
-  const sort = read("sort") === "loved" ? "loved" : "newest";
+  /*
+   * Three orderings, chosen from a fixed list. Anything else in the query
+   * string falls back to newest rather than reaching the SQL — the sort is
+   * interpolated into the query as raw SQL at the other end, so what a child
+   * can type must never be what picks it.
+   */
+  const sortRaw = read("sort");
+  const sort: "newest" | "loved" | "borrowed" =
+    sortRaw === "loved" || sortRaw === "borrowed" ? sortRaw : "newest";
 
   const categories = await listCategories().catch(() => []);
   const category = categories.find((entry) => entry.slug === categorySlug);
@@ -153,12 +159,23 @@ export default async function BooksPage({
                 </select>
               </label>
 
+              {/*
+                A filter, never a gate. The catalogue narrows to a band because
+                a child asked it to; nothing here decides what anybody is
+                allowed to borrow, and the note under the select says so in
+                print rather than leaving it to be inferred.
+              */}
               <label className="flex flex-col gap-2">
                 <span className="flex items-center gap-2 text-base font-semibold text-ink">
                   <Icon name="age" className="text-accent-ink" />
-                  Ages
+                  Written for
                 </span>
-                <select name="age" defaultValue={ageRaw} className={FIELD}>
+                <select
+                  name="age"
+                  defaultValue={ageRaw}
+                  aria-describedby="age-note"
+                  className={FIELD}
+                >
                   <option value="">Any age</option>
                   {AGE_GROUPS.map((group) => (
                     <option key={group.value} value={group.value}>
@@ -169,10 +186,16 @@ export default async function BooksPage({
               </label>
 
               {/*
-                Two orderings and no more. "Best loved" is the one the ratings
-                earn their keep with; everything else a child might want is
-                already a filter above. A dropdown of six sorts on a page a
-                seven-year-old uses is six ways to get lost.
+                Three orderings and no more. "Best loved" is what the ratings
+                earn their keep with and "Most borrowed" is what the loan
+                history does; everything else a child might want is already a
+                filter above. A dropdown of six sorts on a page a seven-year-old
+                uses is six ways to get lost.
+
+                The two are genuinely different questions and both get asked. A
+                book can be adored by the four children who finished it and
+                rarely leave the shelf; another goes home every fortnight and
+                nobody has ever written a word about it.
               */}
               <label className="flex flex-col gap-2">
                 <span className="flex items-center gap-2 text-base font-semibold text-ink">
@@ -182,9 +205,14 @@ export default async function BooksPage({
                 <select name="sort" defaultValue={sort} className={FIELD}>
                   <option value="newest">Newest first</option>
                   <option value="loved">Best loved first</option>
+                  <option value="borrowed">Most borrowed first</option>
                 </select>
               </label>
             </div>
+
+            <p id="age-note" className="text-base text-ink-faint">
+              {AGE_BAND_NOTE}
+            </p>
 
             <div className="flex flex-wrap items-center gap-4">
               <button

@@ -148,6 +148,33 @@ export async function groqAnswer(messages: readonly GroqMessage[]): Promise<stri
 }
 
 /**
+ * One JSON object, from a system prompt that asked for one.
+ *
+ * `response_format: json_object` is the reason this is a separate function
+ * rather than an argument to `groqAnswer`. The two want opposite things: the
+ * chat box wants plain sentences and refuses markdown, and this wants a machine
+ * -readable object and nothing else. Asking a model for JSON in words alone
+ * gets JSON wrapped in a fence and a cheerful preamble often enough to matter.
+ *
+ * `temperature` is lower than the chat box's for the same reason. There is no
+ * personality wanted here — the warmth is in the sentences the model writes
+ * inside the object, not in the shape of the object.
+ *
+ * Returns the raw string. Parsing, and deciding what to do with a reply that is
+ * not the shape it was asked for, belongs to the caller that knows the shape.
+ */
+export async function groqJson(messages: readonly GroqMessage[], maxTokens = 700): Promise<string> {
+  return callGroq({
+    model: env.GROQ_MODEL,
+    messages,
+    temperature: 0.3,
+    max_completion_tokens: maxTokens,
+    reasoning_effort: "low",
+    response_format: { type: "json_object" },
+  });
+}
+
+/**
  * How much a typed question looks like an attempt to talk the helper out of
  * being a librarian.
  *

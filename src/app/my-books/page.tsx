@@ -7,6 +7,7 @@ import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DueCountdownPanel } from "@/components/library/due-countdown";
 import { MessageBoard } from "@/components/library/message-board";
 import { ReadersBoard } from "@/components/library/readers-board";
+import { Recommendations } from "@/components/library/recommendations";
 import { VisitTimes } from "@/components/library/visit-times";
 import { ReviewReminder } from "@/components/library/review-reminder";
 import { PublicShell } from "@/components/layout/site-shell";
@@ -21,6 +22,11 @@ import { loanCountdown } from "@/lib/due-countdown";
 import { previousMonthWindow } from "@/lib/readers-board";
 import { currentNotice } from "@/server/services/announcement-service";
 import { readersOfTheMonth } from "@/server/services/readers-board-service";
+import {
+  RECOMMENDATION_MESSAGES,
+  canRecommend,
+  getStoredRecommendations,
+} from "@/server/services/recommendation-service";
 import { listVisitWeek } from "@/server/services/visit-service";
 import { pendingReviewPrompts } from "@/server/services/review-service";
 import { getActor } from "@/server/authz";
@@ -90,6 +96,23 @@ export default async function MyBooksPage({
   // inside it — and why the week travels in the URL: "next week" has to be a
   // page a parent can be sent, not a piece of state that dies on refresh.
   const notice = await currentNotice();
+
+  /*
+   * What the AI Librarian last suggested, read from our own database.
+   *
+   * Deliberately NOT a call to a model. This runs on every render of the page,
+   * and a page that waited on a network round trip to a third party before it
+   * could show a child their own books would be a page that sometimes does not
+   * load. Asking for new suggestions is a button; see `Recommendations`.
+   *
+   * `eligible` is separate from `recommendations` because they answer different
+   * questions: a reader with two loans and no suggestions yet should see the
+   * card with its invitation, and a reader with no loans at all should not see
+   * the card at all.
+   */
+  const eligible = await canRecommend();
+  const recommendations = eligible ? await getStoredRecommendations() : null;
+
   const { week: weekParam } = await searchParams;
   const week = await listVisitWeek(Number.parseInt(weekParam ?? "0", 10) || 0);
 
@@ -248,6 +271,23 @@ export default async function MyBooksPage({
               ))}
             </ul>
           </section>
+        ) : null}
+
+        {/* ---------------------------------------------------------------- */}
+        {/* What to read next                                                 */}
+        {/*                                                                   */}
+        {/* Below the shelf and above the history, which is where the question */}
+        {/* actually arrives: a child reads what they have, then wonders what   */}
+        {/* comes after it. Hidden entirely for a reader with almost no         */}
+        {/* borrowing behind them — a suggestion drawn from one book is a guess */}
+        {/* dressed up as a recommendation, and children notice.                */}
+        {/* ---------------------------------------------------------------- */}
+        {eligible ? (
+          <Recommendations
+            set={recommendations}
+            messages={RECOMMENDATION_MESSAGES}
+            className="mt-14"
+          />
         ) : null}
 
         {/* ---------------------------------------------------------------- */}
