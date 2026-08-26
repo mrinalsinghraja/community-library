@@ -1,5 +1,22 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# iCloud
+#
+# ~/Documents is synced by "Desktop & Documents Folders", and iCloud loses races
+# against directories that churn: it forked `.git/index` fifteen times and
+# `.git/refs/heads/main` twice in a single afternoon, which is enough to break
+# `git fetch` outright ("fatal: bad object refs/heads/main 2"). It has done the
+# same to `.next` and, in the past, to source files — a stray `page 2.tsx` makes
+# tsc fail with duplicate identifiers.
+#
+# iCloud skips anything whose name ends in `.nosync`, so the three churning
+# directories live under that suffix and are symlinked back to their real names.
+# These entries exist because git ignores `.git` by that exact name and would
+# otherwise offer to commit the entire repository into itself.
+/.git.nosync
+/.next.nosync
+/node_modules.nosync
+
 # dependencies
 /node_modules
 /.pnp
@@ -14,7 +31,7 @@
 /coverage
 
 # next.js
-/.next/
+/.next
 /out/
 
 # production
