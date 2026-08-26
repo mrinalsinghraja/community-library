@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { DeskSelection, SelectionCheckbox } from "@/components/desk/selection-toolbar";
+import { bulkDecideProfileChangesAction } from "@/server/actions/profile-actions";
 import { ChangeDecision } from "@/app/desk/changes/decision";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
 import { Icon } from "@/components/ui/icon";
@@ -65,9 +67,47 @@ export default async function DeskChangesPage() {
             When a reader corrects something on their own account page, it appears here first.
           </EmptyState>
         ) : (
-          <DataTable headers={["Reader", "What they are asking for", "Their note", "When", "", ""]}>
+          <DeskSelection
+            ids={changes.filter((change) => change.status === "PENDING").map((change) => change.id)}
+            bulk={
+              actor.permissions.has("profile_change.review")
+                ? {
+                    noun: "change",
+                    nounPlural: "changes",
+                    run: bulkDecideProfileChangesAction,
+                    actions: [
+                      {
+                        value: "APPROVE",
+                        label: "Apply them all",
+                        tone: "primary",
+                        notePrompt: null,
+                        confirm:
+                          "Apply {count} {change|changes} to {a reader's record|readers' records}? Some of these may include a grown-up's email, which is where a forgotten-password link is sent — the rows above say which.",
+                      },
+                      {
+                        value: "REJECT",
+                        label: "Send them all back",
+                        tone: "secondary",
+                        notePrompt: "One short note for every reader you are sending back to:",
+                        confirm:
+                          "Send {count} {change|changes} back? Every one of these readers gets the same note, so write one that makes sense to all of them.",
+                      },
+                    ],
+                  }
+                : undefined
+            }
+          >
+          <DataTable
+            headers={["", "Reader", "What they are asking for", "Their note", "When", "", ""]}
+          >
             {changes.map((change) => (
               <tr key={change.id} className="border-t-2 border-hairline align-top">
+                <td className="px-3.5 py-2.5 align-top">
+                  {change.status === "PENDING" ? (
+                    <SelectionCheckbox id={change.id} label={change.memberName} />
+                  ) : null}
+                </td>
+
                 <td className="px-3.5 py-2.5 align-top">
                   <Link
                     href={`/desk/members/${change.memberUserId}`}
@@ -121,6 +161,7 @@ export default async function DeskChangesPage() {
               </tr>
             ))}
           </DataTable>
+          </DeskSelection>
         )}
       </div>
     </StaffShell>

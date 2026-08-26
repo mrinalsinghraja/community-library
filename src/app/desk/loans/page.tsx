@@ -5,7 +5,8 @@ import { LoanActions } from "@/app/desk/loans/loan-actions";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DueCountdownInline } from "@/components/library/due-countdown";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
-import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-panel";
+import { DeskSelection, SelectionCheckbox } from "@/components/desk/selection-toolbar";
+import { bulkReturnLoansAction } from "@/server/actions/circulation-actions";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
@@ -194,12 +195,36 @@ export default async function DeskLoansPage({
                 : "Books appear here as soon as they are issued."}
           </EmptyState>
         ) : (
-          <ReportExport
+          <DeskSelection
             report="loans"
             canExport={actor.permissions.has("report.view")}
             ids={result.items.map((loan) => loan.loanId)}
             totalAvailable={result.total}
             filter={{ filter, ...(search ? { search } : {}) }}
+            bulk={
+              /*
+               * Only where a returnable book can actually be on screen. On the
+               * "returned" filter every row is already back, so a Take back
+               * button would be an offer to do nothing.
+               */
+              canReturn && filter !== "returned"
+                ? {
+                    noun: "book",
+                    nounPlural: "books",
+                    run: bulkReturnLoansAction,
+                    actions: [
+                      {
+                        value: "RETURN",
+                        label: "Take them all back",
+                        tone: "primary",
+                        notePrompt: null,
+                        confirm:
+                          "Take {count} {book|books} back? Each one goes straight onto the shelf with its condition unchanged. Anything that needs a closer look should go back on its own row instead.",
+                      },
+                    ],
+                  }
+                : undefined
+            }
           >
           <DataTable
             headers={["", "Reader", "Book", "Book ID", "Issued", "Time left", "Status", "Actions"]}
@@ -212,7 +237,7 @@ export default async function DeskLoansPage({
               return (
                 <tr key={loan.loanId} className="border-t-2 border-hairline align-top">
                   <td className="px-3.5 py-2.5 align-top">
-                    <ReportRowCheckbox
+                    <SelectionCheckbox
                       id={loan.loanId}
                       label={`${loan.title} — ${loan.readerName}`}
                     />
@@ -347,7 +372,7 @@ export default async function DeskLoansPage({
               );
             })}
           </DataTable>
-          </ReportExport>
+          </DeskSelection>
         )}
       </div>
 

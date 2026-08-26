@@ -1,5 +1,8 @@
 "use server";
 
+import type { BulkResult } from "@/lib/bulk";
+import { limitBulkSelection, runBulk } from "@/server/lib/bulk";
+
 import { revalidatePath } from "next/cache";
 
 import { REVIEW_MESSAGES, isRating } from "@/lib/reviews";
@@ -7,6 +10,7 @@ import { toFriendlyMessage, ValidationError } from "@/server/lib/errors";
 import {
   decideReview,
   deleteReviewForever,
+  listReviewsForStaff,
   submitReview,
   withdrawOwnReview,
 } from "@/server/services/review-service";
@@ -168,4 +172,37 @@ export async function deleteReviewAction(
   } catch (error) {
     return toErrorState(error);
   }
+}
+
+/**
+ * Deciding several reviews at once.
+ *
+ * Publishing is permanent — ADR-058 — and what gets published is a child's own
+ * words under their first name, on a page anybody can read. So the confirmation
+ * on this one says "permanent" and means it, and the note field on a refusal is
+ * required rather than optional.
+ *
+ * The reviews themselves are shown in full on the moderation screen, never
+ * clipped, which is what makes ticking several of them a reasonable thing to
+ * do: a librarian has already read every word on the page before the button
+ * exists to press.
+ */
+export async function bulkDecideReviewsAction(
+  ids: string[],
+  action: string,
+  note: string,
+): Promise<BulkResult> {
+  const chosen = limitBulkSelection(ids);
+
+  const rows = await listReviewsForStaff();
+  const labels = new Map(rows.map((row) => [row.id, `${row.title} — ${row.authorName}`]));
+
+  const result = await runBulk(
+    chosen,
+    (id) => labels.get(id) ?? "That review",
+    (id) => decideReview(id, action === "APPROVE", note),
+  );
+
+  revalidateReviews();
+  return result;
 }

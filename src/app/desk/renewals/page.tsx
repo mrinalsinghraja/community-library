@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { DecisionActions } from "@/app/desk/renewals/decision-actions";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
-import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-panel";
+import { DeskSelection, SelectionCheckbox } from "@/components/desk/selection-toolbar";
+import { bulkDecideRenewalsAction } from "@/server/actions/circulation-actions";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -76,13 +77,45 @@ export default async function DeskRenewalsPage() {
             When a reader asks to keep a book for longer, it appears here for you to say yes or no.
           </EmptyState>
         ) : (
-          <ReportExport report="renewal-requests"
-            canExport={actor.permissions.has("report.view")} ids={requests.map((r) => r.requestId)}>
+          <DeskSelection
+            report="renewal-requests"
+            canExport={actor.permissions.has("report.view")}
+            ids={requests.map((r) => r.requestId)}
+            bulk={
+              // `loan.renew` is the authority behind both ways a loan is
+              // extended — the desk button and answering an ask. See ADR-030.
+              actor.permissions.has("loan.renew")
+                ? {
+                    noun: "ask",
+                    nounPlural: "asks",
+                    run: bulkDecideRenewalsAction,
+                    actions: [
+                      {
+                        value: "APPROVE",
+                        label: "Let them all keep",
+                        tone: "primary",
+                        notePrompt: null,
+                        confirm:
+                          "Let {count} {reader|readers} keep their book longer? Each loan gets a new due date and the reader is told.",
+                      },
+                      {
+                        value: "DECLINE",
+                        label: "Ask for them back",
+                        tone: "secondary",
+                        notePrompt: "One short note, sent to every reader you are saying no to:",
+                        confirm:
+                          "Ask {count} {reader|readers} to bring their book back? Every one gets the same note, so write one that makes sense to all of them.",
+                      },
+                    ],
+                  }
+                : undefined
+            }
+          >
           <DataTable headers={["", "Reader", "Book", "Book ID", "Due now", "Asked", "Answer"]}>
             {requests.map((request) => (
               <tr key={request.requestId} className="border-t-2 border-hairline align-top">
                 <td className="px-3.5 py-2.5 align-top">
-                  <ReportRowCheckbox
+                  <SelectionCheckbox
                     id={request.requestId}
                     label={`${request.title} — ${request.readerName}`}
                   />
@@ -158,7 +191,7 @@ export default async function DeskRenewalsPage() {
               </tr>
             ))}
           </DataTable>
-          </ReportExport>
+          </DeskSelection>
         )}
       </div>
     </StaffShell>

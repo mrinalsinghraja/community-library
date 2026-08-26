@@ -52,9 +52,9 @@ describe("every listing offers an export", () => {
   it.each(SCREENS)("$report is wired into $path", ({ path, report }) => {
     const source = read(path);
 
-    expect(source).toContain("@/components/reports/export-panel");
+    expect(source).toContain("@/components/desk/selection-toolbar");
     expect(source).toContain(`report="${report}"`);
-    expect(source).toContain("<ReportRowCheckbox");
+    expect(source).toContain("<SelectionCheckbox");
   });
 
   it.each(SCREENS)("$report hides its toolbar on the permission, not a role name", ({ path }) => {

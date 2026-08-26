@@ -1,5 +1,8 @@
 "use server";
 
+import type { BulkResult } from "@/lib/bulk";
+import { limitBulkSelection, runBulk } from "@/server/lib/bulk";
+
 import { revalidatePath } from "next/cache";
 
 import { CHANGE_MESSAGES } from "@/lib/profile-changes";
@@ -7,6 +10,7 @@ import { toFriendlyMessage, ValidationError } from "@/server/lib/errors";
 import { closeMemberAccount, updateMemberDetails } from "@/server/services/account-service";
 import {
   decideProfileChange,
+  listProfileChanges,
   submitProfileChange,
   withdrawOwnProfileChange,
 } from "@/server/services/profile-change-service";
@@ -162,4 +166,36 @@ export async function closeMemberAccountAction(
   } catch (error) {
     return toErrorState(error);
   }
+}
+
+/**
+ * Deciding several detail changes at once.
+ *
+ * Super Admin only, like the single-row decision — `decideProfileChange` checks
+ * `profile_change.review` itself on every row.
+ *
+ * One of the fields a reader can propose is the guardian email, which is the
+ * channel a password-reset link is delivered to. The screen marks those rows,
+ * and this is deliberately not clever about them: a bulk approve approves what
+ * was ticked. Reading the rows is the librarian's job and the screen is built
+ * to make it possible; the software's job is to do exactly what was chosen.
+ */
+export async function bulkDecideProfileChangesAction(
+  ids: string[],
+  action: string,
+  note: string,
+): Promise<BulkResult> {
+  const chosen = limitBulkSelection(ids);
+
+  const rows = await listProfileChanges();
+  const labels = new Map(rows.map((row) => [row.id, row.memberName]));
+
+  const result = await runBulk(
+    chosen,
+    (id) => labels.get(id) ?? "That change",
+    (id) => decideProfileChange(id, action === "APPROVE", note),
+  );
+
+  revalidateProfile();
+  return result;
 }

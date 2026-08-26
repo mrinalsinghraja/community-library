@@ -6,6 +6,8 @@ import { DataTable, StaffShell } from "@/components/layout/staff-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { Callout, EmptyState } from "@/components/ui/states";
 import { Icon } from "@/components/ui/icon";
+import { DeskSelection, SelectionCheckbox } from "@/components/desk/selection-toolbar";
+import { bulkDecideReviewsAction } from "@/server/actions/review-actions";
 import { StarVerdict } from "@/components/ui/star-rating";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatInTimezone } from "@/lib/dates";
@@ -99,9 +101,53 @@ export default async function DeskReviewsPage() {
             and waits for you.
           </EmptyState>
         ) : (
-          <DataTable headers={["Book", "Stars", "What they wrote", "Reader", "When", "", ""]}>
+          <DeskSelection
+            ids={reviews.filter((review) => review.status === "PENDING").map((review) => review.id)}
+            bulk={
+              actor.permissions.has("review.moderate")
+                ? {
+                    noun: "review",
+                    nounPlural: "reviews",
+                    run: bulkDecideReviewsAction,
+                    actions: [
+                      {
+                        value: "APPROVE",
+                        label: "Put them all up",
+                        tone: "primary",
+                        notePrompt: null,
+                        confirm:
+                          "Put {count} {review|reviews} on the shelf? Each one goes up under the reader's own first name and stays up — putting a review back is a Super Admin's job. Every word is on this page above; please make sure you have read them.",
+                      },
+                      {
+                        value: "REJECT",
+                        label: "Send them all back",
+                        tone: "secondary",
+                        notePrompt: "One short note for every reader you are sending back to:",
+                        confirm:
+                          "Send {count} {review|reviews} back? Every one of these readers gets the same note, so write one that makes sense to all of them.",
+                      },
+                    ],
+                  }
+                : undefined
+            }
+          >
+          <DataTable headers={["", "Book", "Stars", "What they wrote", "Reader", "When", "", ""]}>
             {reviews.map((review) => (
               <tr key={review.id} className="border-t-2 border-hairline align-top">
+                <td className="px-3.5 py-2.5 align-top">
+                  {/*
+                    Only a review still waiting can be acted on, so only one has
+                    a tick box. An already-published review with a checkbox
+                    beside it would invite a press that could do nothing.
+                  */}
+                  {review.status === "PENDING" ? (
+                    <SelectionCheckbox
+                      id={review.id}
+                      label={`${review.title} — ${review.authorName}`}
+                    />
+                  ) : null}
+                </td>
+
                 <td className="px-3.5 py-2.5 align-top">
                   {review.code ? (
                     <Link
@@ -170,6 +216,7 @@ export default async function DeskReviewsPage() {
               </tr>
             ))}
           </DataTable>
+          </DeskSelection>
         )}
       </div>
     </StaffShell>

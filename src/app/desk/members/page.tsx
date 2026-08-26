@@ -5,7 +5,7 @@ import { MemberActions } from "@/app/desk/members/member-actions";
 import { PhotoActions } from "@/app/desk/members/photo-actions";
 import { MemberAvatar } from "@/components/library/avatar";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
-import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-panel";
+import { DeskSelection, SelectionCheckbox } from "@/components/desk/selection-toolbar";
 import { EmptyState } from "@/components/ui/states";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { Field, TextInput } from "@/components/ui/field";
@@ -93,7 +93,7 @@ export default async function MembersPage({
             : "Approved registrations appear here as library cards."}
         </EmptyState>
       ) : (
-        <ReportExport
+        <DeskSelection
           report="readers"
             canExport={actor.permissions.has("report.view")}
           ids={members.map((member) => member.id)}
@@ -109,7 +109,7 @@ export default async function MembersPage({
           {members.map((member) => (
             <tr key={member.id} className="border-t-2 border-hairline align-top">
               <td className="px-3.5 py-2.5 align-top">
-                <ReportRowCheckbox id={member.id} label={member.displayName} />
+                <SelectionCheckbox id={member.id} label={member.displayName} />
               </td>
               <td className="px-3.5 py-2.5 align-top">
                 <div className="flex items-center gap-3">
@@ -195,7 +195,7 @@ export default async function MembersPage({
             </tr>
           ))}
         </DataTable>
-        </ReportExport>
+        </DeskSelection>
       )}
     </StaffShell>
   );

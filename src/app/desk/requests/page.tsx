@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { DecisionActions } from "@/app/desk/requests/decision-actions";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
-import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-panel";
+import { DeskSelection, SelectionCheckbox } from "@/components/desk/selection-toolbar";
+import { bulkDecideBorrowRequestsAction } from "@/server/actions/circulation-actions";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -78,13 +79,48 @@ export default async function DeskRequestsPage() {
             gives the book out, exactly as the desk does — then hand it over in the library room.
           </EmptyState>
         ) : (
-          <ReportExport report="borrow-requests"
-            canExport={actor.permissions.has("report.view")} ids={requests.map((r) => r.requestId)}>
+          <DeskSelection
+            report="borrow-requests"
+            canExport={actor.permissions.has("report.view")}
+            ids={requests.map((r) => r.requestId)}
+            bulk={
+              /*
+               * Offered only to somebody who could press the button on a single
+               * row. `loan.issue` is the permission behind approving a request
+               * — the approval runs the desk's own issue transaction.
+               */
+              actor.permissions.has("loan.issue")
+                ? {
+                    noun: "request",
+                    nounPlural: "requests",
+                    run: bulkDecideBorrowRequestsAction,
+                    actions: [
+                      {
+                        value: "APPROVE",
+                        label: "Give them all out",
+                        tone: "primary",
+                        notePrompt: null,
+                        confirm:
+                          "Give out {count} {book|books}? Each one is issued to the reader who asked for it, exactly as the desk does — then hand the books over in the library room.",
+                      },
+                      {
+                        value: "DECLINE",
+                        label: "Not these ones",
+                        tone: "secondary",
+                        notePrompt: "One short note, sent to every reader you are saying no to:",
+                        confirm:
+                          "Say no to {count} {request|requests}? Every one of these readers gets the same note, so write one that makes sense to all of them.",
+                      },
+                    ],
+                  }
+                : undefined
+            }
+          >
           <DataTable headers={["", "Reader", "Book", "Book ID", "Asked", "Answer"]}>
             {requests.map((request) => (
               <tr key={request.requestId} className="border-t-2 border-hairline align-top">
                 <td className="px-3.5 py-2.5 align-top">
-                  <ReportRowCheckbox
+                  <SelectionCheckbox
                     id={request.requestId}
                     label={`${request.title} — ${request.readerName}`}
                   />
@@ -139,7 +175,7 @@ export default async function DeskRequestsPage() {
               </tr>
             ))}
           </DataTable>
-          </ReportExport>
+          </DeskSelection>
         )}
       </div>
     </StaffShell>

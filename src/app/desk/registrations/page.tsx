@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { ReviewActions } from "@/app/desk/registrations/review-actions";
 import { MemberAvatar } from "@/components/library/avatar";
 import { StaffShell } from "@/components/layout/staff-shell";
-import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-panel";
+import { DeskSelection, SelectionCheckbox } from "@/components/desk/selection-toolbar";
+import { bulkDecideRegistrationsAction } from "@/server/actions/registration-actions";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -82,8 +83,44 @@ export default async function RegistrationsPage() {
           When a family fills in the join form, their registration appears here.
         </EmptyState>
       ) : (
-        <ReportExport report="registrations"
-            canExport={actor.permissions.has("report.view")} ids={requests.map((request) => request.id)}>
+        <DeskSelection
+          report="registrations"
+          canExport={actor.permissions.has("report.view")}
+          ids={requests.map((request) => request.id)}
+          bulk={
+            actor.permissions.has("registration.review")
+              ? {
+                  noun: "registration",
+                  nounPlural: "registrations",
+                  run: bulkDecideRegistrationsAction,
+                  actions: [
+                    {
+                      value: "APPROVE",
+                      label: "Welcome them all in",
+                      tone: "primary",
+                      notePrompt: null,
+                      /*
+                       * The longest confirmation on any screen, deliberately.
+                       * This one creates children's accounts and emails their
+                       * grown-ups — it should be read, and it should feel like
+                       * something worth reading.
+                       */
+                      confirm:
+                        "Welcome {count} {child|children} into the library? This makes {an account|accounts} and emails {their grown-up|each grown-up} a joining link. Please make sure you have read every one of these — the software cannot tell whether you have.",
+                    },
+                    {
+                      value: "REJECT",
+                      label: "Not these ones",
+                      tone: "secondary",
+                      notePrompt: "Why, for the library's own records — the family is not sent this:",
+                      confirm:
+                        "Turn down {count} {registration|registrations}? The same note is kept against each one.",
+                    },
+                  ],
+                }
+              : undefined
+          }
+        >
         <div className="flex flex-col gap-5">
           {requests.map((request) => {
             const age = describeAge(request.childBirthYear, thisYear);
@@ -121,7 +158,7 @@ export default async function RegistrationsPage() {
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-3">
-                      <ReportRowCheckbox id={request.id} label={request.childName} />
+                      <SelectionCheckbox id={request.id} label={request.childName} />
                       <h2 className="text-2xl">{request.childName}</h2>
                       <StatusBadge tone={request.status === "PENDING" ? "soon" : "neutral"}>
                         {request.status === "PENDING" ? "New" : "Being reviewed"}
@@ -258,7 +295,7 @@ export default async function RegistrationsPage() {
             );
           })}
         </div>
-        </ReportExport>
+        </DeskSelection>
       )}
     </StaffShell>
   );

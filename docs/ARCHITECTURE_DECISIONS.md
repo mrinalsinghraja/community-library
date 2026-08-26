@@ -2709,3 +2709,80 @@ This adds the forty-seventh permission, `loan.announce_return`, to the MEMBER
 role. Permissions are data: the platform seed upserts the catalogue and the
 library seed reconciles each role against `ROLE_DEFINITIONS`. Neither runs on
 deploy, so both are a manual step in production — see `docs/SETUP.md`.
+
+---
+
+## ADR-063 — A bulk action is the row's own action, repeated
+
+**Status:** Accepted, 26 August 2026.
+
+Every desk queue had a decision button on each row and no way to answer six at
+once. The tick boxes that were already there only fed the export. This makes the
+same selection drive the decisions too.
+
+The temptation with bulk actions is a fast path: one `updateMany`, one query,
+one transaction. That is exactly what this must not be. A bulk approve written
+as its own query is a second copy of every rule — the borrowing limit, the
+copy-availability check, the guardian-verification requirement — free to drift
+away from the button beside each row, and drifting silently.
+
+So `runBulk` in `src/server/lib/bulk.ts` takes the row's existing service
+function and applies it once per id. There is no `updateMany` behind any bulk
+button in the application, and a test reads the source to keep it that way.
+Approving six requests is six identical transactions with six sets of locks and
+six audit rows — verified in production behaviour, not only in intent: taking
+two books back in one press writes two `loan.returned` rows, exactly as two
+presses would.
+
+### Three properties that follow
+
+**Sequential, not parallel.** These operations take row locks and several send
+email. Twenty at once would contend on the same locks, interleave the audit
+trail and hand the mail provider a burst. A desk queue is tens of rows.
+
+**One failure never stops the run.** A book that became unavailable while the
+librarian was reading the screen is refused on its own; the rest still happen.
+Partial success is the normal outcome and is reported as one — with every
+failure named and explained, never as a count. "3 could not be done" is not
+something anybody can act on; "Matilda — that book is already out" is.
+
+**No permission check in the runner.** Each wrapped service calls
+`requirePermission` itself, so a bulk runner cannot become a way around a gate.
+
+### The two defaults point in opposite directions
+
+The export half treats an empty selection as *everything* — downloading an
+unfiltered list is harmless and is usually what was wanted. The bulk half treats
+it as *nothing*, and the buttons are disabled until rows are ticked. "Give out
+every book on this screen" must never be one accidental press. Ticking is the
+deliberate act; the button only carries it out.
+
+That also decouples the two permissions. `report.view` decides who may
+download; the decision permission — `loan.issue`, `loan.renew`,
+`registration.review`, `review.moderate`, `profile_change.review` — decides who
+may act. Neither may stand in for the other.
+
+### Confirmations say the number and the consequence
+
+Every one of them, and a test enforces it. A dialogue that only asks "are you
+sure?" teaches people to press yes without reading, which is worse than no
+confirmation at all. The registrations one is the longest on any screen because
+it is the one that creates children's accounts and emails their guardians, and
+it says out loud that the software cannot tell whether they have been read.
+
+Because the config is built on the server and rendered by a client component,
+`confirm` is a template string rather than a function — functions cannot cross
+that boundary, only server actions can. `{count}` and `{book|books}` are filled
+in by `fillConfirm`.
+
+### What is deliberately not offered in bulk
+
+**A condition on a bulk return.** Omitting it leaves every copy's condition
+unchanged, which is what the single-row form does when the librarian does not
+look. A bulk condition control would be one person asserting that six books they
+have not opened are all Good — the exact thing the per-row "Check it first" step
+exists to prevent.
+
+**Anything that removes the per-row buttons.** Every queue keeps them, and a
+test asserts it on all six screens. This adds a choice; it takes none away, and
+going one at a time while reading each is still how a careful librarian works.

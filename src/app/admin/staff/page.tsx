@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { CreateStaffForm, StaffRowActions } from "@/app/admin/staff/staff-forms";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
-import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-panel";
+import { DeskSelection, SelectionCheckbox } from "@/components/desk/selection-toolbar";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { formatInTimezone } from "@/lib/dates";
 import { ROLE_KEYS } from "@/lib/permissions";
@@ -52,7 +52,7 @@ export default async function StaffPage() {
           {/* The columns the brief asks for, in that order. "Last signed in"
               rides under Status rather than taking a seventh column: on a
               narrow desk screen the table already scrolls. */}
-          <ReportExport report="staff"
+          <DeskSelection report="staff"
             canExport={actor.permissions.has("report.view")} ids={staff.map((person) => person.id)}>
           <DataTable headers={["", "Name", "Email", "Role", "Status", "Added", "Actions"]}>
             {staff.map((person) => {
@@ -63,7 +63,7 @@ export default async function StaffPage() {
               return (
                 <tr key={person.id} className="border-t-2 border-hairline align-top">
                   <td className="px-3.5 py-2.5 align-top">
-                    <ReportRowCheckbox id={person.id} label={person.displayName} />
+                    <SelectionCheckbox id={person.id} label={person.displayName} />
                   </td>
                   <td className="px-3.5 py-2.5 align-top">
                     <p className="font-bold text-ink">{person.displayName}</p>
@@ -109,7 +109,7 @@ export default async function StaffPage() {
               );
             })}
           </DataTable>
-          </ReportExport>
+          </DeskSelection>
 
           <p className="mt-4 text-base text-ink-soft">
             Everyone added here is a Librarian. The library has one Super Admin, and there is no

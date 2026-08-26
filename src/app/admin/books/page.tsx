@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { ArchiveActions } from "@/app/admin/books/archive-actions";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
-import { ReportExport, ReportRowCheckbox } from "@/components/reports/export-panel";
+import { DeskSelection, SelectionCheckbox } from "@/components/desk/selection-toolbar";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
@@ -253,7 +253,7 @@ export default async function AdminBooksPage({
             </EmptyState>
           )
         ) : (
-          <ReportExport
+          <DeskSelection
             report="books"
             canExport={actor.permissions.has("report.view")}
             ids={result.items.map((book) => book.copyId)}
@@ -268,7 +268,7 @@ export default async function AdminBooksPage({
               return (
                 <tr key={book.copyId} className="border-t-2 border-hairline align-top">
                   <td className="px-3.5 py-2.5 align-top">
-                    <ReportRowCheckbox id={book.copyId} label={`${book.copyCode} ${book.title}`} />
+                    <SelectionCheckbox id={book.copyId} label={`${book.copyCode} ${book.title}`} />
                   </td>
                   <td className="px-3.5 py-2.5 align-top code">{book.copyCode}</td>
                   <td className="px-3.5 py-2.5 align-top">
@@ -328,7 +328,7 @@ export default async function AdminBooksPage({
               );
             })}
             </DataTable>
-          </ReportExport>
+          </DeskSelection>
         )}
       </div>
 

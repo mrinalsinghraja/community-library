@@ -8,6 +8,8 @@ import {
   RENEWAL_REQUEST_MESSAGES,
   RETURN_ANNOUNCEMENT_MESSAGES,
 } from "@/lib/circulation";
+import type { BulkResult } from "@/lib/bulk";
+import { limitBulkSelection, runBulk } from "@/server/lib/bulk";
 import { toFriendlyMessage, ValidationError } from "@/server/lib/errors";
 import {
   announceReturn,
@@ -17,6 +19,9 @@ import {
   decideBorrowRequest,
   decideRenewalRequest,
   issueBook,
+  listLoansForStaff,
+  listPendingBorrowRequests,
+  listPendingRenewalRequests,
   renewLoan,
   requestBorrow,
   requestRenewal,
@@ -339,4 +344,87 @@ export async function cancelLoanAction(
   } catch (error) {
     return toErrorState(error);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Doing it to several at once
+// ---------------------------------------------------------------------------
+
+/*
+ * Every one of these is the row's own action, run once per ticked row, through
+ * `runBulk`. No bulk query, no relaxed rule, no second code path — see
+ * src/server/lib/bulk.ts for why that is the whole safety argument.
+ *
+ * The labels come from the same list the screen is showing, so a failure names
+ * a child and a book rather than a uuid. They are fetched here rather than sent
+ * by the browser: a label that came from the client would be a sentence the
+ * server repeats without knowing whether it is true.
+ */
+
+export async function bulkDecideBorrowRequestsAction(
+  ids: string[],
+  action: string,
+  note: string,
+): Promise<BulkResult> {
+  const decision = action === "APPROVE" ? "APPROVE" : "DECLINE";
+  const chosen = limitBulkSelection(ids);
+
+  const rows = await listPendingBorrowRequests();
+  const labels = new Map(rows.map((row) => [row.requestId, `${row.title} for ${row.readerName}`]));
+
+  const result = await runBulk(
+    chosen,
+    (id) => labels.get(id) ?? "That request",
+    (id) => decideBorrowRequest({ requestId: id, decision, reason: note }),
+  );
+
+  revalidateCirculation();
+  return result;
+}
+
+export async function bulkDecideRenewalsAction(
+  ids: string[],
+  action: string,
+  note: string,
+): Promise<BulkResult> {
+  const decision = action === "APPROVE" ? "APPROVE" : "DECLINE";
+  const chosen = limitBulkSelection(ids);
+
+  const rows = await listPendingRenewalRequests();
+  const labels = new Map(rows.map((row) => [row.requestId, `${row.title} for ${row.readerName}`]));
+
+  const result = await runBulk(
+    chosen,
+    (id) => labels.get(id) ?? "That ask",
+    (id) => decideRenewalRequest({ requestId: id, decision, reason: note }),
+  );
+
+  revalidateCirculation();
+  return result;
+}
+
+/**
+ * Taking several books back at once.
+ *
+ * The condition is deliberately not offered here and is therefore left
+ * unchanged on every copy, exactly as omitting it does on the single-row form.
+ * A bulk condition control would be a librarian asserting that six books they
+ * have not looked at are all Good — which is the one thing the per-row
+ * "Check it first" step exists to prevent. Anything that needs a closer look
+ * goes back one at a time.
+ */
+export async function bulkReturnLoansAction(ids: string[]): Promise<BulkResult> {
+  const chosen = limitBulkSelection(ids);
+
+  const page = await listLoansForStaff({ filter: "active" });
+  const labels = new Map(page.items.map((row) => [row.loanId, `${row.title} from ${row.readerName}`]));
+
+  const result = await runBulk(
+    chosen,
+    (id) => labels.get(id) ?? "That book",
+    (id) => returnBook({ loanId: id }),
+  );
+
+  revalidateCirculation();
+  return result;
 }

@@ -8,12 +8,15 @@ import { CURRENT_CONSENT_TYPES, REQUIRED_CONSENT_TYPES, type ConsentTypeKey } fr
 import { APARTMENT_ERROR, APARTMENT_MAX_LENGTH, isValidApartment } from "@/lib/apartment";
 import { isAvatarKey } from "@/lib/avatars";
 import { isPlausibleBirthYear } from "@/lib/birth-year";
+import type { BulkResult } from "@/lib/bulk";
+import { limitBulkSelection, runBulk } from "@/server/lib/bulk";
 import { toFriendlyMessage, ValidationError, isAppError } from "@/server/lib/errors";
 import { getCurrentLibrary } from "@/server/lib/settings";
 import { storeChildPhoto } from "@/server/services/media-service";
 import { recordStaffVerification } from "@/server/services/guardian-verification-service";
 import {
   approveRegistration,
+  listRegistrations,
   markUnderReview,
   rejectRegistration,
   submitRegistration,
@@ -293,4 +296,42 @@ export async function recordStaffVerificationAction(
   } catch (error) {
     return { status: "error", message: toFriendlyMessage(error) };
   }
+}
+
+/**
+ * Approving or refusing several registrations at once.
+ *
+ * The riskiest bulk action in the application, and the one whose confirmation
+ * works hardest: approving creates a child's account and emails their guardian
+ * a single-use activation link. That is not something to do to six families
+ * without having read six submissions — and the design deliberately separates
+ * seeing a registration from deciding it, precisely so that reading happens.
+ *
+ * This does not weaken that. `approveRegistration` runs in full for every row,
+ * including the guardian-verification requirement, the eligibility check and
+ * the audit row. What it saves is the six presses at the end, not the reading
+ * before them.
+ */
+export async function bulkDecideRegistrationsAction(
+  ids: string[],
+  action: string,
+  note: string,
+): Promise<BulkResult> {
+  const chosen = limitBulkSelection(ids);
+
+  const rows = await listRegistrations();
+  const labels = new Map(rows.map((row) => [row.id, row.childName]));
+
+  const result = await runBulk(
+    chosen,
+    (id) => labels.get(id) ?? "That registration",
+    async (id) => {
+      if (action === "APPROVE") await approveRegistration(id);
+      else await rejectRegistration(id, note);
+    },
+  );
+
+  revalidatePath("/desk/registrations");
+  revalidatePath("/desk");
+  return result;
 }
