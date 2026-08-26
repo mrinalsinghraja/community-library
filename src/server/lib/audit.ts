@@ -29,6 +29,34 @@ export const AUDIT_ACTIONS = {
   USER_REACTIVATED: "user.reactivated",
   USER_DEACTIVATED: "user.deactivated",
   /**
+   * A reader aged out of the library.
+   *
+   * Written whether a Super Admin pressed the button or the daily pass did it,
+   * and the metadata says which — `automatic: true` is the only trace that a
+   * scheduled job closed somebody's account, and "why did my child's card stop
+   * working?" has to be answerable a year later.
+   */
+  USER_GROWN_UP: "user.grown_up",
+  /** A family moved away. Always a person's decision; never inferred. */
+  USER_LEFT: "user.left",
+  /** One run of the growing-up pass, with a count. */
+  GROWN_UP_SWEEP: "user.grown_up.sweep",
+
+  /**
+   * A reader asked for their own details to be corrected, and the desk
+   * answered.
+   *
+   * The metadata carries the field NAMES and never the values. Which fields a
+   * family changed is what the log is for; keeping a copy of the guardian's old
+   * and new email address in a table nobody deletes from is not.
+   */
+  PROFILE_CHANGE_REQUESTED: "profile_change.requested",
+  PROFILE_CHANGE_WITHDRAWN: "profile_change.withdrawn",
+  PROFILE_CHANGE_APPROVED: "profile_change.approved",
+  PROFILE_CHANGE_REJECTED: "profile_change.rejected",
+  /** A librarian corrected a reader's details directly, without a request. */
+  MEMBER_DETAILS_UPDATED: "member.details_updated",
+  /**
    * An account was erased. The row outlives the account on purpose: it is the
    * library's only remaining record that the person existed, so it carries the
    * display name, the role and what was checked before the deletion went ahead.

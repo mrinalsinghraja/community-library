@@ -4,6 +4,7 @@ import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { LIFECYCLE_MESSAGES } from "@/lib/account-lifecycle";
 import { GENERIC_LOGIN_FAILURE, signIn, signOut } from "@/server/auth";
 
 /**
@@ -56,6 +57,21 @@ export async function signInAction(
     });
   } catch (error) {
     if (error instanceof AuthError) {
+      /*
+       * A closed account, told plainly.
+       *
+       * SECURITY: `authorize` raises this only AFTER verifying the password, so
+       * reaching this branch means the person typed the right secret word. A
+       * wrong guess still falls through to the generic message below and gives
+       * away nothing about whether the account exists or what state it is in.
+       *
+       * Worth the extra branch: a child whose card was retired on their
+       * birthday would otherwise be told to check their spelling, over and
+       * over, for a password that is perfectly correct.
+       */
+      const code = (error as { code?: string }).code;
+      if (code === "account_grown_up") return { error: LIFECYCLE_MESSAGES.grownUp };
+      if (code === "account_left") return { error: LIFECYCLE_MESSAGES.left };
       return { error: GENERIC_LOGIN_FAILURE };
     }
     throw error;

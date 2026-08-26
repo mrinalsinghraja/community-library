@@ -101,6 +101,13 @@ export type DormantCirculationSetting = (typeof DORMANT_CIRCULATION_SETTINGS)[nu
  */
 export const BORROWING_ALLOWED_STATUSES: readonly UserStatus[] = ["ACTIVE"];
 
+/*
+ * GROWN_UP and LEFT are absent, and get there by the list being an allowlist
+ * rather than by anybody remembering to add them. That is the point of writing
+ * it this way round: a status invented next year cannot borrow until somebody
+ * types it here on purpose. See src/lib/account-lifecycle.ts.
+ */
+
 /**
  * May this account borrow?
  *

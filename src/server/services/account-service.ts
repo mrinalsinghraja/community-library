@@ -2,6 +2,11 @@ import "server-only";
 
 import type { UserStatus } from "@prisma/client";
 
+import {
+  CLOSURE_KINDS,
+  isClosureStatus,
+  type ClosureStatus,
+} from "@/lib/account-lifecycle";
 import { env } from "@/server/env";
 import { prisma } from "@/server/db";
 import { requireActor, requirePermission, type Actor } from "@/server/authz";
@@ -10,6 +15,8 @@ import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
 import { EmailService } from "@/server/lib/email";
 import { NotFoundError, RuleViolationError, ValidationError } from "@/server/lib/errors";
 import { mintToken, revokeTokens, TOKEN_LIFETIME } from "@/server/lib/tokens";
+import { APARTMENT_ERROR, isValidApartment } from "@/lib/apartment";
+import { isPlausibleBirthYear } from "@/lib/birth-year";
 import { recoveryEmailFor } from "@/server/services/password-service";
 
 /**
@@ -24,8 +31,25 @@ import { recoveryEmailFor } from "@/server/services/password-service";
  *      gets a plain message and an invitation to come and talk.
  */
 
-/** Terminal-ish states a member cannot be moved out of by ordinary staff action. */
-const REACTIVATABLE_FROM: readonly UserStatus[] = ["SUSPENDED", "DEACTIVATED"];
+/**
+ * States an account can be brought back from.
+ *
+ * GROWN_UP and LEFT are on the list, and they are on it because a Super Admin
+ * pressing the wrong button on the wrong child must be able to put it back. A
+ * closure that cannot be undone turns a slip into a support conversation with a
+ * family.
+ *
+ * Reopening a genuinely aged-out account is allowed and does not last: the
+ * daily pass closes it again the same night, which is the honest outcome — the
+ * reader really has grown up, and the way to keep them is to change the
+ * library's age range rather than to hold one account open against it.
+ */
+const REACTIVATABLE_FROM: readonly UserStatus[] = [
+  "SUSPENDED",
+  "DEACTIVATED",
+  "GROWN_UP",
+  "LEFT",
+];
 
 async function loadMember(actor: Actor, memberUserId: string) {
   const user = await prisma.appUser.findFirst({
@@ -451,13 +475,21 @@ export async function getOwnMemberCard(): Promise<{
   memberCode: string;
   avatarKey: string | null;
   photoMediaId: string | null;
+  /**
+   * Their own birth year, and only ever their own.
+   *
+   * Here so the reader's page can work out whether they are in their last year
+   * inside the library's range without a second query. It is a fact about
+   * themselves that they already know, and the function still takes no id.
+   */
+  birthYear: number;
 } | null> {
   const actor = await requireActor();
   if (actor.kind !== "MEMBER") return null;
 
   return prisma.memberProfile.findUnique({
     where: { userId: actor.userId },
-    select: { memberCode: true, avatarKey: true, photoMediaId: true },
+    select: { memberCode: true, avatarKey: true, photoMediaId: true, birthYear: true },
   });
 }
 
@@ -945,4 +977,218 @@ export async function deleteMemberAccount(
   });
 
   return { displayName: member.displayName };
+}
+
+// ---------------------------------------------------------------------------
+// Closing an account, without deleting anybody
+// ---------------------------------------------------------------------------
+
+/**
+ * Marks a reader as grown up, or as having left the building.
+ *
+ * **Nothing is deleted, and that is the whole contract.** Loan history, reviews
+ * and donation records stay exactly where they are: they are the library's own
+ * account of what it lent and got back, not the member's alone, and a child
+ * moving to another city is not a reason to lose the record that the library
+ * lent forty books that year. Deleting an account remains a separate, narrower
+ * power (`user.delete`) that refuses anything with history at all.
+ *
+ * Guarded by `member.deactivate`, which the Super Admin holds alone. The two
+ * closures share that key rather than inventing two more: both are the same
+ * act — closing an account — and the status is which fact it records.
+ *
+ * The account stops working immediately, in one transaction plus a session
+ * revoke: no sign-in (the login allowlist is ACTIVE), no borrowing (the
+ * borrowing allowlist is ACTIVE), and any live activation or reset link dies
+ * so the account cannot be let back in through an old email.
+ */
+export async function closeMemberAccount(
+  memberUserId: string,
+  status: ClosureStatus,
+  internalReason: string,
+): Promise<void> {
+  const actor = await requirePermission("member.deactivate");
+  const member = await loadMember(actor, memberUserId);
+
+  if (!isClosureStatus(status)) {
+    throw new ValidationError({ status: "Choose why this account is being closed." });
+  }
+
+  const reason = internalReason.trim();
+  if (reason.length < 3) {
+    throw new ValidationError({ reason: "Please note why, for the library's own records." });
+  }
+
+  // Already in this state is not an error. Two administrators pressing the same
+  // button is not a failure and should not be reported as one.
+  if (member.status === status) return;
+
+  await applyClosure({
+    memberUserId: member.id,
+    libraryId: actor.libraryId,
+    previousStatus: member.status,
+    status,
+    reason,
+    actorUserId: actor.userId,
+    actorLabel: actor.displayName,
+    automatic: false,
+  });
+}
+
+/**
+ * The write itself, shared by the button and by the nightly pass.
+ *
+ * One function so that an account closed by a scheduled job is closed exactly
+ * as one closed by a person: same session revoke, same token revoke, same audit
+ * shape. The `automatic` flag is the only difference, and it is in the log
+ * rather than in the behaviour.
+ */
+export async function applyClosure(params: {
+  memberUserId: string;
+  libraryId: string;
+  previousStatus: UserStatus;
+  status: ClosureStatus;
+  reason: string;
+  actorUserId: string | null;
+  actorLabel: string;
+  automatic: boolean;
+}): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.appUser.update({
+      where: { id: params.memberUserId },
+      data: {
+        status: params.status,
+        statusReason: params.reason,
+        statusChangedAt: new Date(),
+        statusChangedById: params.actorUserId,
+      },
+    });
+
+    await revokeTokens(tx, params.memberUserId, "ACTIVATION");
+    await revokeTokens(tx, params.memberUserId, "PASSWORD_RESET");
+
+    // Any correction the reader had waiting is answered by the closure itself.
+    // Leaving it PENDING would put a request from a closed account in front of
+    // the desk for ever, and approving it would write to a closed record.
+    await tx.profileChangeRequest.updateMany({
+      where: { memberUserId: params.memberUserId, status: "PENDING" },
+      data: { status: "WITHDRAWN", decidedAt: new Date() },
+    });
+
+    await recordAudit(tx, {
+      libraryId: params.libraryId,
+      action:
+        params.status === "GROWN_UP" ? AUDIT_ACTIONS.USER_GROWN_UP : AUDIT_ACTIONS.USER_LEFT,
+      entityType: "app_user",
+      entityId: params.memberUserId,
+      actorUserId: params.actorUserId,
+      actorLabel: params.actorLabel,
+      metadata: {
+        reason: params.reason,
+        previousStatus: params.previousStatus,
+        automatic: params.automatic,
+      },
+    });
+  });
+
+  await revokeAllSessionsForUser(params.memberUserId);
+}
+
+/** The two closures and their wording, for the desk's buttons. */
+export function closureKinds() {
+  return CLOSURE_KINDS;
+}
+
+// ---------------------------------------------------------------------------
+// Correcting a reader's details, at the desk
+// ---------------------------------------------------------------------------
+
+export interface MemberDetailsInput {
+  memberUserId: string;
+  displayName?: string;
+  apartment?: string;
+  /**
+   * Corrected only by staff. A reader cannot propose their own — it decides
+   * whether they are still the right age for the library, so it is the one
+   * field that could be edited to stay past the range.
+   */
+  birthYear?: number;
+}
+
+/**
+ * A librarian correcting what is on a reader's record.
+ *
+ * Guarded by `member.edit`, which Librarian and Super Admin both hold: fixing a
+ * misspelt name is ordinary desk work and should not need the owner. It is a
+ * different act from approving what a *child* proposed, which is Super Admin
+ * only — see `profile_change.review`.
+ *
+ * The audit row names the fields and not the values, for the same reason the
+ * guardian-contact one does: the log is read during incidents and exported, and
+ * it should not become a second copy of a child's details.
+ */
+export async function updateMemberDetails(input: MemberDetailsInput): Promise<{ changed: string[] }> {
+  const actor = await requirePermission("member.edit");
+  const member = await loadMember(actor, input.memberUserId);
+
+  const profile = await prisma.memberProfile.findUnique({
+    where: { userId: member.id },
+    select: { apartment: true, birthYear: true },
+  });
+  if (!profile) throw new NotFoundError(`Member ${member.id} has no profile`);
+
+  const errors: Record<string, string> = {};
+  const changed: string[] = [];
+
+  const displayName = input.displayName?.trim();
+  if (displayName !== undefined && displayName !== member.displayName) {
+    if (displayName.length === 0) errors.displayName = "A reader needs a name.";
+    else if (displayName.length > 80) errors.displayName = "That is too long.";
+    else changed.push("displayName");
+  }
+
+  const apartment = input.apartment?.trim();
+  if (apartment !== undefined && apartment !== profile.apartment) {
+    if (!isValidApartment(apartment)) errors.apartment = APARTMENT_ERROR;
+    else changed.push("apartment");
+  }
+
+  if (input.birthYear !== undefined && input.birthYear !== profile.birthYear) {
+    if (!isPlausibleBirthYear(input.birthYear, new Date().getUTCFullYear())) {
+      errors.birthYear = "That does not look like a year somebody was born in.";
+    } else {
+      changed.push("birthYear");
+    }
+  }
+
+  if (Object.keys(errors).length > 0) throw new ValidationError(errors);
+  if (changed.length === 0) return { changed: [] };
+
+  await prisma.$transaction(async (tx) => {
+    if (changed.includes("displayName")) {
+      await tx.appUser.update({ where: { id: member.id }, data: { displayName } });
+    }
+
+    if (changed.includes("apartment") || changed.includes("birthYear")) {
+      await tx.memberProfile.update({
+        where: { userId: member.id },
+        data: {
+          apartment: changed.includes("apartment") ? apartment : undefined,
+          birthYear: changed.includes("birthYear") ? input.birthYear : undefined,
+        },
+      });
+    }
+
+    await recordAudit(tx, {
+      libraryId: actor.libraryId,
+      action: AUDIT_ACTIONS.MEMBER_DETAILS_UPDATED,
+      entityType: "app_user",
+      entityId: member.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.displayName,
+      metadata: { fieldsChanged: changed },
+    });
+  });
+
+  return { changed };
 }

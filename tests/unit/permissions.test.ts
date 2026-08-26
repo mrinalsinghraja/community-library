@@ -164,6 +164,14 @@ describe("role definitions", () => {
       // would like to keep a book, and changes nothing about the book, the
       // date, or the loan until a librarian answers.
       "loan.request_renewal",
+      // Version 1. The same shape a third time, and the one where it matters
+      // most: this lets a reader propose a correction to their own details —
+      // including the guardian email their password-reset link is delivered
+      // to — and write it NOWHERE except a queue. The values reach the record
+      // only when somebody holding `profile_change.review` approves them, and
+      // that key belongs to the Super Admin alone. A reader holding this
+      // cannot change a single field of their own account.
+      "profile.request_change",
     ]);
   });
 

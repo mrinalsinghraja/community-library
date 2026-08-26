@@ -58,6 +58,10 @@ export const DESK_DESTINATIONS: readonly DeskDestination[] = [
   { href: "/desk/reviews", label: "Reviews", permission: "review.moderate" },
   // When the room is open. `visit.manage` is Librarian and Super Admin both —
   // the person who will be standing behind the desk is the person who says when.
+  // Corrections readers have asked for. `profile_change.review` is Super Admin
+  // only — approving what a child proposed for their guardian's email moves the
+  // account's recovery path, which is not the desk's call.
+  { href: "/desk/changes", label: "Detail changes", permission: "profile_change.review" },
   { href: "/desk/visits", label: "Visiting times", permission: "visit.manage" },
   // What the library says to every family at once. Super Admin alone.
   { href: "/desk/board", label: "Notice board", permission: "announcement.manage" },

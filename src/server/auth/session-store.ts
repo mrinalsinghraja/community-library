@@ -2,6 +2,7 @@ import "server-only";
 
 import type { UserKind, UserStatus } from "@prisma/client";
 
+import { maySignIn } from "@/lib/account-lifecycle";
 import { prisma } from "@/server/db";
 import { generateToken, hashToken, hashIdentifier } from "@/server/lib/crypto";
 
@@ -126,7 +127,7 @@ export async function resolveSession(rawToken: string): Promise<ResolvedSessionU
   }
 
   // A suspended, deactivated or not-yet-activated account has no valid session.
-  if (session.user.status !== "ACTIVE") {
+  if (!maySignIn(session.user.status)) {
     await prisma.session.deleteMany({ where: { userId: session.user.id } });
     return null;
   }

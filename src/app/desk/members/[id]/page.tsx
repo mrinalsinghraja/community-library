@@ -2,12 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CloseAccount } from "@/app/desk/members/[id]/close-account";
 import { DeleteAccount } from "@/app/desk/members/[id]/delete-account";
+import { EditDetails } from "@/app/desk/members/[id]/edit-details";
 import { ActivationFallback } from "@/components/library/activation-fallback";
 import { MemberAvatar } from "@/components/library/avatar";
 import { StaffShell } from "@/components/layout/staff-shell";
 import { Card, CardTitle } from "@/components/ui/card";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
+import { isClosed } from "@/lib/account-lifecycle";
 import { Icon } from "@/components/ui/icon";
 import { describeAge } from "@/lib/birth-year";
 import { formatInTimezone } from "@/lib/dates";
@@ -41,6 +44,8 @@ const STATUS_TONE: Record<string, StatusTone> = {
   ACTIVE: "available",
   INVITED: "soon",
   SUSPENDED: "late",
+  GROWN_UP: "neutral",
+  LEFT: "neutral",
   DEACTIVATED: "out",
   ARCHIVED: "out",
 };
@@ -49,6 +54,10 @@ const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Active",
   INVITED: "Waiting to set up",
   SUSPENDED: "Paused",
+  // Neutral words, not "expired" or "removed". Both are ordinary things that
+  // happen to a growing child and a moving family, and the record is kept.
+  GROWN_UP: "Grown up",
+  LEFT: "Left",
   DEACTIVATED: "Closed",
   ARCHIVED: "Archived",
 };
@@ -117,12 +126,21 @@ export default async function MemberDetailPage({
    * `registration.review` is Super-Admin only: the person who admits a reader
    * is the person who may hand them the way in. See ADR-043.
    */
+  /*
+   * Written as "the account still works", not as a list of statuses to exclude.
+   *
+   * The old form named three statuses to refuse, so GROWN_UP and LEFT would
+   * have been admitted by default and the desk would have been offered an
+   * activation link for an account that can no longer be signed in to.
+   */
   const showActivationFallback =
     member.mustSetPassword &&
+    !isClosed(member.status) &&
     member.status !== "SUSPENDED" &&
-    member.status !== "DEACTIVATED" &&
-    member.status !== "ARCHIVED" &&
     actor.permissions.has("registration.review");
+
+  const canEditDetails = actor.permissions.has("member.edit");
+  const canClose = actor.permissions.has("member.deactivate");
 
   return (
     <StaffShell branding={branding} actor={actor} title={member.displayName}>
@@ -281,6 +299,38 @@ export default async function MemberDetailPage({
                 ))}
               </ul>
             )}
+          </Card>
+        ) : null}
+
+        {canEditDetails ? (
+          <Card>
+            <CardTitle icon={<Icon name="reader" />}>Their details</CardTitle>
+            <div className="mt-4">
+              <EditDetails
+                memberId={member.id}
+                displayName={member.displayName}
+                apartment={member.apartment ?? ""}
+                birthYear={member.birthYear}
+              />
+            </div>
+          </Card>
+        ) : null}
+
+        {/*
+          Closing an account, kept well away from deleting one and worded so the
+          difference is unmissable. They sit next to each other on this page and
+          they are the two most consequential controls on it.
+        */}
+        {canClose ? (
+          <Card>
+            <CardTitle icon={<Icon name="archive" />}>Close this account</CardTitle>
+            <div className="mt-4">
+              <CloseAccount
+                memberId={member.id}
+                displayName={member.displayName}
+                currentStatus={member.status}
+              />
+            </div>
           </Card>
         ) : null}
 

@@ -37,6 +37,20 @@ export const PERMISSIONS = {
     description:
       "Change guardian contact details, including the email that receives recovery links",
   },
+  /**
+   * Decide a correction a reader has asked for.
+   *
+   * Super Admin only, by the owner's decision, and the separation from
+   * `member.edit` is the point rather than an accident. A librarian correcting
+   * a misspelt name is ordinary desk work. Approving a change a *child*
+   * proposed is a different act: one of the fields on that form is the address
+   * their password-reset link goes to, so saying yes to it moves the account's
+   * recovery path to a different inbox.
+   */
+  "profile_change.review": {
+    category: "members",
+    description: "Approve or refuse a correction a reader has asked for",
+  },
   "member.manage_photo": {
     category: "members",
     description: "Replace or remove a child's photograph",
@@ -122,6 +136,17 @@ export const PERMISSIONS = {
   "loan.request": {
     category: "circulation",
     description: "Ask a librarian to borrow a book you have found in the catalogue",
+  },
+  /**
+   * Ask for your own details to be corrected.
+   *
+   * Named like `loan.request` and for the same reason: asking is not doing.
+   * Holding this changes no record — it lets a reader put a proposal in a queue
+   * that somebody else decides. See src/lib/profile-changes.ts.
+   */
+  "profile.request_change": {
+    category: "members",
+    description: "Ask for your own details to be corrected",
   },
   "loan.request_renewal": {
     category: "circulation",
@@ -328,6 +353,9 @@ const LIBRARIAN_PERMISSIONS = [
   // breaking a time families have already read is the Super Admin's, the same
   // way un-publishing anything else here is.
   "visit.manage",
+  // `profile_change.review` is deliberately absent — see the key's own note.
+  // Approving what a child proposed for their own guardian's email is the
+  // owner's call, not the desk's.
   // `announcement.manage` is deliberately absent — see the key's own note. The
   // notice board reaches every family at once and belongs to the owner.
 ] as const satisfies readonly PermissionKey[];
@@ -367,6 +395,9 @@ const MEMBER_PERMISSIONS = [
   // the date or the record until a librarian decides — which is the whole
   // reason it is a request and not a renewal.
   "loan.request_renewal",
+  // Asking for a correction changes nothing until somebody approves it, which
+  // is exactly the shape of the two keys above.
+  "profile.request_change",
 ] as const satisfies readonly PermissionKey[];
 
 export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [

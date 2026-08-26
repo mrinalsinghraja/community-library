@@ -14,6 +14,9 @@ import { signOutAction } from "@/server/actions/auth-actions";
 import { getActor } from "@/server/authz";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { getOwnAccountSummary, getOwnMemberCard } from "@/server/services/account-service";
+import { getOwnProfile } from "@/server/services/profile-change-service";
+import { ProfileForm } from "@/app/account/profile-form";
+import { ageStage, LIFECYCLE_MESSAGES } from "@/lib/account-lifecycle";
 import { Icon } from "@/components/ui/icon";
 
 export const metadata: Metadata = { title: "My library" };
@@ -37,9 +40,23 @@ export default async function AccountPage() {
   // Ownership from the session, never from the request. There is no id in the
   // URL to tamper with here, and that is the point.
   const profile = await getOwnMemberCard();
+  const memberBirthYear = profile?.birthYear ?? null;
   const account = await getOwnAccountSummary();
+  // Null for staff, who hold no library card and have nothing to correct here.
+  const ownProfile = await getOwnProfile();
   const { settings } = await getCurrentLibrary();
   const timezone = settings.timezone;
+
+  /*
+   * Whether this reader is in their last year inside the library's range.
+   *
+   * Computed here rather than stored, because it changes on 1 January without
+   * anybody touching the row — and a stored flag would need a job to keep it
+   * true, which is a job that can fail silently.
+   */
+  const growingUp =
+    memberBirthYear !== null &&
+    ageStage(memberBirthYear, settings.ageMax, new Date().getUTCFullYear()) === "lastYear";
   const permissions = [...actor.permissions].sort();
 
   /*
@@ -79,6 +96,22 @@ export default async function AccountPage() {
             <h1 className="mt-1 text-4xl">Hello, {actor.displayName}! 👋</h1>
           </div>
         </div>
+
+        {/*
+          The quiet note in the corner, during the year a reader might pass the
+          top of the library's range.
+
+          Deliberately not a warning and deliberately not an email. Nothing
+          changes on the day it appears, the reader has done nothing wrong, and
+          the next step is a conversation with a person rather than an action in
+          software. It shows for a year before anything is closed — see
+          `ageStage` for why the two edges are drawn where they are.
+        */}
+        {growingUp ? (
+          <Callout tone="info" title={LIFECYCLE_MESSAGES.growingUpTitle} className="mt-6">
+            {LIFECYCLE_MESSAGES.growingUp(settings.ageMin, settings.ageMax)}
+          </Callout>
+        ) : null}
 
         {actor.mustSetPassword ? (
           <Callout tone="warn" title="Your account still needs a secret word" className="mt-6">
@@ -171,6 +204,8 @@ export default async function AccountPage() {
           discoverable only by signing out and finding the link on /login, which
           is a strange thing to ask of somebody who is already signed in.
         */}
+        {ownProfile ? <ProfileForm profile={ownProfile} /> : null}
+
         <Card tone="shelf" className="mt-6">
           <CardTitle icon={<Icon name="key" />}>Your secret word</CardTitle>
           <CardBody>

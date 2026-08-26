@@ -2,6 +2,7 @@ import "server-only";
 
 import type { AuthTokenType, Prisma } from "@prisma/client";
 
+import { mayUseAuthToken } from "@/lib/account-lifecycle";
 import { prisma } from "@/server/db";
 import { generateToken, hashIdentifier, hashToken } from "@/server/lib/crypto";
 
@@ -125,9 +126,15 @@ export async function inspectToken(
   if (token.consumedAt) return { ok: false, reason: "ALREADY_USED" };
   if (token.expiresAt <= new Date()) return { ok: false, reason: "EXPIRED" };
 
-  // A suspended or deactivated account cannot be activated or reset into.
-  if (token.user.status === "SUSPENDED" || token.user.status === "DEACTIVATED" ||
-      token.user.status === "ARCHIVED") {
+  /*
+   * An allowlist, not a list of statuses to refuse.
+   *
+   * This used to name SUSPENDED, DEACTIVATED and ARCHIVED and let everything
+   * else through, which meant a status added later was admitted by default —
+   * and GROWN_UP and LEFT were added later. A closed account could have reset
+   * its way back in, and nothing here would have looked wrong.
+   */
+  if (!mayUseAuthToken(token.user.status)) {
     return { ok: false, reason: "USER_UNAVAILABLE" };
   }
 

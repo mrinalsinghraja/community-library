@@ -34,8 +34,25 @@ enum UserStatus {
   INVITED
   ACTIVE
   SUSPENDED
+  /// Past the age this library is for. Reached automatically by the daily pass
+  /// once the birth year is past the range on every reading of it, or set by a
+  /// Super Admin. Keeps every row; the account simply stops working.
+  GROWN_UP
+  /// The family has moved away. Set by a Super Admin only — the software has no
+  /// way to know, and guessing from an unreturned book would be an accusation.
+  LEFT
   DEACTIVATED
   ARCHIVED
+}
+
+/// A reader has asked for their own details to be corrected, and nothing has
+/// changed yet. See src/lib/profile-changes.ts for why the asking and the
+/// applying are two separate acts.
+enum ProfileChangeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
 }
 
 enum RegistrationStatus {
@@ -345,6 +362,7 @@ model Library {
   mediaObjects          MediaObject[]
   codeSequences         CodeSequence[]
   visitSlots            VisitSlot[]
+  profileChanges        ProfileChangeRequest[]
 
   @@index([communityId])
   @@map("library")
@@ -538,6 +556,8 @@ model AppUser {
   borrowDecisions   BorrowRequest[]       @relation("BorrowRequestDecider")
   auditLogs         AuditLog[]
   bookReviews       BookReview[]          @relation("ReviewAuthor")
+  profileChanges    ProfileChangeRequest[] @relation("ProfileChangeSubject")
+  profileDecisions  ProfileChangeRequest[] @relation("ProfileChangeDecider")
   reviewDecisions   BookReview[]          @relation("ReviewDecider")
   donationsGiven    Donation[]            @relation("DonationDonor")
   donationsRecorded Donation[]            @relation("DonationRecorder")
@@ -1376,6 +1396,49 @@ model Announcement {
 
   @@index([libraryId, audience, publishedAt])
   @@map("announcement")
+}
+
+/// One reader's request to have their own details corrected.
+///
+/// The proposal is held here and NOWHERE else until somebody approves it. The
+/// account keeps its current values throughout, which is what makes it safe to
+/// let a child edit the address their password-reset link goes to: they are
+/// asking, not writing.
+///
+/// Rejected and withdrawn rows are kept. "Who asked to change what, and what
+/// did the library say" is the question this table exists to answer, and it
+/// stops being answerable the moment the failures are deleted.
+model ProfileChangeRequest {
+  id           String              @id @default(uuid(7))
+  libraryId    String              @map("library_id")
+  memberUserId String              @map("member_user_id")
+  status       ProfileChangeStatus @default(PENDING)
+
+  /// `{ field: newValue }`, restricted to CHANGEABLE_FIELDS. Never the old
+  /// values — those are on the record, which is where they stay until this is
+  /// approved.
+  proposed Json
+
+  /// The reader's own words about why. Optional, and often the useful part:
+  /// "we moved to B-204" tells the desk more than the diff does.
+  note         String?
+  /// What the desk said back. Required on a rejection — a child told "no" and
+  /// nothing else has been refused by a machine.
+  decisionNote String? @map("decision_note")
+
+  decidedAt   DateTime? @map("decided_at") @db.Timestamptz(6)
+  decidedById String?   @map("decided_by_id")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  library Library @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  member  AppUser @relation("ProfileChangeSubject", fields: [memberUserId], references: [id], onDelete: Cascade)
+  decider AppUser? @relation("ProfileChangeDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([libraryId, status, createdAt])
+  @@index([memberUserId, status])
+  @@map("profile_change_request")
 }
 
 /// One session of the library room being open.

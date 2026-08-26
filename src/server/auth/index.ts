@@ -1,9 +1,10 @@
 import "server-only";
 
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 
 import { env, isProduction } from "@/server/env";
+import { maySignIn } from "@/lib/account-lifecycle";
 import { prisma } from "@/server/db";
 import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
 import { fakeVerifyDelay, verifyPassword } from "@/server/lib/password";
@@ -51,6 +52,39 @@ function readSessionHandle(token: unknown): string | undefined {
  * a particular member code belongs to a real child.
  */
 export const GENERIC_LOGIN_FAILURE = "That didn't work. Check the spelling and try again.";
+
+/**
+ * Why a sign-in was refused, when saying so costs nothing.
+ *
+ * SECURITY: this is set ONLY after the password has been verified. A wrong
+ * guess is still answered with `GENERIC_LOGIN_FAILURE` and reveals nothing —
+ * not whether the account exists, not whether it is closed. The only person who
+ * ever sees one of these already proved they know the secret word, so telling
+ * them "this card was retired" gives away nothing they could not learn by
+ * asking the librarian, and withholding it leaves a child staring at "check the
+ * spelling" for a password that is perfectly correct.
+ */
+export type LoginRefusal = "GROWN_UP" | "LEFT";
+
+export function loginRefusalFor(status: string): LoginRefusal | null {
+  return status === "GROWN_UP" || status === "LEFT" ? status : null;
+}
+
+/**
+ * Carries the refusal out of `authorize`.
+ *
+ * A plain `throw new Error("…")` does NOT work here: Auth.js deliberately
+ * discards the message of anything thrown inside a credentials provider and
+ * reports a bare `CredentialsSignin`, precisely so that a provider cannot leak
+ * why a sign-in failed. `code` is the one field it preserves, and subclassing is
+ * the supported way to set it.
+ */
+export class AccountClosedError extends CredentialsSignin {
+  constructor(readonly refusal: LoginRefusal) {
+    super();
+    this.code = refusal === "LEFT" ? "account_left" : "account_grown_up";
+  }
+}
 
 function normaliseIdentifier(raw: unknown): string {
   return typeof raw === "string" ? raw.trim().toLowerCase() : "";
@@ -172,7 +206,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         // Correct password, but the account is not usable. Deliberately the same
         // outcome as a wrong password from the caller's point of view.
-        if (user.status !== "ACTIVE") {
+        if (!maySignIn(user.status)) {
           await recordLoginAttempt({ identifier, ip, succeeded: false, libraryId: user.libraryId });
           await recordAudit(prisma, {
             libraryId: user.libraryId,
@@ -184,6 +218,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             metadata: { reason: "status_not_active", status: user.status },
             ipHash: null,
           });
+
+          /*
+           * The password was right and the account is closed.
+           *
+           * Encoded in the thrown message so the sign-in action can say
+           * something true instead of "check the spelling". Reached only past
+           * the password check above, so a guess learns nothing — see
+           * LoginRefusal.
+           */
+          const refusal = loginRefusalFor(user.status);
+          if (refusal) throw new AccountClosedError(refusal);
+
           return null;
         }
 

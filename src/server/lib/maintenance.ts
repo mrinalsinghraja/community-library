@@ -1,5 +1,6 @@
 import "server-only";
 
+import { retireGrownUpReaders, type GrowingUpResult } from "@/server/lib/growing-up";
 import { prisma } from "@/server/db";
 import { pruneExpiredSessions } from "@/server/auth/session-store";
 import { pruneOldLoginAttempts } from "@/server/lib/rate-limit";
@@ -28,6 +29,8 @@ import {
  */
 
 export interface MaintenanceResult {
+  /** Readers retired because they have grown out of the library's age range. */
+  grownUpRetired: number;
   expiredSessionsRemoved: number;
   spentTokensRemoved: number;
   oldLoginAttemptsRemoved: number;
@@ -97,6 +100,23 @@ export async function runDailyMaintenance(): Promise<MaintenanceResult> {
   const media = await sweepPendingMedia();
 
   /*
+   * Retiring readers who have grown out of the library.
+   *
+   * Not fatal, and after the housekeeping for the same reason the reminders
+   * are: this one closes people's accounts, and if it throws halfway the run
+   * above has already happened and is still worth reporting. A day when this
+   * does not run leaves a reader with a card slightly longer than the range
+   * allows, which is the harmless direction for it to fail in.
+   */
+  let grownUp: GrowingUpResult;
+  try {
+    grownUp = await retireGrownUpReaders();
+  } catch (error) {
+    console.error("[maintenance] growing-up pass failed:", error);
+    grownUp = { retired: 0, cutoffBirthYear: 0 };
+  }
+
+  /*
    * Reminders last, and never fatal.
    *
    * If this throws — a mail provider misconfigured, a template failing to
@@ -113,6 +133,7 @@ export async function runDailyMaintenance(): Promise<MaintenanceResult> {
   }
 
   return {
+    grownUpRetired: grownUp.retired,
     expiredSessionsRemoved,
     spentTokensRemoved,
     oldLoginAttemptsRemoved,
