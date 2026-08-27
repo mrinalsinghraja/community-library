@@ -74,6 +74,7 @@ export default async function MyCardPage() {
                 ? formatInTimezone(facts.joinedAt, settings.timezone, "MMM yyyy")
                 : null,
               avatarKey: facts.avatarKey,
+              logoUrl: facts.logoUrl,
               libraryName: facts.libraryName,
               communityName: facts.communityName,
               rules: facts.rules,
@@ -85,12 +86,17 @@ export default async function MyCardPage() {
             to a family group. The card on screen has their child's face on it
             and the downloads do not, and a parent who notices deserves to know
             it was a decision rather than a bug.
+
+            It says "a coloured initial" because that is what the saved files
+            actually carry. It used to say "picture-mark", which was the avatar
+            the reader chose — true of the screen, never true of the download,
+            and the kind of small inaccuracy that costs a parent their trust in
+            everything else the page says about privacy.
           */}
           <p className="mt-4 flex items-start gap-2 text-base text-ink-soft">
             <Icon name="hide" className="mt-1 shrink-0" />
-            The saved copies show the reader&rsquo;s chosen picture-mark rather than their
-            photograph, so a card that gets forwarded carries less about your child than the one on
-            this screen.
+            The saved copies carry a coloured initial rather than your child&rsquo;s photograph, so
+            a card that gets forwarded says less about them than the one on this screen.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">

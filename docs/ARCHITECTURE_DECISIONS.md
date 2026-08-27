@@ -3003,3 +3003,61 @@ fine for a late book" twice, and `tests/unit/consequences-policy.test.ts` caught
 both. The library publishes no policy about what happens when a book goes wrong
 — not a threat and not an immunity — and a page written to reassure parents is
 precisely where that rule is easiest to break.
+
+## ADR-067 — A card that leaves with its mark on it
+
+**Status:** accepted · **Date:** 2026-08-27
+
+The reader's card was three drawings of the same object — elements in the
+browser, a canvas for the picture download, a `pdf-lib` page for the PDF — and
+only the *words* were shared between them. The numbers were not, and neither
+was the logo: both downloads left the mark off entirely, so the file a family
+kept was a plainer relative of the card they had been shown.
+
+### The decision
+
+**One set of coordinates.** `src/lib/card-art.ts` holds the card's geometry,
+palette and type sizes; the canvas and the PDF both draw from it. Points,
+origin top-left, y downwards — the canvas convention, because it is also how
+anybody reading the layout thinks. PDF space runs the other way, so the PDF
+flips once, at the edge, in `flip()`. `tests/unit/card-art.test.ts` checks the
+class of mistake this invites: a line laid out past the trim, or a line of the
+plinth drawn up on the dark field.
+
+The screen keeps its own layout and takes only the palette. It has to be fluid
+from a phone to a desktop, and a fixed 380-point grid is exactly what a
+responsive card must not be. What it may not do is drift in content or colour,
+and both are pinned.
+
+**The mark travels with the code.** `src/server/reports/packaged-mark.ts` is the
+deployment's mark as bytes. A server cannot reach for `/brand/library-mark.png`:
+that file is served to browsers by the static handler and is not part of a
+function's own filesystem, and fetching it back over HTTP would make one card
+depend on the site being up — a strange thing for a file a family already asked
+to keep. An uploaded logo comes from the media store through
+`getAuthorizedMedia` like every other byte in this system, rather than around
+it; a WebP falls back to the packaged mark, because `pdf-lib` embeds PNG and
+JPEG and a quiet downgrade beats a failed download.
+
+**The plinth is the clip.** The engraved rings are swept from points outside the
+card and the pale plinth is painted over the bottom of them. Neither renderer
+has to clip, and both do it identically.
+
+### What the downloads still do not carry
+
+A child's photograph, for the reason they never did: a file gets forwarded, and
+a picture carrying a face plus a name plus a flat number is a different object
+from a card in a pocket. The privacy test that used to say "no images at all"
+now says something sharper — `embedPng`, `embedJpg` and `drawImage` are the only
+three calls that can put pixels on a card, each appears exactly once, and each
+one draws the library's mark.
+
+They also do not carry the avatar's emoji. The standard PDF fonts cannot draw
+one, and a picture that showed the fox while the PDF showed a letter would be
+two different cards. Both draw the coloured disc and the initial.
+
+**And the page now says so.** The sentence under the downloads used to promise
+"the reader's chosen picture-mark", which was true of the screen and never true
+of the file. It says "a coloured initial" now. A small inaccuracy in the one
+paragraph a parent reads about privacy costs them their trust in every other
+claim on the page.

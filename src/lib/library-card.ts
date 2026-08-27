@@ -99,6 +99,8 @@ export const CARD_MESSAGES = {
   /** On the page above the card, for a reader who has just found this screen. */
   intro:
     "This is your card. Show it at the library room, or keep a copy on the phone you borrow books with.",
+  /** The one benefit line, on the card itself. Said the same way everywhere. */
+  free: "Free. No fees, no catch.",
   downloadPng: "Download as a picture",
   downloadPdf: "Download as a PDF",
   preparing: "Getting it ready…",

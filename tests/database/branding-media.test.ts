@@ -4,6 +4,8 @@ import { __setSessionHandle } from "../stubs/auth-stub";
 import { createSession } from "@/server/auth/session-store";
 import { __setStorageDriverForTests } from "@/server/lib/storage";
 import { getAuthorizedMedia, sweepPendingMedia } from "@/server/services/media-service";
+import { packagedMarkPng } from "@/server/reports/packaged-mark";
+import { resolveCardMark } from "@/server/reports/card-mark";
 import { removeLibraryLogo, updateLibraryLogo } from "@/server/services/settings-service";
 
 import { FakeStorageDriver, pngBytes } from "./fake-storage";
@@ -204,5 +206,54 @@ describe("who may see a logo", () => {
 
     __setSessionHandle(null);
     await expect(getAuthorizedMedia(photo.id)).rejects.toThrow();
+  });
+});
+
+describe("the logo on a downloaded card", () => {
+  /*
+   * The card a family saves has to be the card they were shown, mark and all.
+   * The PDF is drawn on a server, so it cannot reach for the file the browser
+   * gets from the static handler — it either reads the uploaded logo out of the
+   * media store or falls back to the mark packaged with the code.
+   */
+
+  it("draws the library's own uploaded logo", async () => {
+    await actingAs(admin.id);
+    const bytes = pngBytes(4096);
+    const { logoUrl } = await updateLibraryLogo({ bytes, declaredMimeType: "image/png" });
+
+    const mark = await resolveCardMark(logoUrl);
+
+    expect(mark.format).toBe("png");
+    expect(Buffer.from(mark.bytes).equals(Buffer.from(bytes))).toBe(true);
+  });
+
+  it("falls back to the packaged mark when the library has uploaded none", async () => {
+    await actingAs(admin.id);
+    const mark = await resolveCardMark(null);
+
+    expect(mark.format).toBe("png");
+    expect(Buffer.from(mark.bytes).equals(Buffer.from(packagedMarkPng))).toBe(true);
+  });
+
+  it("falls back rather than failing when the logo has gone", async () => {
+    await actingAs(admin.id);
+    const { logoUrl } = await updateLibraryLogo({ bytes: pngBytes() });
+    await removeLibraryLogo();
+    await sweepPendingMedia();
+
+    // A card with the packaged mark beats a download that 500s because a row
+    // was mid-deletion when a family pressed the button.
+    const mark = await resolveCardMark(logoUrl);
+    expect(Buffer.from(mark.bytes).equals(Buffer.from(packagedMarkPng))).toBe(true);
+  });
+
+  it("ignores anything that is not one of this library's media ids", async () => {
+    await actingAs(admin.id);
+
+    for (const url of ["https://example.test/logo.png", "/api/media/../../etc/passwd", ""]) {
+      const mark = await resolveCardMark(url);
+      expect(Buffer.from(mark.bytes).equals(Buffer.from(packagedMarkPng))).toBe(true);
+    }
   });
 });

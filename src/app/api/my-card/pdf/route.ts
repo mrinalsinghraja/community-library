@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { cardFileName } from "@/lib/library-card";
 import { isAppError } from "@/server/lib/errors";
 import { getCurrentLibrary } from "@/server/lib/settings";
+import { resolveCardMark } from "@/server/reports/card-mark";
 import { renderLibraryCardPdf } from "@/server/reports/library-card-pdf";
 import { getOwnLibraryCard } from "@/server/services/card-service";
 
@@ -35,7 +36,10 @@ export async function GET() {
     }
 
     const { settings } = await getCurrentLibrary();
-    const pdf = await renderLibraryCardPdf(facts, settings.timezone);
+    // The library's own mark, so the file a family keeps is the card they were
+    // shown rather than a plainer relative of it.
+    const mark = await resolveCardMark(facts.logoUrl);
+    const pdf = await renderLibraryCardPdf(facts, settings.timezone, mark);
 
     return new NextResponse(pdf as unknown as BodyInit, {
       headers: {

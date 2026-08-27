@@ -32,6 +32,10 @@ const CANVAS = readFileSync(
   join(process.cwd(), "src", "app", "my-card", "card-downloads.tsx"),
   "utf8",
 );
+const MARK = readFileSync(
+  join(process.cwd(), "src", "server", "reports", "card-mark.ts"),
+  "utf8",
+);
 
 describe("what the card never carries", () => {
   it("selects no guardian contact from the database", () => {
@@ -59,10 +63,34 @@ describe("what the card never carries", () => {
   });
 
   it("puts no photograph in either download", () => {
-    // A file gets forwarded. The disc and monogram carry the recognition; a
+    // A file gets forwarded. The disc and initial carry the recognition; a
     // child's face plus their name plus their flat is a different object.
-    expect(PDF).not.toMatch(/photoMediaId|embedPng|embedJpg/);
-    expect(CANVAS).not.toMatch(/photoMediaId|drawImage/);
+    expect(PDF).not.toMatch(/photoMediaId/);
+    expect(CANVAS).not.toMatch(/photoMediaId|photoUrl/);
+  });
+
+  it("draws exactly one image in each download, and it is the library's mark", () => {
+    /*
+     * Both renderers now embed a picture, which is the thing this file exists
+     * to be careful about. So the assertion is not "no images" — it is that
+     * every image either of them draws came from the mark and from nowhere
+     * else. `embedPng`, `embedJpg` and `drawImage` are the only three calls
+     * that can put pixels on a card, and each appears once.
+     */
+    expect(PDF.match(/embedPng\(|embedJpg\(/g)).toHaveLength(2);
+    expect(PDF).toContain("mark.format === \"png\" ? await pdf.embedPng(mark.bytes)");
+    expect(CANVAS.match(/drawImage\(/g)).toHaveLength(1);
+    expect(CANVAS).toContain("ctx.drawImage(\n      mark,");
+  });
+
+  it("takes the mark from the library's own logo, never from anywhere else", () => {
+    // Same source the screen uses, so the saved card is the card they saw.
+    expect(CANVAS).toContain("loadMark(facts.logoUrl ?? PACKAGED_MARK_URL)");
+    expect(MARK).toContain("getAuthorizedMedia(mediaId)");
+    // Only the two formats pdf-lib can embed, and only from a media id that
+    // looks like one. Anything else gets the packaged mark rather than a throw.
+    expect(MARK).toContain("image/png");
+    expect(MARK).toContain("image/jpeg");
   });
 
   it("names the file after the code, never after the child", () => {

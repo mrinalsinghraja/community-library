@@ -1,5 +1,6 @@
 import Image from "next/image";
 
+import { PACKAGED_MARK_URL } from "@/lib/card-art";
 import { cn } from "@/lib/cn";
 
 /**
@@ -20,8 +21,6 @@ import { cn } from "@/lib/cn";
  * not forgery.
  */
 
-const PACKAGED_MARK = "/brand/library-mark.png";
-
 /** The mark's true aspect (640 × 690), so nothing is ever squashed. */
 const MARK_RATIO = 690 / 640;
 
@@ -38,7 +37,7 @@ export function LibraryLogo({
   className?: string;
   priority?: boolean;
 }) {
-  const src = logoUrl ?? PACKAGED_MARK;
+  const src = logoUrl ?? PACKAGED_MARK_URL;
 
   return (
     <Image

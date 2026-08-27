@@ -6,6 +6,18 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { getAvatar } from "@/lib/avatars";
 import {
+  CARD,
+  CARD_ALPHA,
+  CARD_INK,
+  CARD_LAYOUT,
+  CONTENT_RIGHT,
+  CONTENT_WIDTH,
+  GUILLOCHE,
+  PACKAGED_MARK_URL,
+  PLINTH_TOP,
+  foilRamp,
+} from "@/lib/card-art";
+import {
   CARD_MESSAGES,
   cardAllowances,
   cardFileName,
@@ -27,35 +39,27 @@ import { monogram } from "@/lib/readers-board";
  * Rasterising the rendered card would mean either a screenshot library (a
  * dependency this application does not need) or an SVG `foreignObject` (which
  * silently loses self-hosted fonts). Drawing it is a third renderer of the same
- * card, which is a real cost — so every word and number it draws comes from
- * `@/lib/library-card`, the same module the page and the PDF read. The layouts
- * differ; the content cannot.
+ * card, which is a real cost — so every word it draws comes from
+ * `@/lib/library-card` and every coordinate from `@/lib/card-art`, the same two
+ * modules the page and the PDF read. Only the typeface differs, and it differs
+ * in the picture's favour: this one has the library's own face to draw with.
  *
- * ## No photograph
+ * ## The mark, and the face that is not here
  *
- * The card on screen shows the child's own picture. Neither download does, and
- * that is deliberate: a file is a thing that gets forwarded, and a picture
- * carrying a child's face, their name and their flat number together is a
- * different object from a card in a pocket. The avatar disc and monogram carry
- * the same recognition — the same drawing the readers' board uses — at none of
- * the risk.
+ * The library's logo is drawn — same source the screen uses, same tile — so the
+ * saved picture is the card and not an approximation of it. The child's
+ * photograph is not, and neither is their avatar's emoji, which the PDF's
+ * standard fonts cannot draw and which would make the two downloads two
+ * different cards. Both saved formats carry the coloured disc and the initial.
+ *
+ * A file gets forwarded; a picture carrying a child's face, their name and
+ * their flat number together is a different object from a card in a pocket.
  */
 
 /** Drawn at three times the card's point size, so it is crisp on a phone. */
 const SCALE = 3;
-const W = 340 * SCALE;
-const H = 250 * SCALE;
-const PAD = 20 * SCALE;
-
-const INK = "#2B2118";
-const INK_SOFT = "#5C4F42";
-const PRIMARY_DEEP = "#14574A";
-const PRIMARY = "#1F6F5C";
-const ACCENT_WASH = "#FBEAF3";
-const SUNK = "#F6EFE3";
-const HAIRLINE = "#E3D9C9";
-const LEAF = "#78B030";
-const ACCENT = "#A82878";
+const W = CARD.width * SCALE;
+const H = CARD.height * SCALE;
 
 export interface CardDownloadFacts {
   readerName: string;
@@ -65,6 +69,7 @@ export interface CardDownloadFacts {
   avatarKey: string | null;
   libraryName: string;
   communityName: string;
+  logoUrl: string | null;
   rules: CardRules | null;
 }
 
@@ -80,13 +85,15 @@ export function CardDownloads({ facts }: { facts: CardDownloadFacts }) {
       // canvas drawn before they load falls back to a system serif.
       if (document.fonts?.ready) await document.fonts.ready;
 
+      const mark = await loadMark(facts.logoUrl ?? PACKAGED_MARK_URL);
+
       const canvas = document.createElement("canvas");
       canvas.width = W;
       canvas.height = H;
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("no 2d context");
 
-      drawCard(ctx, facts);
+      drawCard(ctx, facts, mark);
 
       const blob = await new Promise<Blob | null>((resolve) =>
         canvas.toBlob(resolve, "image/png"),
@@ -133,13 +140,37 @@ export function CardDownloads({ facts }: { facts: CardDownloadFacts }) {
   );
 }
 
+/**
+ * The library's mark, ready to draw.
+ *
+ * Always a same-origin URL — either `/api/media/<id>` for an uploaded logo or
+ * the packaged file — so the canvas is never tainted and `toBlob` keeps
+ * working. Returns null rather than throwing: a card with an empty tile is a
+ * card, and a download that failed because a logo was slow is not.
+ */
+async function loadMark(src: string): Promise<HTMLImageElement | null> {
+  try {
+    const image = new Image();
+    image.src = src;
+    await image.decode();
+    return image;
+  } catch {
+    return null;
+  }
+}
+
 /** The body face, as the page is actually serving it. */
 function bodyFont(weight: number, px: number): string {
   const family =
     typeof window === "undefined"
       ? "sans-serif"
       : getComputedStyle(document.body).fontFamily || "sans-serif";
-  return `${weight} ${px}px ${family}`;
+  return `${weight} ${px * SCALE}px ${family}`;
+}
+
+/** The face the member code is set in, everywhere it appears. */
+function serialFont(px: number): string {
+  return `700 ${px * SCALE}px ui-monospace, "SF Mono", Menlo, monospace`;
 }
 
 function roundedRect(
@@ -150,141 +181,260 @@ function roundedRect(
   h: number,
   r: number,
 ) {
+  const radius = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
   ctx.closePath();
 }
 
-function drawCard(ctx: CanvasRenderingContext2D, facts: CardDownloadFacts) {
-  const contentWidth = W - PAD * 2;
+/** Letter-spaced text, drawn a glyph at a time. Returns where it ended. */
+function tracked(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  baseline: number,
+  spacing: number,
+): number {
+  let cursor = x;
+  for (const character of text) {
+    ctx.fillText(character, cursor, baseline);
+    cursor += ctx.measureText(character).width + spacing * SCALE;
+  }
+  return cursor;
+}
 
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillRect(0, 0, W, H);
+function trackedWidth(ctx: CanvasRenderingContext2D, text: string, spacing: number): number {
+  const glyphs = [...text];
+  return (
+    glyphs.reduce((total, character) => total + ctx.measureText(character).width, 0) +
+    spacing * SCALE * Math.max(0, glyphs.length - 1)
+  );
+}
 
-  // ---- Header band --------------------------------------------------------
-  const band = 44 * SCALE;
-  ctx.fillStyle = PRIMARY_DEEP;
-  ctx.fillRect(0, 0, W, band);
+/** Cuts a string to fit the width it has been given. Same rule as the PDF. */
+function fit(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let cut = text;
+  while (cut.length > 1 && ctx.measureText(`${cut}...`).width > maxWidth) {
+    cut = cut.slice(0, -1).trimEnd();
+  }
+  return `${cut}...`;
+}
 
-  ctx.fillStyle = "#FFFFFF";
-  ctx.font = bodyFont(700, 11 * SCALE);
+function drawCard(
+  ctx: CanvasRenderingContext2D,
+  facts: CardDownloadFacts,
+  mark: HTMLImageElement | null,
+) {
+  const pt = (value: number) => value * SCALE;
   ctx.textBaseline = "alphabetic";
-  ctx.fillText(facts.libraryName, PAD, 20 * SCALE, contentWidth - 70 * SCALE);
 
-  ctx.globalAlpha = 0.85;
-  ctx.font = bodyFont(400, 7.5 * SCALE);
-  ctx.fillText(facts.communityName, PAD, 32 * SCALE);
+  // ---- The field ----------------------------------------------------------
+  const field = ctx.createLinearGradient(0, 0, 0, pt(CARD.fieldHeight));
+  field.addColorStop(0, CARD_INK.fieldTop);
+  field.addColorStop(1, CARD_INK.fieldBase);
+  ctx.fillStyle = field;
+  ctx.fillRect(0, 0, W, pt(CARD.fieldHeight));
 
-  ctx.font = bodyFont(700, 7 * SCALE);
-  const label = "READER CARD";
-  ctx.fillText(label, W - PAD - ctx.measureText(label).width, 20 * SCALE);
-  ctx.globalAlpha = 1;
+  // The engraving, swept from two points outside the card. The plinth is
+  // painted over the bottom of it in a moment, which is the cheapest clip there
+  // is — and the same one the PDF uses.
+  ctx.strokeStyle = `rgba(255,255,255,${CARD_ALPHA.guilloche})`;
+  ctx.lineWidth = pt(0.7);
+  for (const family of GUILLOCHE) {
+    for (const radius of family.radii) {
+      ctx.beginPath();
+      ctx.arc(pt(family.cx), pt(family.cy), pt(radius), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
 
-  // The garden rule, closing the band.
-  const third = W / 3;
-  [LEAF, PRIMARY, ACCENT].forEach((colour, index) => {
-    ctx.fillStyle = colour;
-    ctx.fillRect(third * index, band, third, 3 * SCALE);
-  });
+  // ---- The plinth, and the rule between ------------------------------------
+  ctx.fillStyle = CARD_INK.plinth;
+  ctx.fillRect(0, pt(PLINTH_TOP), W, H - pt(PLINTH_TOP));
 
-  // ---- The person ---------------------------------------------------------
-  let y = band + 3 * SCALE + 24 * SCALE;
+  for (const strip of foilRamp(96)) {
+    ctx.fillStyle = strip.colour;
+    ctx.fillRect(pt(strip.x), pt(CARD.fieldHeight), pt(strip.width), pt(CARD.foilHeight));
+  }
 
-  const avatar = getAvatar(facts.avatarKey);
-  const radius = 17 * SCALE;
-  const discX = PAD + radius;
-  const discY = y + 2 * SCALE;
-
-  ctx.fillStyle = avatar.color;
-  ctx.beginPath();
-  ctx.arc(discX, discY, radius, 0, Math.PI * 2);
+  // ---- The mark ------------------------------------------------------------
+  const tile = CARD_LAYOUT.tile;
+  ctx.fillStyle = CARD_INK.white;
+  roundedRect(ctx, pt(tile.x), pt(tile.y), pt(tile.size), pt(tile.size), pt(tile.radius));
   ctx.fill();
 
-  ctx.fillStyle = "#FFFFFF";
-  ctx.font = bodyFont(700, 17 * SCALE);
-  const initial = monogram(facts.readerName);
-  ctx.fillText(initial, discX - ctx.measureText(initial).width / 2, discY + 6 * SCALE);
+  if (mark) {
+    const box = pt(tile.size - tile.inset * 2);
+    // Contain, never stretch: an uploaded logo is any shape at all.
+    const scale = Math.min(box / mark.naturalWidth, box / mark.naturalHeight);
+    const width = mark.naturalWidth * scale;
+    const height = mark.naturalHeight * scale;
+    ctx.drawImage(
+      mark,
+      pt(tile.x) + (pt(tile.size) - width) / 2,
+      pt(tile.y) + (pt(tile.size) - height) / 2,
+      width,
+      height,
+    );
+  }
 
-  const textX = PAD + radius * 2 + 12 * SCALE;
-  const textWidth = W - textX - PAD;
+  // ---- The header ----------------------------------------------------------
+  const label = CARD_LAYOUT.cardLabel;
+  ctx.font = bodyFont(700, label.size);
+  const labelWidth = trackedWidth(ctx, label.text, label.tracking);
+  const nameRoom = pt(CONTENT_RIGHT - CARD_LAYOUT.libraryName.x) - labelWidth - pt(16);
 
-  ctx.fillStyle = INK_SOFT;
-  ctx.font = bodyFont(700, 6.5 * SCALE);
-  ctx.fillText("READER", textX, y - 8 * SCALE);
+  ctx.fillStyle = `rgba(255,255,255,${CARD_ALPHA.cardLabel})`;
+  tracked(ctx, label.text, W - pt(CARD.pad) - labelWidth, pt(label.baseline), label.tracking);
 
-  ctx.fillStyle = INK;
-  ctx.font = bodyFont(700, 15 * SCALE);
-  ctx.fillText(facts.readerName, textX, y + 6 * SCALE, textWidth);
+  ctx.fillStyle = CARD_INK.white;
+  ctx.font = bodyFont(700, CARD_LAYOUT.libraryName.size);
+  ctx.fillText(
+    fit(ctx, facts.libraryName, nameRoom),
+    pt(CARD_LAYOUT.libraryName.x),
+    pt(CARD_LAYOUT.libraryName.baseline),
+  );
 
-  ctx.fillStyle = PRIMARY_DEEP;
-  ctx.font = bodyFont(400, 9 * SCALE);
-  ctx.fillText(facts.memberCode, textX, y + 19 * SCALE, textWidth);
+  ctx.fillStyle = `rgba(255,255,255,${CARD_ALPHA.community})`;
+  ctx.font = bodyFont(400, CARD_LAYOUT.communityName.size);
+  ctx.fillText(
+    fit(ctx, facts.communityName, nameRoom),
+    pt(CARD_LAYOUT.communityName.x),
+    pt(CARD_LAYOUT.communityName.baseline),
+  );
 
-  y += 42 * SCALE;
+  ctx.fillStyle = `rgba(255,255,255,${CARD_ALPHA.divider})`;
+  ctx.fillRect(pt(CARD.pad), pt(CARD_LAYOUT.headRule.y), pt(CONTENT_WIDTH), pt(0.6));
 
-  // ---- Home, joined -------------------------------------------------------
+  // ---- The person ----------------------------------------------------------
+  const avatar = CARD_LAYOUT.avatar;
+  ctx.fillStyle = getAvatar(facts.avatarKey).color;
+  ctx.beginPath();
+  ctx.arc(pt(avatar.cx), pt(avatar.cy), pt(avatar.r), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
+  ctx.lineWidth = pt(1);
+  ctx.stroke();
+
+  const initial = monogram(facts.readerName || "?");
+  ctx.fillStyle = CARD_INK.white;
+  ctx.font = bodyFont(700, avatar.initialSize);
+  ctx.fillText(
+    initial,
+    pt(avatar.cx) - ctx.measureText(initial).width / 2,
+    pt(avatar.cy + avatar.initialSize * 0.35),
+  );
+
+  const readerLabel = CARD_LAYOUT.readerLabel;
+  ctx.fillStyle = `rgba(255,255,255,${CARD_ALPHA.readerLabel})`;
+  ctx.font = bodyFont(700, readerLabel.size);
+  tracked(ctx, readerLabel.text, pt(readerLabel.x), pt(readerLabel.baseline), readerLabel.tracking);
+
+  const readerName = CARD_LAYOUT.readerName;
+  ctx.fillStyle = CARD_INK.white;
+  ctx.font = bodyFont(700, readerName.size);
+  ctx.fillText(
+    fit(ctx, facts.readerName, pt(CONTENT_RIGHT - readerName.x)),
+    pt(readerName.x),
+    pt(readerName.baseline),
+  );
+
+  const code = CARD_LAYOUT.memberCode;
+  ctx.fillStyle = CARD_INK.sun;
+  ctx.font = serialFont(code.size);
+  tracked(ctx, facts.memberCode, pt(code.x), pt(code.baseline), code.tracking);
+
+  // ---- Home, joined, and the one benefit line ------------------------------
+  const meta = CARD_LAYOUT.meta;
   const details: string[] = [];
   if (facts.apartment) details.push(`Home ${facts.apartment}`);
   if (facts.joinedLabel) details.push(`Reader since ${facts.joinedLabel}`);
   if (details.length > 0) {
-    ctx.fillStyle = INK_SOFT;
-    ctx.font = bodyFont(400, 8 * SCALE);
-    ctx.fillText(details.join("   ·   "), PAD, y, contentWidth);
-    y += 16 * SCALE;
+    ctx.fillStyle = `rgba(255,255,255,${CARD_ALPHA.meta})`;
+    ctx.font = bodyFont(400, meta.size);
+    ctx.fillText(
+      fit(ctx, details.join("   ·   "), pt(CONTENT_WIDTH * 0.55)),
+      pt(meta.x),
+      pt(meta.baseline),
+    );
   }
 
-  // ---- What the card allows ----------------------------------------------
+  const pill = CARD_LAYOUT.pill;
+  ctx.font = bodyFont(700, pill.size);
+  const pillTextWidth = trackedWidth(ctx, CARD_MESSAGES.free, pill.tracking);
+  const pillWidth = pillTextWidth + pt(pill.padX) * 2;
+  const pillLeft = W - pt(CARD.pad) - pillWidth;
+
+  ctx.strokeStyle = `rgba(255,255,255,${CARD_ALPHA.pillBorder})`;
+  ctx.lineWidth = pt(0.7);
+  roundedRect(
+    ctx,
+    pillLeft,
+    pt(pill.baseline - pill.height + 4.5),
+    pillWidth,
+    pt(pill.height),
+    pt(pill.height / 2),
+  );
+  ctx.stroke();
+
+  ctx.fillStyle = CARD_INK.sun;
+  tracked(ctx, CARD_MESSAGES.free, pillLeft + pt(pill.padX), pt(pill.baseline), pill.tracking);
+
+  // ---- What the card allows ------------------------------------------------
   if (facts.rules) {
+    const stats = CARD_LAYOUT.stats;
     const columns = cardAllowances(facts.rules);
-    const columnWidth = contentWidth / columns.length;
+    const columnWidth = pt(CONTENT_WIDTH) / columns.length;
+
     columns.forEach((item, index) => {
-      const x = PAD + columnWidth * index;
-      ctx.fillStyle = INK_SOFT;
-      ctx.font = bodyFont(400, 6.5 * SCALE);
-      ctx.fillText(item.label, x, y);
-      ctx.fillStyle = INK;
-      ctx.font = bodyFont(700, 11 * SCALE);
-      ctx.fillText(item.value, x, y + 12 * SCALE);
+      const x = pt(CARD.pad) + columnWidth * index;
+
+      if (index > 0) {
+        ctx.fillStyle = `rgba(255,255,255,${CARD_ALPHA.statDivider})`;
+        ctx.fillRect(
+          x - pt(10),
+          pt(stats.dividerTop),
+          pt(0.6),
+          pt(stats.dividerBottom - stats.dividerTop),
+        );
+      }
+
+      ctx.fillStyle = `rgba(255,255,255,${CARD_ALPHA.statLabel})`;
+      ctx.font = bodyFont(700, stats.labelSize);
+      tracked(ctx, item.label.toUpperCase(), x, pt(stats.labelBaseline), stats.labelTracking);
+
+      ctx.fillStyle = CARD_INK.white;
+      ctx.font = bodyFont(700, stats.valueSize);
+      ctx.fillText(fit(ctx, item.value, columnWidth - pt(12)), x, pt(stats.valueBaseline));
     });
-    y += 26 * SCALE;
   }
 
-  // ---- The line the library is about --------------------------------------
-  ctx.fillStyle = ACCENT_WASH;
-  roundedRect(ctx, PAD, y - 3 * SCALE, contentWidth, 18 * SCALE, 4 * SCALE);
-  ctx.fill();
-  ctx.fillStyle = INK;
-  ctx.font = bodyFont(700, 8.5 * SCALE);
-  ctx.fillText("Free. No fees, no catch.", PAD + 7 * SCALE, y + 9 * SCALE);
+  // ---- House rules along the bottom ----------------------------------------
+  const plinthLabel = CARD_LAYOUT.plinthLabel;
+  ctx.fillStyle = CARD_INK.inkSoft;
+  ctx.font = bodyFont(700, plinthLabel.size);
+  tracked(ctx, plinthLabel.text, pt(plinthLabel.x), pt(plinthLabel.baseline), plinthLabel.tracking);
 
-  // ---- House rules along the bottom ---------------------------------------
-  const rules = shortRules(facts.rules);
-  const footer = (10 + 8) * SCALE + rules.length * 9.5 * SCALE + 6 * SCALE;
+  const rules = CARD_LAYOUT.rules;
+  shortRules(facts.rules).forEach((rule, index) => {
+    const baseline = rules.firstBaseline + rules.step * index;
 
-  ctx.fillStyle = SUNK;
-  ctx.fillRect(0, H - footer, W, footer);
-  ctx.fillStyle = HAIRLINE;
-  ctx.fillRect(0, H - footer, W, 0.5 * SCALE);
-
-  let ruleY = H - footer + 12 * SCALE;
-  ctx.fillStyle = INK_SOFT;
-  ctx.font = bodyFont(700, 6 * SCALE);
-  ctx.fillText("LOOKING AFTER A BOOK", PAD, ruleY);
-  ruleY += 10 * SCALE;
-
-  for (const rule of rules) {
-    ctx.fillStyle = LEAF;
+    ctx.fillStyle = CARD_INK.leaf;
     ctx.beginPath();
-    ctx.arc(PAD + 2 * SCALE, ruleY - 2.5 * SCALE, 1.4 * SCALE, 0, Math.PI * 2);
+    ctx.arc(pt(rules.bulletX), pt(baseline - 2.2), pt(rules.bulletR), 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = INK;
-    ctx.font = bodyFont(400, 7.5 * SCALE);
-    ctx.fillText(rule, PAD + 8 * SCALE, ruleY, contentWidth - 10 * SCALE);
-    ruleY += 9.5 * SCALE;
-  }
+    ctx.fillStyle = CARD_INK.ink;
+    ctx.font = bodyFont(400, rules.size);
+    ctx.fillText(
+      fit(ctx, rule, pt(CONTENT_RIGHT - rules.textX)),
+      pt(rules.textX),
+      pt(baseline),
+    );
+  });
 }
