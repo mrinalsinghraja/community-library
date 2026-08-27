@@ -215,11 +215,11 @@ export default async function DeskLoansPage({
                     actions: [
                       {
                         value: "RETURN",
-                        label: "Take them all back",
+                        label: "Accept these returns",
                         tone: "primary",
                         notePrompt: null,
                         confirm:
-                          "Take {count} {book|books} back? Each one goes straight onto the shelf with its condition unchanged. Anything that needs a closer look should go back on its own row instead.",
+                          "Take {count} {book|books} back? Each one goes straight onto the shelf, with nothing said about what shape it is in. A book that came back damaged should go back on its own row instead.",
                       },
                     ],
                   }
@@ -341,7 +341,7 @@ export default async function DeskLoansPage({
                       <p className="mt-1 flex items-start gap-1.5 text-base text-accent-ink">
                         <Icon name="returnBook" className="mt-1 shrink-0" />
                         <span>
-                          Coming back &mdash; reader said so on{" "}
+                          Reader is returning this &mdash; told us{" "}
                           {formatInTimezone(loan.returnAnnouncedAt, settings.timezone)}
                         </span>
                       </p>

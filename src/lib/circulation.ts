@@ -358,13 +358,14 @@ export const RENEWAL_REQUEST_MESSAGES = {
  * one sentence on this screen that turns out to be untrue when they arrive.
  */
 export const RETURN_ANNOUNCEMENT_MESSAGES = {
-  invitation: "Finished with this one? Tell the library it is coming back.",
-  announced: "You told the library this one is coming back. Bring it to the library room and a librarian will take it in.",
-  done: "Thank you — bring it along and a librarian will take it in.",
+  invitation: "Finished this book?",
+  announced:
+    "You told the library. Bring the book to the library room and a librarian will take it back.",
+  done: "Thank you! Bring the book in and a librarian will take it back.",
   alreadyAnnounced: "You have already told the library about this book.",
   notYours: "We could not find that book on your shelf.",
   noneToCancel: "There is nothing to change for this book.",
-  keptBack: "That is fine — this one is on your shelf again.",
+  keptBack: "No problem — the book is still yours.",
 } as const;
 
 /** What a child is told about their own request, if they have one open. */

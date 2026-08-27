@@ -14,6 +14,7 @@ import {
   memberMayBorrow,
   readerDueSentence,
   readerLoanBadge,
+  RETURN_ANNOUNCEMENT_MESSAGES,
   staffOverdueSummary,
 } from "@/lib/circulation";
 
@@ -128,6 +129,40 @@ describe("what a child reads", () => {
       const badge = readerLoanBadge(activeDue(`${due}T18:29:59Z`), TZ, NOW);
       expect(badge.label.length).toBeGreaterThan(0);
       expect(badge.tone.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("returning a book, in words a child can read", () => {
+  const messages = Object.values(RETURN_ANNOUNCEMENT_MESSAGES);
+
+  it("says what the child is doing, not what the library calls it", () => {
+    // "I'm bringing this back" describes an errand. A child looking for how to
+    // give a book back is looking for the word "return".
+    expect(RETURN_ANNOUNCEMENT_MESSAGES.invitation).toBe("Finished this book?");
+  });
+
+  it("never claims the book is back", () => {
+    // The book is in a bag by the front door. Every sentence here has to stay
+    // true after the child closes the laptop.
+    for (const message of messages) {
+      expect(message.toLowerCase()).not.toMatch(/\breturned\b|\bback on the shelf\b/);
+    }
+  });
+
+  it("keeps its sentences short enough to read", () => {
+    for (const message of messages) {
+      for (const sentence of message.split(/[.?!]\s+/)) {
+        const words = sentence.trim().split(/\s+/).filter(Boolean).length;
+        expect(words, `too long: "${sentence}"`).toBeLessThanOrEqual(18);
+      }
+    }
+  });
+
+  it("uses no word the library would not say out loud to a child", () => {
+    const copy = messages.join(" ").toLowerCase();
+    for (const word of ["announce", "request", "submit", "pending", "status", "confirm"]) {
+      expect(copy, `found "${word}"`).not.toContain(word);
     }
   });
 });

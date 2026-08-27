@@ -14,7 +14,15 @@ import {
 import { Icon } from "@/components/ui/icon";
 
 /**
- * The three things a librarian does to a book that is already out.
+ * The three things a librarian does to a book that is already out, in the order
+ * they actually happen.
+ *
+ * **One of them is the job and two are exceptions**, and the screen now says so
+ * rather than offering four buttons of equal weight. Almost every row on this
+ * page ends the same way: a child walks up with a book and it goes back on the
+ * shelf. Taking it back is the only filled button. Extending a loan for a child
+ * who asked in person, recording that a book came back damaged, and undoing a
+ * mis-issue are all real and all rare, so they are quiet.
  *
  * Each is its own small form with its own state, so a failed renewal does not
  * blank the return control next to it, and a queue of children does not have to
@@ -63,10 +71,14 @@ export function LoanActions({
 /**
  * Taking a book back.
  *
- * One click for the ordinary case, and a condition dropdown behind "Check it
- * first" for the case where the book came back in a state. The dropdown's
- * default is deliberately "leave it as it is" rather than Good: a book that
- * went out Fair comes back Fair unless somebody actually looked.
+ * One click for the ordinary case. The condition dropdown sits behind a link
+ * named for the reason somebody would want it — "Damaged or torn?" — rather
+ * than for the click itself: "Check it first" read like a second, more careful
+ * way of returning, which made two buttons look like a choice a librarian had
+ * to make on every row. It is not a choice. It is an exception.
+ *
+ * The dropdown's default is deliberately "leave it as it is" rather than Good:
+ * a book that went out Fair comes back Fair unless somebody actually looked.
  */
 function ReturnControl({ loanId, copyCode }: { loanId: string; copyCode: string }) {
   const [state, formAction, pending] = useActionState(returnBookAction, initialState);
@@ -90,7 +102,7 @@ function ReturnControl({ loanId, copyCode }: { loanId: string; copyCode: string 
             htmlFor={`condition-${loanId}`}
             className="text-base font-semibold text-ink"
           >
-            How is it?
+            What shape is it in?
           </label>
           <Select
             id={`condition-${loanId}`}
@@ -110,11 +122,11 @@ function ReturnControl({ loanId, copyCode }: { loanId: string; copyCode: string 
 
       <div className="flex flex-wrap gap-2">
         <Button type="submit" size="sm" icon={<Icon name="returnBook" />} disabled={pending}>
-          {pending ? "Taking it back…" : "Return"}
+          {pending ? "Taking it back…" : "Accept Return"}
         </Button>
         {!checking ? (
           <Button variant="quiet" size="sm" onClick={() => setChecking(true)}>
-            Check it first
+            Damaged or torn?
           </Button>
         ) : null}
       </div>
@@ -161,14 +173,14 @@ function RenewControl({
         Disabling is a courtesy; `renewLoan` re-checks both rules server-side
         and refuses regardless of what the browser did.
       */}
-      <Button type="submit" variant="secondary" size="sm" icon={<Icon name="renew" />} disabled={pending || blocked}>
+      <Button type="submit" variant="quiet" size="sm" icon={<Icon name="renew" />} disabled={pending || blocked}>
         {blockedByOverdue
           ? "Return it first"
           : renewalsLeft <= 0
             ? "No renewals left"
             : pending
               ? "Extending…"
-              : "Keep longer"}
+              : "Let them keep it longer"}
       </Button>
       {state.status === "error" ? (
         <p role="alert" className="text-base font-bold text-danger">

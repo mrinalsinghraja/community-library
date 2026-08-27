@@ -62,7 +62,7 @@ export function ReturnAnnouncement({
         </p>
         {!confirming ? (
           <Button variant="quiet" size="sm" className="mt-2" onClick={() => setConfirming(true)}>
-            Actually, I want to keep reading
+            I want to keep reading
           </Button>
         ) : (
           <form action={undoAction} className="mt-2 flex flex-wrap gap-2">
@@ -71,7 +71,7 @@ export function ReturnAnnouncement({
               {undoing ? "Putting it back…" : "Yes, I am still reading it"}
             </Button>
             <Button variant="quiet" size="sm" onClick={() => setConfirming(false)}>
-              No, it is coming back
+              No, I am returning it
             </Button>
           </form>
         )}
@@ -106,7 +106,7 @@ export function ReturnAnnouncement({
         className="mt-2"
         disabled={telling}
       >
-        {telling ? "Telling the library…" : "I'm Bringing This Back"}
+        {telling ? "Telling the library…" : "I want to return this book"}
       </Button>
       <span className="sr-only">Telling the library about {title}</span>
       {tell.status === "error" ? (
