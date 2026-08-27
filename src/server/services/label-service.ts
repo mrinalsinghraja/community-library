@@ -1,5 +1,6 @@
 import "server-only";
 
+import { ageGroupLabel } from "@/lib/catalogue";
 import { formatInTimezone } from "@/lib/dates";
 import { MAX_LABELS, labelFilename, type LabelSize } from "@/lib/labels";
 import { requirePermission } from "@/server/authz";
@@ -25,8 +26,8 @@ import { listBooksForStaff } from "@/server/services/catalogue-service";
  * catalogue extract in a different shape, and it must never become the way
  * somebody prints a list they were not allowed to open.
  *
- * There is nothing personal on a label — a book code and a title, no donor, no
- * reader, no flat. That is worth stating because it is what makes this the one
+ * There is nothing personal on a label — a book code, a title, the shelf and
+ * the reading age; no donor, no reader, no flat. That is worth stating because it is what makes this the one
  * export that can be left lying on the desk.
  */
 
@@ -99,7 +100,17 @@ export async function printBookLabels(request: LabelRequest): Promise<LabelFile>
   const generatedAt = new Date();
 
   const sheet = await buildLabelSheet({
-    rows: rows.map((row) => ({ code: row.copyCode, title: row.title })),
+    /*
+     * The shelf and the age are turned into words here, not in the PDF writer.
+     * `ageGroupLabel` is the catalogue's own vocabulary and there is exactly one
+     * copy of it — a renderer that knew what `AGE_8_11` meant would be a second.
+     */
+    rows: rows.map((row) => ({
+      code: row.copyCode,
+      title: row.title,
+      shelf: row.categoryName,
+      age: ageGroupLabel(row.ageGroup),
+    })),
     size: request.size,
     // Read from settings, never written as a literal — the lint rule that keeps
     // this library's name out of `src/` applies here as much as anywhere.

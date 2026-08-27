@@ -7,6 +7,7 @@ import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Field, Select, TextInput } from "@/components/ui/field";
 import { Callout } from "@/components/ui/states";
+import { COVER_MAX_BYTES, COVER_MIN_BYTES, describeSize } from "@/lib/cover-image";
 import { downscaleImage, formatBytes } from "@/lib/image-downscale";
 import { AGE_GROUPS, CATALOGUE_LIMITS, CONDITIONS, SELECTABLE_STATUSES, statusDefinition } from "@/lib/catalogue";
 import {
@@ -430,6 +431,30 @@ function CoverField({
     }
 
     setPreviewUrl(URL.createObjectURL(prepared));
+
+    /*
+     * Said here, before the form is submitted, because the server's refusal
+     * arrives after a page round trip with the file input already emptied — so
+     * a librarian meets the rule at the point where they can still choose a
+     * different picture. The server still refuses independently; this is a
+     * courtesy, not the gate.
+     */
+    if (prepared.size < COVER_MIN_BYTES) {
+      setNote(
+        `That picture is only ${describeSize(prepared.size)}, which is usually too small to ` +
+          `read on a phone. Please choose one over ${describeSize(COVER_MIN_BYTES)}.`,
+      );
+      return;
+    }
+
+    if (prepared.size > COVER_MAX_BYTES) {
+      setNote(
+        `That picture is ${describeSize(prepared.size)}. Please choose one under ` +
+          `${describeSize(COVER_MAX_BYTES)}.`,
+      );
+      return;
+    }
+
     setNote(
       changed
         ? `Ready — resized to ${formatBytes(prepared.size)} so it loads quickly.`
@@ -442,7 +467,7 @@ function CoverField({
       id={fieldId}
       label="Cover picture"
       error={error}
-      hint="Optional. A photo of the front cover is plenty — books without one get a drawn cover instead."
+      hint={`Optional. A photo of the front cover is plenty — books without one get a drawn cover instead. Between ${describeSize(COVER_MIN_BYTES)} and ${describeSize(COVER_MAX_BYTES)}; anything larger is shrunk for you.`}
     >
       <input
         id={fieldId}

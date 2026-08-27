@@ -1,5 +1,7 @@
 import "server-only";
 
+import { COVER_MAX_BYTES, COVER_MIN_BYTES, describeSize } from "@/lib/cover-image";
+
 import { generateToken, sha256Bytes } from "@/server/lib/crypto";
 import { ValidationError } from "@/server/lib/errors";
 
@@ -28,6 +30,16 @@ export type UploadPurpose = (typeof UPLOAD_PURPOSES)[keyof typeof UPLOAD_PURPOSE
 
 export interface UploadRules {
   maxBytes: number;
+  /**
+   * A floor, where one is wanted. Optional, and set for exactly one purpose.
+   *
+   * It is a proxy for "this picture is big enough to look like something", not
+   * a measure of quality — a well-compressed image can be small and sharp, and
+   * this will refuse it. That trade was made deliberately for book covers,
+   * where the failure it prevents is a thumbnail dragged off a search result
+   * becoming the picture on the shelf for years.
+   */
+  minBytes?: number;
   /** Private objects are never given a public URL. */
   visibility: "PUBLIC" | "PRIVATE";
   allowedMimeTypes: readonly string[];
@@ -56,7 +68,11 @@ export const UPLOAD_RULES: Record<UploadPurpose, UploadRules> = {
    * different question being asked.
    */
   [UPLOAD_PURPOSES.BOOK_COVER]: {
-    maxBytes: 5 * 1024 * 1024,
+    // Both ends, and the reasoning for them, live in @/lib/cover-image — the
+    // browser's downscaler reads the same numbers so it can never produce a
+    // file this would refuse.
+    minBytes: COVER_MIN_BYTES,
+    maxBytes: COVER_MAX_BYTES,
     visibility: "PRIVATE",
     allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   },
@@ -349,9 +365,8 @@ export function validateUpload(params: {
   }
 
   if (bytes.byteLength > rules.maxBytes) {
-    const limitMb = Math.round(rules.maxBytes / (1024 * 1024));
     throw new ValidationError({
-      file: `That picture is a bit big. Please choose one under ${limitMb} MB.`,
+      file: `That picture is a bit big. Please choose one under ${describeSize(rules.maxBytes)}.`,
     });
   }
 
@@ -374,6 +389,24 @@ export function validateUpload(params: {
       { file: "That does not look like a picture. Please choose a JPG or PNG." },
       "Upload rejected: no recognised image signature",
     );
+  }
+
+  /*
+   * The floor comes after the type checks, not before them.
+   *
+   * A 200-byte text file is not a small picture, it is not a picture — and
+   * telling somebody their picture is "too small" about a file that was never
+   * an image sends them looking for a bigger version of the wrong thing.
+   *
+   * Said with the actual size, because "too small" without a number leaves a
+   * person guessing at a rule they cannot see.
+   */
+  if (rules.minBytes && bytes.byteLength < rules.minBytes) {
+    throw new ValidationError({
+      file:
+        `That picture is only ${describeSize(bytes.byteLength)}, which is usually too small to ` +
+        `print or read on a phone. Please choose one over ${describeSize(rules.minBytes)}.`,
+    });
   }
 
   if (!rules.allowedMimeTypes.includes(detectedMime)) {

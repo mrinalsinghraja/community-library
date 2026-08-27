@@ -33,8 +33,8 @@ import { buildLabelSheet, wrapText, type LabelRow } from "@/server/reports/label
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
 const ROWS: LabelRow[] = [
-  { code: "TST-B0001", title: "The Very Hungry Caterpillar" },
-  { code: "TST-B0002", title: "Cabin Fever" },
+  { code: "TST-B0001", title: "The Very Hungry Caterpillar", shelf: "Stories", age: "5–7 years" },
+  { code: "TST-B0002", title: "Cabin Fever", shelf: "Comics", age: "8–11 years" },
 ];
 
 function sheet(rows: LabelRow[], overrides: Partial<Parameters<typeof buildLabelSheet>[0]> = {}) {
@@ -202,12 +202,14 @@ describe("the label sheet", () => {
     const rows: LabelRow[] = Array.from({ length: perSheet }, (_, index) => ({
       code: `TST-B${index}`,
       title: `Book ${index}`,
+      shelf: "Stories",
+      age: "5–7 years",
     }));
 
     const exact = await sheet(rows);
     expect(exact.sheetCount).toBe(1);
 
-    const oneMore = await sheet([...rows, { code: "TST-B999", title: "One too many" }]);
+    const oneMore = await sheet([...rows, { code: "TST-B999", title: "One too many", shelf: "Stories", age: "5–7 years" }]);
     expect(oneMore.sheetCount).toBe(2);
   });
 
@@ -215,6 +217,8 @@ describe("the label sheet", () => {
     const rows: LabelRow[] = Array.from({ length: 60 }, (_, index) => ({
       code: `TST-B${index}`,
       title: `Book ${index}`,
+      shelf: "Stories",
+      age: "5–7 years",
     }));
     const { bytes, sheetCount } = await sheet(rows, { size: "small" });
     const reopened = await PDFDocument.load(bytes);
@@ -232,7 +236,7 @@ describe("the label sheet", () => {
 
   it("does not throw on a title it cannot draw, and reports the loss", async () => {
     const { bytes, unrepresentable } = await sheet([
-      { code: "TST-B0003", title: "শিশু গ্ৰন্থাগাৰ" },
+      { code: "TST-B0003", title: "শিশু গ্ৰন্থাগাৰ", shelf: "Stories", age: "5–7 years" },
     ]);
 
     expect(bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
@@ -247,7 +251,7 @@ describe("the label sheet", () => {
   it("still prints the book code when the title cannot be drawn", async () => {
     // The code is the half of the label that finds the book again. A title in a
     // script Helvetica has no glyphs for must not take it down with it.
-    const { bytes } = await sheet([{ code: "TST-B0003", title: "শিশু গ্ৰন্থাগাৰ" }]);
+    const { bytes } = await sheet([{ code: "TST-B0003", title: "শিশু গ্ৰন্থাগাৰ", shelf: "Stories", age: "5–7 years" }]);
     const reopened = await PDFDocument.load(bytes);
 
     expect(reopened.getPageCount()).toBe(1);
@@ -339,5 +343,77 @@ describe("how the labels are wired", () => {
     for (const source of [service, route, page]) {
       expect(source).not.toMatch(/Mana Jardin|MJCL/);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("what is actually printed on a label", () => {
+  /*
+   * The PDF is read back rather than trusted. A label is stuck to a book and
+   * stays wrong for years, so "the code draws a third line" is not the claim
+   * worth testing — "the third line is in the file" is.
+   *
+   * pdf-lib flate-compresses its content streams, so they are inflated here and
+   * the drawn strings read out of them.
+   */
+  async function drawnText(bytes: Buffer): Promise<string> {
+    const { inflateSync } = await import("node:zlib");
+    const raw = bytes.toString("latin1");
+
+    let drawn = "";
+    let at = 0;
+    for (;;) {
+      const start = raw.indexOf("stream", at);
+      if (start === -1) break;
+      let from = start + "stream".length;
+      if (raw.charCodeAt(from) === 13) from += 1;
+      if (raw.charCodeAt(from) === 10) from += 1;
+
+      const end = raw.indexOf("endstream", from);
+      if (end === -1) break;
+
+      try {
+        const content = inflateSync(Buffer.from(raw.slice(from, end), "latin1")).toString("latin1");
+        // pdf-lib writes every string as `<hex> Tj`, so the drawn words have to
+        // be decoded rather than read straight out of the stream.
+        for (const match of content.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) {
+          drawn += `${Buffer.from(match[1], "hex").toString("latin1")}\n`;
+        }
+      } catch {
+        // Not a flate stream (a font, an object stream) — skip it.
+      }
+      at = end + 1;
+    }
+    return drawn;
+  }
+
+  it("prints the shelf and the reading age under the title", async () => {
+    const { bytes } = await sheet([
+      {
+        code: "TST-B0007",
+        title: "The Gruffalo",
+        shelf: "Stories",
+        age: "5–7 years",
+      },
+    ]);
+
+    const text = await drawnText(bytes);
+    expect(text).toContain("TST-B0007");
+    expect(text).toContain("The Gruffalo");
+    // One line, the two facts joined — this is what a librarian re-shelving a
+    // returned book reads.
+    expect(text).toMatch(/Stories.{0,3}5.{0,3}7 years/);
+  });
+
+  it("prints the half it has when a book has only one of them", async () => {
+    const { bytes } = await sheet([
+      { code: "TST-B0008", title: "Untitled", shelf: "", age: "All Ages" },
+    ]);
+
+    const text = await drawnText(bytes);
+    expect(text).toContain("All Ages");
+    // No orphaned separator when one half is missing.
+    expect(text).not.toMatch(/\u00b7\s*All Ages/);
   });
 });

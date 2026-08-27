@@ -36,6 +36,14 @@ export interface LabelPreset {
   codeSize: number;
   /** The title, under it. */
   titleSize: number;
+  /**
+   * The shelf and the reading age, under the title, in the quiet ink.
+   *
+   * Smaller than the title on purpose. A label answers two questions from arm's
+   * length — which book is this, and which shelf does it go back on — and the
+   * second only has to be readable by somebody already holding the book.
+   */
+  metaSize: number;
   /** Breathing room inside one label, so the cut edge never touches ink. */
   padding: number;
 }
@@ -50,9 +58,9 @@ export interface LabelPreset {
  * room, which is the entire job of the label.
  */
 export const LABEL_PRESETS: Record<LabelSize, LabelPreset> = {
-  large: { columns: 2, rows: 7, codeSize: 22, titleSize: 10.5, padding: 12 },
-  standard: { columns: 3, rows: 8, codeSize: 16, titleSize: 8.5, padding: 9 },
-  small: { columns: 4, rows: 10, codeSize: 12, titleSize: 6.5, padding: 6 },
+  large: { columns: 2, rows: 7, codeSize: 22, titleSize: 10.5, metaSize: 8, padding: 12 },
+  standard: { columns: 3, rows: 8, codeSize: 16, titleSize: 8.5, metaSize: 6.8, padding: 9 },
+  small: { columns: 4, rows: 10, codeSize: 12, titleSize: 6.5, metaSize: 5.4, padding: 6 },
 };
 
 export function labelsPerSheet(size: LabelSize): number {

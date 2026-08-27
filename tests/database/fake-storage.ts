@@ -48,7 +48,16 @@ export class FakeStorageDriver implements StorageDriver {
 }
 
 /** A minimal but genuinely valid PNG: the 8-byte signature and some payload. */
-export function pngBytes(size = 64): Uint8Array {
+/**
+ * A PNG-shaped blob, big enough to pass the book-cover floor by default.
+ *
+ * The default was 64 bytes, which every cover test used and which
+ * `validateUpload` now refuses: a book jacket has a minimum size, on the
+ * grounds that under it is nearly always a thumbnail lifted from a search
+ * result. Tests that are about something else should not have to know that, so
+ * the default clears the floor and a caller can still ask for any size.
+ */
+export function pngBytes(size = 128 * 1024): Uint8Array {
   const bytes = new Uint8Array(size);
   bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
   for (let i = 8; i < size; i += 1) bytes[i] = i % 251;

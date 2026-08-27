@@ -20,11 +20,16 @@ import { winAnsi } from "@/server/reports/winansi";
  * one of the fourteen faces every PDF reader already has, so nothing has to be
  * embedded and the file stays small enough to print from a phone.
  *
- * Two lines per label and no third one. The code is set large and bold because
- * it is what somebody reads while crouched at a shelf; the title sits under it
- * in a size chosen to fit two lines of a real children's book title. Nothing
- * else goes on: a sticker is small, and every extra mark on it makes the two
- * things that matter harder to find.
+ * The code is set large and bold because it is what somebody reads while
+ * crouched at a shelf; the title sits under it in a size chosen to fit two
+ * lines of a real children's book title; and under that, quietly, the shelf and
+ * the reading age.
+ *
+ * That third line was added because the first two answer "which book is this?"
+ * and neither answers "where does it go back?". A returned book with a code and
+ * a title on it still had to be looked up before it could be re-shelved, which
+ * is the one job a shelf label exists to save. It stays small and grey: it is
+ * read by somebody already holding the book, not from across the room.
  */
 
 const INK = rgb(0.11, 0.13, 0.12);
@@ -40,6 +45,16 @@ const MAX_TITLE_LINES = 2;
 export interface LabelRow {
   code: string;
   title: string;
+  /**
+   * The shelf this book belongs on, and the age it was written for, already
+   * turned into words by the caller.
+   *
+   * Words, not enum keys, because this file draws — it must not know that
+   * `AGE_8_11` exists, and the catalogue's own vocabulary lives in one place in
+   * `src/lib/catalogue.ts`. Either may be empty and the line is then skipped.
+   */
+  shelf: string;
+  age: string;
 }
 
 export interface LabelSheetRequest {
@@ -226,7 +241,20 @@ export async function buildLabelSheet(request: LabelSheetRequest): Promise<Rende
        * cut out and looked at on its own, so the block has to sit in the middle
        * of the piece of paper somebody is actually holding.
        */
-      const blockHeight = codeSize + titleLines.length * preset.titleSize * LINE_GAP;
+      /*
+       * "Stories · 8–11 years", or whichever half of it exists. One line, never
+       * wrapped: a shelf name that will not fit is shortened by `wrapText`
+       * rather than allowed to push the block out of the label.
+       */
+      const meta = [row.shelf, row.age].filter(Boolean).join(" · ");
+      const metaLines = meta
+        ? wrapText(safe(meta), regular, preset.metaSize, innerWidth, 1)
+        : [];
+
+      const blockHeight =
+        codeSize +
+        titleLines.length * preset.titleSize * LINE_GAP +
+        metaLines.length * preset.metaSize * LINE_GAP;
       // Rows fill from the top of the page; PDF's origin is the bottom.
       const cellTop = PAGE_HEIGHT - SHEET_MARGIN - line * cell.height;
       const blockTop = cellTop - Math.max(preset.padding, (cell.height - blockHeight) / 2);
@@ -243,6 +271,17 @@ export async function buildLabelSheet(request: LabelSheetRequest): Promise<Rende
           size: preset.titleSize,
           font: regular,
           color: INK,
+        });
+      });
+
+      const titleBottom = codeBaseline - preset.titleSize * LINE_GAP * titleLines.length;
+      metaLines.forEach((text, lineIndex) => {
+        page.drawText(text, {
+          x: left,
+          y: titleBottom - preset.metaSize * LINE_GAP * (lineIndex + 1),
+          size: preset.metaSize,
+          font: regular,
+          color: INK_SOFT,
         });
       });
     });

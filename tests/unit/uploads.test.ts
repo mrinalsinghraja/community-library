@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { ValidationError } from "@/server/lib/errors";
@@ -87,8 +90,11 @@ describe("upload validation", () => {
   it("ignores a lying Content-Type header", () => {
     // Declared image/png, actually a JPEG: we believe the bytes.
     const result = validateUpload({
+      // CHILD_PHOTO, because this test is about believing the bytes rather than
+      // the header, and a book cover carries a minimum size these fixtures are
+      // deliberately far below.
       bytes: jpeg(),
-      purpose: UPLOAD_PURPOSES.BOOK_COVER,
+      purpose: UPLOAD_PURPOSES.CHILD_PHOTO,
       declaredMimeType: "image/png",
     });
 
@@ -146,8 +152,8 @@ describe("upload validation", () => {
   });
 
   it("gives two identical uploads different storage keys", () => {
-    const a = validateUpload({ bytes: png(), purpose: UPLOAD_PURPOSES.BOOK_COVER });
-    const b = validateUpload({ bytes: png(), purpose: UPLOAD_PURPOSES.BOOK_COVER });
+    const a = validateUpload({ bytes: png(), purpose: UPLOAD_PURPOSES.CHILD_PHOTO });
+    const b = validateUpload({ bytes: png(), purpose: UPLOAD_PURPOSES.CHILD_PHOTO });
 
     expect(a.storageKey).not.toBe(b.storageKey);
     // ...but the same content still hashes the same, for de-duplication.
@@ -258,7 +264,7 @@ describe("stripping embedded metadata", () => {
 
   it("leaves a file with nothing to strip byte-identical", () => {
     const clean = png();
-    const result = validateUpload({ bytes: clean, purpose: UPLOAD_PURPOSES.BOOK_COVER });
+    const result = validateUpload({ bytes: clean, purpose: UPLOAD_PURPOSES.CHILD_PHOTO });
 
     expect(Buffer.from(result.bytes).equals(Buffer.from(clean))).toBe(true);
   });
@@ -289,5 +295,66 @@ describe("what a browser may keep", () => {
     for (const purpose of MEDIA_MAY_REVALIDATE) {
       expect(known.has(purpose)).toBe(true);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("how big a book cover has to be", () => {
+  /*
+   * Both ends are the librarian's rule, and both are about the same thing: a
+   * cover is looked at on a phone and kept for as long as the library holds the
+   * book. Under the floor is nearly always a thumbnail lifted from a search
+   * result — sharp at 80 pixels, mush at 300.
+   */
+  const jpeg = (bytes: number) => {
+    const out = new Uint8Array(bytes);
+    out.set([0xff, 0xd8, 0xff, 0xe0], 0);
+    return out;
+  };
+
+  it("refuses a picture under the floor, and says how small it was", () => {
+    try {
+      validateUpload({ bytes: jpeg(40 * 1024), purpose: "book_cover" });
+      throw new Error("expected a refusal");
+    } catch (error) {
+      expect(String((error as { fieldErrors?: Record<string, string> }).fieldErrors?.file)).toMatch(
+        /only 40 KB/,
+      );
+    }
+  });
+
+  it("refuses a picture over the ceiling", () => {
+    expect(() =>
+      validateUpload({ bytes: jpeg(2 * 1024 * 1024), purpose: "book_cover" }),
+    ).toThrow();
+  });
+
+  it("accepts one in between", () => {
+    const result = validateUpload({ bytes: jpeg(300 * 1024), purpose: "book_cover" });
+    expect(result.mimeType).toBe("image/jpeg");
+  });
+
+  it("applies no floor to a child's photograph", () => {
+    // A parent photographs a child on whatever phone they have. The rule that
+    // exists for jackets is not a rule about families.
+    expect(UPLOAD_RULES.child_photo.minBytes).toBeUndefined();
+    const result = validateUpload({ bytes: jpeg(20 * 1024), purpose: "child_photo" });
+    expect(result.mimeType).toBe("image/jpeg");
+  });
+
+  it("never lets the browser produce a file the server would refuse", () => {
+    /*
+     * The trap this closes: the cover field downscales in the browser, and a
+     * flat jacket at 1400px can land under the floor — so the librarian would
+     * be told their picture was too small about a file the application had
+     * just made from a perfectly good one.
+     */
+    const downscale = readFileSync(
+      join(process.cwd(), "src", "lib", "image-downscale.ts"),
+      "utf8",
+    );
+    expect(downscale).toContain("COVER_MIN_BYTES");
+    expect(downscale).toMatch(/blob\.size < COVER_MIN_BYTES && file\.size >= COVER_MIN_BYTES/);
   });
 });

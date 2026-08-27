@@ -1,3 +1,5 @@
+import { COVER_MIN_BYTES } from "@/lib/cover-image";
+
 /**
  * Shrinking a picture before it is uploaded.
  *
@@ -113,6 +115,17 @@ export async function downscaleImage(
     // Bigger than what we started with happens with small, flat images. Keep
     // whichever is actually smaller.
     if (!blob || blob.size >= file.size) return unchanged;
+
+    /*
+     * Never hand back a file the server would refuse.
+     *
+     * A flat, simple jacket at 1400px and quality 0.82 can land under the
+     * cover floor, and the librarian would then be told their picture was "too
+     * small to print" about a file this function had just produced from a
+     * perfectly good one. Downscaling exists to save bytes; when saving them
+     * would cost the upload, it does nothing instead.
+     */
+    if (blob.size < COVER_MIN_BYTES && file.size >= COVER_MIN_BYTES) return unchanged;
 
     const name = file.name.replace(/\.[^.]+$/, "") || "cover";
     return {
