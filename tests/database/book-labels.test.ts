@@ -53,7 +53,7 @@ function bookInput(overrides: Partial<BookInput> = {}): BookInput {
     title: "The Jungle Book",
     author: "Rudyard Kipling",
     categoryId,
-    ageGroup: "AGE_8_10",
+    ageGroup: "AGE_8_11",
     condition: "GOOD",
     status: "AVAILABLE",
     donorName: "",

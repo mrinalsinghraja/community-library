@@ -62,7 +62,7 @@ function bookInput(overrides: Partial<BookInput> = {}): BookInput {
     title: "The Jungle Book",
     author: "Rudyard Kipling",
     categoryId,
-    ageGroup: "AGE_8_10",
+    ageGroup: "AGE_8_11",
     condition: "GOOD",
     status: "AVAILABLE",
     donorName: "Mrinal",
@@ -129,7 +129,7 @@ describe("adding a book", () => {
 
     expect(copy.title.title).toBe("The Jungle Book");
     expect(copy.title.authors).toEqual(["Rudyard Kipling"]);
-    expect(copy.title.ageGroup).toBe("AGE_8_10");
+    expect(copy.title.ageGroup).toBe("AGE_8_11");
     expect(copy.status).toBe("AVAILABLE");
     expect(copy.condition).toBe("GOOD");
     expect(copy.donation?.donorName).toBe("Mrinal");
@@ -473,7 +473,7 @@ describe("filtering", () => {
     await addBook({
       title: "Comic One",
       categoryId: comicsId,
-      ageGroup: "AGE_11_14",
+      ageGroup: "AGE_12_16",
       condition: "FAIR",
       status: "DAMAGED",
     });
@@ -781,12 +781,12 @@ describe("editing", () => {
     const second = await addBook();
 
     await actingAs(librarian.id);
-    await updateBook(first.copyId, bookInput({ ageGroup: "AGE_11_14" }));
+    await updateBook(first.copyId, bookInput({ ageGroup: "AGE_12_16" }));
 
     const other = await getBookForStaff(second.copyId);
     // Correct, and the reason the edit screen says so out loud: the reading age
     // belongs to the book, not to one object on the shelf.
-    expect(other.ageGroup).toBe("AGE_11_14");
+    expect(other.ageGroup).toBe("AGE_12_16");
   });
 
   it("removes the donation when the donor name is cleared", async () => {

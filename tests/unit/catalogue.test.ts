@@ -32,16 +32,16 @@ describe("recommended age", () => {
   it("offers exactly the four bands, in order", () => {
     expect(AGE_GROUPS.map((group) => group.label)).toEqual([
       "5–7 years",
-      "8–10 years",
-      "11–14 years",
+      "8–11 years",
+      "12–16 years",
       "All Ages",
     ]);
   });
 
   it("keeps the bounds structured, so nothing has to parse the label", () => {
-    // "8–10 years" is a label. 8 and 10 are the data. Anything that needed the
+    // "8–11 years" is a label. 8 and 10 are the data. Anything that needed the
     // numbers back out of the string would be a bug waiting for a re-wording.
-    expect(AGE_GROUPS[1]).toMatchObject({ minYears: 8, maxYears: 10 });
+    expect(AGE_GROUPS[1]).toMatchObject({ minYears: 8, maxYears: 11 });
     // All Ages genuinely has no bounds rather than a sentinel pair.
     expect(AGE_GROUPS[3]).toMatchObject({ minYears: null, maxYears: null });
   });

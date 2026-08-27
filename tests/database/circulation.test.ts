@@ -72,7 +72,7 @@ async function namedCopy(title: string, author = "Rudyard Kipling") {
       libraryId: fixture.libraryId,
       title,
       authors: [author],
-      ageGroup: "AGE_8_10",
+      ageGroup: "AGE_8_11",
       categoryId: category.id,
     },
   });
@@ -417,7 +417,7 @@ describe("issuing a book", () => {
         libraryId: fixture.libraryId,
         title: "The Jungle Book",
         authors: ["Rudyard Kipling"],
-        ageGroup: "AGE_8_10",
+        ageGroup: "AGE_8_11",
         categoryId: category.id,
       },
     });
@@ -1062,7 +1062,7 @@ describe("the catalogue defers to circulation", () => {
       title: "The Jungle Book",
       author: "Rudyard Kipling",
       categoryId: "",
-      ageGroup: "AGE_8_10",
+      ageGroup: "AGE_8_11",
       condition: "GOOD",
       status,
       donorName: "",

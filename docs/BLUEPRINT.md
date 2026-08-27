@@ -10,13 +10,13 @@
 
 ## 1. Executive Summary
 
-We are building a **reusable Community Children's Library Platform**, deployed first as *Mana Jardin Children's Library*. It manages a small physical library of donated children's books in a corner of the community Yoga Room, serving children aged 5–14, free of charge, with voluntary book donation.
+We are building a **reusable Community Children's Library Platform**, deployed first as *Mana Jardin Children's Library*. It manages a small physical library of donated children's books in a corner of the community Yoga Room, serving children aged 5–16, free of charge, with voluntary book donation.
 
 The system has three faces:
 
 | Face | User | Design goal |
 |---|---|---|
-| **Reader app** | Children 5–14 | Delightful, huge type, few choices, no tables |
+| **Reader app** | Children 5–16 | Delightful, huge type, few choices, no tables |
 | **Desk app** | Librarians (adults now, children later) | Two-click issue/return, hard to get wrong |
 | **Admin app** | Super Admin | Configuration, members, reports, audit |
 
@@ -491,7 +491,7 @@ Enforced in the service as an explicit transition table, not scattered `if` stat
 
 **Abuse controls on the public form:** IP-hash rate limit (5/hour), hidden honeypot field, minimum time-on-form, size-and-type-validated upload, and no information leakage in responses (a duplicate submission gets the same friendly acknowledgement as a new one).
 
-**Why a child cannot own the email identity:** children aged 5–14 mostly have no email address, and requiring one would exclude families or push them to share a parent's inbox as a login. So the parent's email is the **recovery and notification channel**, stored on `guardian`; the child's **login identity is their library card code or a chosen username**. This is the single most consequential UX decision in the whole system and is why Supabase Auth (email-centric) was rejected.
+**Why a child cannot own the email identity:** children aged 5–16 mostly have no email address, and requiring one would exclude families or push them to share a parent's inbox as a login. So the parent's email is the **recovery and notification channel**, stored on `guardian`; the child's **login identity is their library card code or a chosen username**. This is the single most consequential UX decision in the whole system and is why Supabase Auth (email-centric) was rejected.
 
 ---
 

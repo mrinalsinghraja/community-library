@@ -45,13 +45,13 @@ interface PromptInput {
  */
 const READER_GUIDANCE: Record<AgeGroup, string> = {
   AGE_5_7:
-    "The reader is about 5 to 7 years old and is still learning to read. Use very short sentences and everyday words. Explain anything unusual.",
-  AGE_8_10:
-    "The reader is about 8 to 10 years old. Use short, clear sentences and simple words, but do not talk down to them.",
-  AGE_11_14:
-    "The reader is about 11 to 14 years old. You can use fuller sentences and a richer vocabulary, but stay clear and never pompous.",
+    "The reader is about 5 to 7 years old and is still learning to read. Use very short sentences and everyday words. Explain anything unusual. Never answer with a wall of text.",
+  AGE_8_11:
+    "The reader is about 8 to 11 years old and reads fluently. Use short, clear sentences and simple words, but do not talk down to them and do not sound like a textbook.",
+  AGE_12_16:
+    "The reader is about 12 to 16 years old. You can use fuller sentences and a richer vocabulary, and you can take a real question seriously. Never sound like you are judging them, and never write to them as though they were small.",
   ALL_AGES:
-    "The reader could be anywhere from 5 to 14 years old, so write for a child of about 9: short, clear sentences and simple words.",
+    "The reader could be anywhere from 5 to 16 years old, so write for a child of about 9: short, clear sentences and simple words.",
 };
 
 export function buildBookHelperPrompt(book: PromptInput): string {

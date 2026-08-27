@@ -36,7 +36,7 @@ const BOOK = {
   title: "Matilda",
   authors: ["Roald Dahl"],
   categoryName: "Stories",
-  ageGroup: "AGE_8_10" as const,
+  ageGroup: "AGE_8_11" as const,
   libraryName: "The Reading Room",
 };
 
@@ -66,8 +66,8 @@ describe("what the helper is told", () => {
 
   it("sets the reading age from the book's own shelf band", () => {
     expect(buildBookHelperPrompt({ ...BOOK, ageGroup: "AGE_5_7" })).toContain("5 to 7");
-    expect(buildBookHelperPrompt({ ...BOOK, ageGroup: "AGE_8_10" })).toContain("8 to 10");
-    expect(buildBookHelperPrompt({ ...BOOK, ageGroup: "AGE_11_14" })).toContain("11 to 14");
+    expect(buildBookHelperPrompt({ ...BOOK, ageGroup: "AGE_8_11" })).toContain("8 to 11");
+    expect(buildBookHelperPrompt({ ...BOOK, ageGroup: "AGE_12_16" })).toContain("12 to 16");
     // A book for everybody still has to be written for somebody.
     expect(buildBookHelperPrompt({ ...BOOK, ageGroup: "ALL_AGES" })).toMatch(/about 9/);
   });

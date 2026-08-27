@@ -68,7 +68,7 @@ const VALID = {
   maxRenewals: "1",
   renewalPeriodDays: "14",
   ageMin: "5",
-  ageMax: "14",
+  ageMax: "16",
   memberCodePrefix: "TST-R",
   copyCodePrefix: "TST-B",
   catalogueVisibility: "MEMBER_ONLY",

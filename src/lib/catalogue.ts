@@ -31,15 +31,24 @@ export interface AgeGroupDefinition {
 /**
  * Shelf bands, in the order they appear in the dropdown.
  *
+ * Three bands, and between them they cover the whole membership range with no
+ * gap and no overlap. That is the point of the shape: when membership ran to 14
+ * and the bands ran 5–7, 8–10 and 11–14, a 15-year-old member had no band to
+ * belong to, and a librarian cataloguing for them had to pick the nearest lie.
+ *
+ * The boundaries are where a child's reading changes rather than where a number
+ * is round: 5–7 is still learning to decode words, 8–11 reads fluently and
+ * reads for the story, 12–16 reads for the argument and the person.
+ *
  * These are a *catalogue* taxonomy, not the library's membership rule. The
  * range a child must be in to join lives in `library_settings.age_min/age_max`
  * and answers a different question — a nine-year-old may perfectly well borrow
- * a book banded 11–14.
+ * a book banded 12–16.
  */
 export const AGE_GROUPS: readonly AgeGroupDefinition[] = [
   { value: "AGE_5_7", label: "5–7 years", minYears: 5, maxYears: 7 },
-  { value: "AGE_8_10", label: "8–10 years", minYears: 8, maxYears: 10 },
-  { value: "AGE_11_14", label: "11–14 years", minYears: 11, maxYears: 14 },
+  { value: "AGE_8_11", label: "8–11 years", minYears: 8, maxYears: 11 },
+  { value: "AGE_12_16", label: "12–16 years", minYears: 12, maxYears: 16 },
   { value: "ALL_AGES", label: "All Ages", minYears: null, maxYears: null },
 ] as const;
 
@@ -63,10 +72,10 @@ export function isAgeGroup(value: unknown): value is AgeGroup {
  * **No book in this library is restricted by age, and nothing in the code
  * enforces one.** The whole collection is for children, the membership range in
  * `library_settings` is who may join, and the band on a book says who it was
- * written for — an eight-year-old may borrow a book banded 11–14 and a
+ * written for — an eight-year-old may borrow a book banded 12–16 and a
  * thirteen-year-old may borrow a picture book, and neither needs to ask.
  *
- * This wording exists because the bare label did not say that. "8–10 years" on
+ * This wording exists because the bare label did not say that. "8–11 years" on
  * a badge beside "On the shelf" reads like a condition of borrowing, and a
  * child who reads ahead of their years would be the one to believe it.
  */

@@ -198,11 +198,11 @@ async function seedDemoUsers(prisma: PrismaClient, libraryId: string): Promise<v
 
 const DEMO_BOOKS = [
   { title: "The Gruffalo", authors: ["Julia Donaldson"], category: "stories", ageGroup: "AGE_5_7", copies: 2 },
-  { title: "Matilda", authors: ["Roald Dahl"], category: "stories", ageGroup: "AGE_8_10", copies: 1 },
-  { title: "Charlotte's Web", authors: ["E. B. White"], category: "stories", ageGroup: "AGE_8_10", copies: 1 },
+  { title: "Matilda", authors: ["Roald Dahl"], category: "stories", ageGroup: "AGE_8_11", copies: 1 },
+  { title: "Charlotte's Web", authors: ["E. B. White"], category: "stories", ageGroup: "AGE_8_11", copies: 1 },
   { title: "The Magic Faraway Tree", authors: ["Enid Blyton"], category: "adventure-and-fantasy", ageGroup: "AGE_5_7", copies: 1 },
-  { title: "A Wrinkle in Time", authors: ["Madeleine L'Engle"], category: "adventure-and-fantasy", ageGroup: "AGE_11_14", copies: 1 },
-  { title: "The Story of Babur", authors: ["Anuradha Sharma"], category: "science-and-knowledge", ageGroup: "AGE_11_14", copies: 1 },
+  { title: "A Wrinkle in Time", authors: ["Madeleine L'Engle"], category: "adventure-and-fantasy", ageGroup: "AGE_12_16", copies: 1 },
+  { title: "The Story of Babur", authors: ["Anuradha Sharma"], category: "science-and-knowledge", ageGroup: "AGE_12_16", copies: 1 },
   { title: "Tinkle Double Digest", authors: ["Anant Pai"], category: "comics", ageGroup: "ALL_AGES", copies: 1 },
   { title: "The Big Book of Puzzles", authors: ["Nita Berry"], category: "activity-and-learning", ageGroup: "ALL_AGES", copies: 1 },
 ] as const;

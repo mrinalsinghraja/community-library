@@ -109,6 +109,13 @@ export const READER_DESTINATIONS: readonly ReaderDestination[] = [
   { href: "/my-reviews", label: "What I thought", membersOnly: true },
   { href: "/how-to-join", label: "How to join" },
   { href: "/rules", label: "Our rules" },
+  /*
+   * In the shared list, so it is in the masthead of both shells for every role.
+   * A parent reads it before joining and a librarian gets asked the same
+   * questions at the desk; putting it only on the home page would mean the one
+   * person who has to answer them cannot reach the answers.
+   */
+  { href: "/faq", label: "Questions" },
   { href: "/donors", label: "Book friends" },
 ];
 

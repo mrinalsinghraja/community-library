@@ -26,7 +26,7 @@ They are separate on purpose:
 
 ## 2. How a child signs in
 
-Children aged 5–14 mostly have no email address. Requiring one would exclude
+Children aged 5–16 mostly have no email address. Requiring one would exclude
 families or push several children onto a shared parent inbox — so a member's
 identity is:
 

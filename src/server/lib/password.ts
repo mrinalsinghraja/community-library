@@ -16,7 +16,7 @@ import { env } from "@/server/env";
  *
  *   Staff  — adults with real administrative power over children's data.
  *            12 characters minimum, strength-checked.
- *   Member — children aged 5 to 14. 8 characters, no character-class rules.
+ *   Member — children aged 5 to 16. 8 characters, no character-class rules.
  *
  * The member policy is weaker than an adult standard on purpose. Complexity
  * rules do not make a child's password stronger; they make it written on a

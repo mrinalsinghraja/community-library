@@ -169,7 +169,15 @@ describe("submitting a registration", () => {
       submitRegistration({
         ...BASE_INPUT,
         childName: "Too Old",
-        childBirthYear: birthYearForAge(17),
+        /*
+         * 18, not 17. The eligibility check is deliberately generous by a year
+         * at each edge, because the library holds a birth year and not a
+         * birthday — a child turning 17 this year is 16 until their birthday,
+         * and refusing them in January on the strength of a fact the library
+         * chose not to collect is the behaviour `isEligibleBirthYear` exists to
+         * prevent. With the range now ending at 16, 17 is inside that pad.
+         */
+        childBirthYear: birthYearForAge(18),
       }),
     ).rejects.toMatchObject({ code: "RULE_VIOLATION" });
   });

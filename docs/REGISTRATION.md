@@ -56,7 +56,7 @@ sit in the queue while an administrator changes the range. Both have tests.
 
 An out-of-range submission is the one rejection told plainly to the parent:
 
-> Our library is for readers aged 5 to 14. We would still love to see you — do
+> Our library is for readers aged 5 to 16. We would still love to see you — do
 > come and talk to the librarian.
 
 It concerns their own child, reveals nothing about anyone else, and silently

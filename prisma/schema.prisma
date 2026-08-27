@@ -176,8 +176,8 @@ enum CopyCondition {
 /// that stays in library_settings.age_min/age_max and is a different question.
 enum AgeGroup {
   AGE_5_7
-  AGE_8_10
-  AGE_11_14
+  AGE_8_11
+  AGE_12_16
   ALL_AGES
 }
 
@@ -376,7 +376,7 @@ model LibrarySettings {
 
   // Membership
   ageMin Int @default(5) @map("age_min")
-  ageMax Int @default(14) @map("age_max")
+  ageMax Int @default(16) @map("age_max")
 
   // Borrowing
   //

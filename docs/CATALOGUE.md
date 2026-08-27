@@ -78,7 +78,7 @@ a choice nobody has made.
 ## 3. Title and copy stay separate
 
 ```
-book_title   The Jungle Book · Rudyard Kipling · Adventure & Fantasy · 8–10 years
+book_title   The Jungle Book · Rudyard Kipling · Adventure & Fantasy · 8–11 years
   └─ book_copy  MJCL-B0010  Good      Available   donated by Mrinal, P15
   └─ book_copy  MJCL-B0028  Fair      Borrowed    donated by the Iyer family
   └─ book_copy  MJCL-B0047  Good      Available   (bought)
@@ -117,15 +117,15 @@ that still have books or that an administrator added by hand.
 
 ## 5. Recommended age — an enum, not a range
 
-`5–7 years` · `8–10 years` · `11–14 years` · `All Ages`
+`5–7 years` · `8–11 years` · `12–16 years` · `All Ages`
 
 Stored as `AgeGroup`, with the labels and the numeric bounds together in
-`src/lib/catalogue.ts`. **Nothing anywhere parses "8–10 years" back into
+`src/lib/catalogue.ts`. **Nothing anywhere parses "8–11 years" back into
 numbers.** No free text, at any layer.
 
 These are catalogue *shelf bands*, not the library's membership rule — that
 stays in `library_settings.age_min/age_max` and answers a different question. A
-nine-year-old may perfectly well borrow a book banded 11–14; the label is a
+nine-year-old may perfectly well borrow a book banded 12–16; the label is a
 guide, and the form says so.
 
 ## 6. Condition — three words

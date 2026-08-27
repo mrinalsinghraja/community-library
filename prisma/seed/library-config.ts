@@ -66,7 +66,7 @@ export const MANA_JARDIN: LibraryConfigInput = {
   },
   settings: {
     ageMin: 5,
-    ageMax: 14,
+    ageMax: 16,
     /*
      * The circulation rules, and the only place they are written down.
      *

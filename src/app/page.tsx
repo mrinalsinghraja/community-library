@@ -187,6 +187,15 @@ export default async function HomePage() {
               <Link href="/how-to-join" className="font-bold text-primary-deep">
                 See what happens next
               </Link>
+              , or read the{" "}
+              {/*
+                Where a parent looks before filling anything in. These questions
+                were being answered one at a time on WhatsApp, which meant the
+                answer depended on who happened to reply.
+              */}
+              <Link href="/faq" className="font-bold text-primary-deep">
+                questions families ask
+              </Link>
               .
             </p>
           </div>
@@ -520,7 +529,11 @@ export default async function HomePage() {
             <Link href="/rules" className="font-bold text-primary-deep">
               Read our rules in full
             </Link>{" "}
-            — they are short, and written to be read by a child as well as a parent.
+            — they are short, and written to be read by a child as well as a parent. The{" "}
+            <Link href="/faq" className="font-bold text-primary-deep">
+              questions and answers
+            </Link>{" "}
+            go further: what we hold about your child, who can see it, and for how long.
           </p>
         </div>
       </section>

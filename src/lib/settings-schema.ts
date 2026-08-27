@@ -39,7 +39,7 @@ export const SETTING_BOUNDS = {
   maxRenewals: { min: 0, max: 3, standard: 1 },
   renewalPeriodDays: { min: 1, max: 30, standard: 14 },
   ageMin: { min: 2, max: 18, standard: 5 },
-  ageMax: { min: 2, max: 18, standard: 14 },
+  ageMax: { min: 2, max: 18, standard: 16 },
 } as const;
 
 /** Code prefixes are printed on physical labels and cards, so: short and plain. */
