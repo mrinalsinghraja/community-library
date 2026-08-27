@@ -98,6 +98,20 @@ export interface ReaderDestination {
 
 export const READER_DESTINATIONS: readonly ReaderDestination[] = [
   /*
+   * Home, first, for everybody.
+   *
+   * The library's name in the corner has always been a link to it, and that is
+   * a convention rather than a control: it is unlabelled, it is not where a
+   * person looks for a way back, and on the desk the same corner says "Library
+   * desk" and goes to /desk instead. So a librarian standing on a reader page
+   * had no way back to the front of the site at all, and a child who had wandered
+   * into the donors register had to know that a logo is a button.
+   *
+   * A named door, in the same row as the others, in the same place on every
+   * screen. It costs one item and removes a piece of folklore.
+   */
+  { href: "/", label: "Home" },
+  /*
    * "Catalogue", not "Books". The desk has a "Book list" and this is the shelf
    * a child browses; when both were called "Books" a librarian saw the same
    * word in two menus pointing at two different pages, which is the one kind of

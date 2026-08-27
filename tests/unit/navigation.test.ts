@@ -116,7 +116,7 @@ describe("what each role is offered", () => {
     expect(visitor(false)).not.toContain("/books");
   });
 
-  it("always offers the three pages anybody may read", () => {
+  it("always offers the pages anybody may read, starting at home", () => {
     for (const isMember of [true, false]) {
       for (const signedIn of [true, false]) {
         const hrefs = readerDestinationsFor({
@@ -128,6 +128,9 @@ describe("what each role is offered", () => {
         expect(hrefs).toContain("/how-to-join");
         expect(hrefs).toContain("/rules");
         expect(hrefs).toContain("/donors");
+        expect(hrefs).toContain("/faq");
+        // Home is offered to every role in every state, and is offered first.
+        expect(hrefs[0]).toBe("/");
       }
     }
   });
