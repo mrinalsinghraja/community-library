@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
@@ -8,10 +9,12 @@ import { CatalogueSearchBand } from "@/components/library/catalogue-search";
 import { HelperPreview } from "@/components/library/helper-preview";
 import { LibraryCard } from "@/components/library/library-card";
 import { PublicShell } from "@/components/layout/site-shell";
+import { POST_LOGIN_PATH } from "@/lib/routes";
 import { WhatsAppButton, WhatsAppHelp } from "@/components/library/whatsapp-help";
 import { DONATE_BOOKS_MESSAGE } from "@/lib/whatsapp";
 import { bookHelperEnabled } from "@/server/lib/ai/groq";
 import { catalogueIsPubliclyVisible, getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
+import { getActor } from "@/server/authz";
 import { listCategories } from "@/server/services/catalogue-service";
 import { Icon } from "@/components/ui/icon";
 
@@ -48,7 +51,29 @@ import { Icon } from "@/components/ui/icon";
  * why does it matter → what do you do with my child's details → who do I ask.
  */
 
+/*
+ * Per request, never prerendered. It reads the library's settings and now the
+ * session too — a page baked at build time would serve one family's answer to
+ * everybody and would never redirect anyone.
+ */
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
+  /*
+   * The front door is for people who are not inside yet.
+   *
+   * Everything below this line is written to a family who has not joined: the
+   * specimen library card, "Ask for a library card", the joining form, what it
+   * costs. A signed-in reader pressing Home in the menu was being shown the
+   * shop window of a shop they are already standing in — and, worse, being
+   * asked again to sign up. They get the landing the sign-in itself would have
+   * given them, in whichever shell their role uses.
+   *
+   * Signing out returns here, because signOut redirects to "/" with the cookie
+   * already gone.
+   */
+  if (await getActor()) redirect(POST_LOGIN_PATH);
+
   const branding = await getBrandingSafe();
 
   // Rules come from settings; if the library is not configured yet the page

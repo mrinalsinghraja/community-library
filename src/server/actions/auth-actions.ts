@@ -2,6 +2,8 @@
 
 import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
+
+import { POST_LOGIN_PATH } from "@/lib/routes";
 import { z } from "zod";
 
 import { LIFECYCLE_MESSAGES } from "@/lib/account-lifecycle";
@@ -25,7 +27,7 @@ const signInSchema = z.object({
     .string()
     .optional()
     .transform((value) =>
-      value && value.startsWith("/") && !value.startsWith("//") ? value : "/account",
+      value && value.startsWith("/") && !value.startsWith("//") ? value : POST_LOGIN_PATH,
     ),
 });
 

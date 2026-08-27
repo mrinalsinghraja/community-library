@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { LoginForm } from "@/app/login/login-form";
 import { PublicShell } from "@/components/layout/site-shell";
 import { Card } from "@/components/ui/card";
+import { POST_LOGIN_PATH } from "@/lib/routes";
 import { getActor } from "@/server/authz";
 import { formatCode } from "@/server/lib/codes";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
@@ -29,7 +30,7 @@ export default async function LoginPage({
    * ever, and the reader could not get back in. Resolving the real session is
    * the difference between "you are signed in" and "you have a cookie".
    */
-  if (await getActor()) redirect("/account");
+  if (await getActor()) redirect(POST_LOGIN_PATH);
 
   // A worked example of this library's own card format, so the hint is right
   // whichever community is running the platform.

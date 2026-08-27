@@ -193,3 +193,45 @@ describe("the menu does not depend on the page", () => {
     expect(ask()).toBe(ask());
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe("home means something different once you are signed in", () => {
+  const read = (...parts: string[]) =>
+    readFileSync(join(process.cwd(), "src", ...parts), "utf8");
+
+  /*
+   * The front page is written to a family who has not joined: a specimen
+   * library card, "Ask for a library card", what it costs, the joining form. A
+   * signed-in reader pressing Home in the menu was shown the shop window of a
+   * shop they are already standing in, and asked to sign up again.
+   */
+  it("sends a signed-in person to their own landing", () => {
+    const home = read("app", "page.tsx");
+    expect(home).toContain("if (await getActor()) redirect(POST_LOGIN_PATH)");
+  });
+
+  it("uses the same landing the sign-in itself uses", () => {
+    // One constant, because three places have to agree and used to agree only
+    // by coincidence.
+    for (const source of [
+      read("app", "page.tsx"),
+      read("app", "login", "page.tsx"),
+      read("server", "actions", "auth-actions.ts"),
+    ]) {
+      expect(source).toContain("POST_LOGIN_PATH");
+    }
+    expect(read("lib", "routes.ts")).toMatch(/POST_LOGIN_PATH = "\/account"/);
+  });
+
+  it("is rendered per request, so the redirect can happen at all", () => {
+    expect(read("app", "page.tsx")).toContain('export const dynamic = "force-dynamic"');
+  });
+
+  it("still points Home at / — the redirect decides, not the menu", () => {
+    // A role-dependent href would mean two menus again, and the footer, the
+    // masthead and the logo would each have to remember the rule.
+    const home = READER_DESTINATIONS.find((item) => item.label === "Home");
+    expect(home?.href).toBe("/");
+  });
+});
