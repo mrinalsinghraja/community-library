@@ -85,6 +85,30 @@ export function ageGroupSuggestion(value: AgeGroup): string {
   return found.value === "ALL_AGES" ? "Good for any age" : `Best for ${found.label}`;
 }
 
+/**
+ * How many times a book has gone home, as a sentence.
+ *
+ * The companion to the rating's bracketed count, and it answers the question a
+ * rating cannot: 5.0 from one reader and 5.0 from one reader who is the only
+ * child ever to have opened it are different books. It is also the only number
+ * on the shelf that goes up on its own — a rating waits for somebody to write
+ * one, a borrow count moves every time a book is issued.
+ *
+ * **Null at nought, never "Borrowed 0 times".** Same rule the rating follows on
+ * a card: a shelf still being catalogued would otherwise carry two dozen tiles
+ * each stating that nobody has wanted this book yet, which is a sentence about
+ * the library's age dressed up as a verdict on its books.
+ *
+ * **It counts the work, not the copy, and it never names anybody.** Two copies
+ * of the same title are one book as far as this figure is concerned, and a loan
+ * the desk cancelled a minute after issuing it is a correction rather than a
+ * reading. See the query in `catalogue-service` for both rules in SQL.
+ */
+export function borrowCountLabel(count: number): string | null {
+  if (!Number.isFinite(count) || count <= 0) return null;
+  return count === 1 ? "Borrowed once" : `Borrowed ${count} times`;
+}
+
 /** Said once, in full, wherever a child might mistake the band for a rule. */
 export const AGE_BAND_NOTE =
   "This is a suggestion, not a rule. Anyone may borrow any book in our library.";

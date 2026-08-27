@@ -10,6 +10,7 @@ import {
   SELECTABLE_STATUSES,
   STATUSES,
   ageGroupLabel,
+  borrowCountLabel,
   conditionLabel,
   isAgeGroup,
   isCondition,
@@ -56,6 +57,40 @@ describe("recommended age", () => {
     expect(isAgeGroup("AGE_5_7")).toBe(true);
     expect(isAgeGroup("AGE_3_5")).toBe(false);
     expect(isAgeGroup("")).toBe(false);
+  });
+});
+
+describe("how often a book has gone home", () => {
+  it("counts in words a child reads without stopping", () => {
+    expect(borrowCountLabel(1)).toBe("Borrowed once");
+    expect(borrowCountLabel(2)).toBe("Borrowed 2 times");
+    expect(borrowCountLabel(37)).toBe("Borrowed 37 times");
+  });
+
+  it("says nothing at all about a book nobody has borrowed", () => {
+    /*
+     * The same rule the rating follows on a card. A shelf still being
+     * catalogued would otherwise carry two dozen tiles each announcing that
+     * nobody has wanted this book yet — a sentence about the library's age,
+     * dressed up as a verdict on its books.
+     */
+    expect(borrowCountLabel(0)).toBeNull();
+  });
+
+  it("is not fooled by a number that is not one", () => {
+    // The count arrives as a bigint from PostgreSQL and is converted on the way
+    // through. If that ever goes wrong the card stays quiet rather than
+    // printing "Borrowed NaN times" at a nine-year-old.
+    expect(borrowCountLabel(Number.NaN)).toBeNull();
+    expect(borrowCountLabel(-3)).toBeNull();
+  });
+
+  it("never mentions a reader", () => {
+    // Whatever the number, this string is about the book. There is no shape of
+    // it that names, counts or hints at the children behind it.
+    for (const count of [1, 2, 40]) {
+      expect(borrowCountLabel(count)).not.toMatch(/reader|child|by |member/i);
+    }
   });
 });
 

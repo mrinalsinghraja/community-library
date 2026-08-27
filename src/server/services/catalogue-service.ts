@@ -33,6 +33,7 @@ import {
   scheduleMediaDeletion,
 } from "@/server/services/media-service";
 import { copyIsOnLoan } from "@/server/services/circulation-service";
+import { borrowCountForTitle } from "@/server/services/circulation-service";
 import { ratingForTitle } from "@/server/services/review-service";
 
 /**
@@ -205,6 +206,17 @@ export interface ReaderBookCard {
    * shape and "no ratings yet" is a state rather than an absence.
    */
   rating: RatingSummary;
+  /**
+   * How many times this work has been borrowed, across every copy of it.
+   *
+   * A number and nothing else. No borrower, no dates, no loan ids — which child
+   * read what is nobody's business but theirs, and a figure that cannot name
+   * anyone is what makes this safe on a shelf a visitor can read signed out.
+   *
+   * Zero is a real value, not a missing one: the surfaces decide whether an
+   * unborrowed book says so, and `borrowCountLabel` says it stays quiet.
+   */
+  borrowCount: number;
 }
 
 export interface ReaderBookDetail extends ReaderBookCard {
@@ -673,6 +685,7 @@ function toReaderCard(row: CopyRow): ReaderBookCard {
     status: row.status,
     coverMediaId: row.cover_media_id,
     rating: toRatingSummary(row),
+    borrowCount: Number(row.loan_count),
   };
 }
 
@@ -738,7 +751,20 @@ export async function getBookByCode(code: string): Promise<ReaderBookDetail> {
     coverMediaId: copy.title.coverMediaId,
     donorAcknowledgement: donorAcknowledgement(copy.donation),
     titleId: copy.titleId,
+    /*
+     * Two small queries rather than one large one. This page reads a single
+     * copy through Prisma; the shelf reads twenty-four rows of raw SQL with
+     * both aggregates lateral-joined. Sharing a code path between them would
+     * mean rewriting one of the two into the other's shape for no gain a reader
+     * would notice on a page that is already one round trip from the database.
+     *
+     * What must not differ is the rule, and it does not: both count PUBLISHED
+     * reviews, and both count loans across every copy of the work with
+     * CANCELLED excluded. `tests/database/catalogue.test.ts` pins the pair
+     * together against the same fixture.
+     */
     rating: await ratingForTitle(copy.titleId),
+    borrowCount: await borrowCountForTitle(copy.titleId),
   };
 }
 

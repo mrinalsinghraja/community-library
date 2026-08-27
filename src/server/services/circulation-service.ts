@@ -1993,6 +1993,30 @@ export async function copyIsOnLoan(copyId: string): Promise<boolean> {
   return count > 0;
 }
 
+/**
+ * How many times a work has been borrowed. A number, and nothing else.
+ *
+ * Asks for no permission, for the same reason `reviewsForTitle` does not: the
+ * catalogue's own gate has already been passed by the caller, and what keeps
+ * this safe is the projection rather than a check. There is no borrower here,
+ * no date, no loan id — nothing that could be joined back to a child.
+ *
+ * Two rules, and they are the same two the shelf's SQL applies:
+ *
+ * **Counted across every copy.** A loan points at a physical copy, but the
+ * question a reader is asking is about the book. The library's second copy of a
+ * title should not split its answer in two.
+ *
+ * **CANCELLED excluded.** An issue the desk undid a minute later is a
+ * correction, not a reading, and counting it would let a mistake at the desk
+ * make a book look popular.
+ */
+export async function borrowCountForTitle(titleId: string): Promise<number> {
+  return prisma.loan.count({
+    where: { copy: { titleId }, status: { not: "CANCELLED" } },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Asking for a book
 // ---------------------------------------------------------------------------

@@ -93,10 +93,19 @@ beforeEach(async () => {
   storageDriver.reset();
   // Each block starts from an empty shelf, so a count assertion means what it
   // says rather than depending on which test ran first.
-  await db.donation.deleteMany({});
-  await db.bookCopy.deleteMany({});
-  await db.bookTitle.deleteMany({});
-  await db.mediaObject.deleteMany({});
+  /*
+   * One transaction, because the shelf and the ledger are checked against each
+   * other at commit: a loan holds its copy with onDelete: Restrict, and a copy
+   * reading BORROWED with no active loan is refused. Emptying the shelf means
+   * removing both halves together, which is the same rule the desk works under.
+   */
+  await db.$transaction(async (tx) => {
+    await tx.donation.deleteMany({});
+    await tx.loan.deleteMany({});
+    await tx.bookCopy.deleteMany({});
+    await tx.bookTitle.deleteMany({});
+    await tx.mediaObject.deleteMany({});
+  });
   await db.codeSequence.updateMany({
     where: { libraryId: fixture.libraryId, kind: "BOOK_COPY" },
     data: { nextValue: 1 },
@@ -801,5 +810,122 @@ describe("editing", () => {
       where: { action: AUDIT_ACTIONS.DONATION_UPDATED, entityId: created.copyId },
     });
     expect(row.metadata).toMatchObject({ removed: true, previousDonorName: "Mrinal" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("how often a book has gone home", () => {
+  /**
+   * The figure beside the rating.
+   *
+   * A rating says how much the children who read a book liked it. This says how
+   * many of them there were, which on a shelf this size is often the more
+   * useful of the two — and unlike a rating it moves on its own, without
+   * waiting for anybody to sit down and write something.
+   *
+   * What is under test is the pair of rules the figure depends on, and that the
+   * shelf and the book's own page apply both of them the same way. They are two
+   * different queries — twenty-four rows of raw SQL against one Prisma count —
+   * so "they agree" is a property that has to be checked rather than assumed.
+   */
+
+  async function lend(copyId: string, status: "ACTIVE" | "RETURNED" | "CANCELLED" = "RETURNED") {
+    /*
+     * Both halves in one transaction, because the database enforces the pair in
+     * both directions: an ACTIVE loan against an AVAILABLE copy is refused, and
+     * so is a BORROWED copy with no active loan. The constraint is deferred to
+     * commit, which is what lets a fixture — or the real desk — move the two
+     * together. Satisfying it here is not overhead; it is the reason a borrow
+     * count can be trusted at all.
+     */
+    await db.$transaction(async (tx) => {
+      if (status === "ACTIVE") {
+        await tx.bookCopy.update({ where: { id: copyId }, data: { status: "BORROWED" } });
+      }
+
+      await tx.loan.create({
+        data: {
+          libraryId: fixture.libraryId,
+          copyId,
+          memberUserId: reader.id,
+          status,
+          dueAt: new Date("2026-09-10T00:00:00Z"),
+          returnedAt: status === "RETURNED" ? new Date("2026-09-01T00:00:00Z") : null,
+          cancelledAt: status === "CANCELLED" ? new Date("2026-09-01T00:00:00Z") : null,
+        },
+      });
+    });
+  }
+
+  async function shelfCount(code: string): Promise<number> {
+    const page = await browseCatalogue({ search: code });
+    return page.items[0].borrowCount;
+  }
+
+  it("says nought until somebody has taken it home", async () => {
+    await addBook();
+    await actingAs(reader.id, "MEMBER");
+
+    expect(await shelfCount("TST-B0001")).toBe(0);
+    expect((await getBookByCode("TST-B0001")).borrowCount).toBe(0);
+  });
+
+  it("counts a loan on the shelf and on the book's own page alike", async () => {
+    const created = await addBook();
+    await lend(created.copyId);
+    await lend(created.copyId, "ACTIVE");
+    await actingAs(reader.id, "MEMBER");
+
+    // A book currently out counts too: it has gone home, which is the question.
+    expect(await shelfCount("TST-B0001")).toBe(2);
+    expect((await getBookByCode("TST-B0001")).borrowCount).toBe(2);
+  });
+
+  it("adds up every copy of the same book", async () => {
+    const first = await addBook();
+    const second = await addBook();
+    expect(second.createdNewTitle).toBe(false);
+
+    await lend(first.copyId);
+    await lend(second.copyId);
+    await actingAs(reader.id, "MEMBER");
+
+    // The reader's question is about the book. A library that bought a second
+    // copy must not end up looking half as popular on each of them.
+    expect(await shelfCount("TST-B0001")).toBe(2);
+    expect(await shelfCount("TST-B0002")).toBe(2);
+    expect((await getBookByCode("TST-B0002")).borrowCount).toBe(2);
+  });
+
+  it("does not count an issue the desk cancelled", async () => {
+    const created = await addBook();
+    await lend(created.copyId);
+    await lend(created.copyId, "CANCELLED");
+    await actingAs(reader.id, "MEMBER");
+
+    // A loan undone a minute after it was made is a correction, not a reading.
+    // Counting it would let a slip at the desk make a book look wanted.
+    expect(await shelfCount("TST-B0001")).toBe(1);
+    expect((await getBookByCode("TST-B0001")).borrowCount).toBe(1);
+  });
+
+  it("carries no borrower, no date and no loan id off the server", async () => {
+    const created = await addBook();
+    await lend(created.copyId);
+    await actingAs(reader.id, "MEMBER");
+
+    /*
+     * The whole reason this figure is safe on a shelf a visitor can read while
+     * signed out. Serialise the card and look for the reader in it: their id,
+     * their code and their name must not be anywhere, at any depth.
+     */
+    const page = await browseCatalogue({ search: "TST-B0001" });
+    const rendered = JSON.stringify(page.items[0]);
+
+    expect(rendered).toContain('"borrowCount":1');
+    for (const secret of [reader.id, reader.username ?? "", reader.displayName]) {
+      expect(rendered).not.toContain(secret);
+    }
   });
 });

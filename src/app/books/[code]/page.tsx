@@ -12,7 +12,12 @@ import { PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { RatingSummaryLine } from "@/components/ui/star-rating";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { AGE_BAND_NOTE, ageGroupSuggestion, statusDefinition } from "@/lib/catalogue";
+import {
+  AGE_BAND_NOTE,
+  ageGroupSuggestion,
+  borrowCountLabel,
+  statusDefinition,
+} from "@/lib/catalogue";
 import { getActor } from "@/server/authz";
 import { isAppError } from "@/server/lib/errors";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
@@ -74,6 +79,7 @@ export default async function BookDetailPage({
   }
 
   const status = statusDefinition(book.status);
+  const borrowed = borrowCountLabel(book.borrowCount);
   const { settings } = await getCurrentLibrary();
 
   /*
@@ -148,6 +154,18 @@ export default async function BookDetailPage({
                 <RatingSummaryLine summary={book.rating} />
               </a>
             </p>
+
+            {/*
+              Under the rating, because it is the other half of the same
+              question. A rating says how much the children who read it liked
+              it; this says how many there were. On a shelf this size that is
+              often the more useful of the two.
+
+              Nothing here identifies a reader: it is a count of loans across
+              every copy of this work, with cancelled issues left out. Silent
+              until a book has actually gone home once.
+            */}
+            {borrowed ? <p className="mt-2 text-lg text-ink-soft">{borrowed}</p> : null}
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <StatusBadge tone="neutral">
