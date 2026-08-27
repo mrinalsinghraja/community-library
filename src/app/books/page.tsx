@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { BookCardTile } from "@/components/library/book-card";
 import { Butterfly, LeafSprig } from "@/components/library/library-logo";
-import { PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
 import { AGE_BAND_NOTE, AGE_GROUPS, PAGE_SIZES, isAgeGroup } from "@/lib/catalogue";
@@ -108,7 +108,7 @@ export default async function BooksPage({
 
   return (
     <PublicShell branding={branding}>
-      <div className="relative mx-auto w-full max-w-6xl px-5 py-10 sm:px-8 sm:py-14">
+      <PageBody width="wide">
         <Butterfly className="drift pointer-events-none absolute right-4 top-6 w-10 opacity-70 sm:w-14" />
 
         <h1 className="garden-rule inline-block text-4xl sm:text-5xl">
@@ -279,7 +279,7 @@ export default async function BooksPage({
               </EmptyState>
             )
           ) : (
-            <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4 xl:grid-cols-5">
+            <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {result.items.map((book) => (
                 <BookCardTile key={book.code} book={book} />
               ))}
@@ -323,7 +323,7 @@ export default async function BooksPage({
             <Icon name="arrowRight" />
           </Link>
         </p>
-      </div>
+      </PageBody>
     </PublicShell>
   );
 }

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Butterfly } from "@/components/library/library-logo";
-import { PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PublicShell } from "@/components/layout/site-shell";
 import { WhatsAppButton } from "@/components/library/whatsapp-help";
 import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -78,7 +78,7 @@ export default async function DonorsPage() {
 
   return (
     <PublicShell branding={branding}>
-      <div className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8 sm:py-16">
+      <PageBody width="wide">
         <header className="relative">
           <h1 className="garden-rule inline-block text-3xl sm:text-4xl">
             Thank you, book friends
@@ -302,7 +302,7 @@ export default async function DonorsPage() {
             </p>
           )}
 
-          <ul className="mt-8 grid gap-5 sm:grid-cols-3">
+          <ul className="mt-8 grid gap-5 sm:grid-cols-3 2xl:grid-cols-4">
             {[
               {
                 title: "You bring the book",
@@ -324,7 +324,7 @@ export default async function DonorsPage() {
             ))}
           </ul>
         </section>
-      </div>
+      </PageBody>
     </PublicShell>
   );
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { PageHeading, PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PageHeading, PublicShell } from "@/components/layout/site-shell";
 import { WhatsAppHelp } from "@/components/library/whatsapp-help";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
@@ -91,7 +91,7 @@ export default async function HowToJoinPage() {
 
   return (
     <PublicShell branding={branding}>
-      <div className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8 sm:py-14">
+      <PageBody width="page">
         <PageHeading title="How to join">
           Every child in the building can have a card, and it costs nothing. Here is exactly what
           happens, from the form to the first book.
@@ -237,7 +237,7 @@ export default async function HowToJoinPage() {
             ) : null}
           </div>
         </section>
-      </div>
+      </PageBody>
     </PublicShell>
   );
 }

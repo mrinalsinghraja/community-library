@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ProfileForm } from "@/app/account/profile-form";
-import { PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PublicShell } from "@/components/layout/site-shell";
 import { StaffShell } from "@/components/layout/staff-shell";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
@@ -57,7 +57,7 @@ export default async function AccountDetailsPage() {
 
   return (
     <Shell branding={branding} actor={actor} title="Account details">
-      <div className="mx-auto w-full max-w-4xl px-5 py-14 sm:px-8">
+      <PageBody width="page">
         <p className="text-base text-ink-soft">
           <Link href="/account" className="font-bold text-primary-deep no-underline">
             ← My library
@@ -198,7 +198,7 @@ export default async function AccountDetailsPage() {
             a shared device in the library, always use this button.
           </p>
         </div>
-      </div>
+      </PageBody>
     </Shell>
   );
 }

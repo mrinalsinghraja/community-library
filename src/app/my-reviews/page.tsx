@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { Butterfly } from "@/components/library/library-logo";
-import { PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { StarVerdict } from "@/components/ui/star-rating";
@@ -51,7 +51,7 @@ export default async function MyReviewsPage() {
 
   return (
     <PublicShell branding={branding}>
-      <div className="relative mx-auto w-full max-w-4xl px-5 py-12 sm:px-8">
+      <PageBody width="wide">
         <Butterfly className="drift pointer-events-none absolute right-4 top-8 w-10 opacity-70 sm:w-12" />
 
         {/*
@@ -96,7 +96,7 @@ export default async function MyReviewsPage() {
             </EmptyState>
           </div>
         ) : (
-          <ul className="mt-8 flex list-none flex-col gap-4 p-0">
+          <ul className="mt-8 grid list-none gap-4 p-0 xl:grid-cols-2">
             {reviews.map((review) => (
               <li
                 key={review.id}
@@ -203,7 +203,7 @@ export default async function MyReviewsPage() {
             My books
           </ButtonLink>
         </div>
-      </div>
+      </PageBody>
     </PublicShell>
   );
 }

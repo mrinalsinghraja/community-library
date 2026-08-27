@@ -11,7 +11,7 @@ import { ReadersBoard } from "@/components/library/readers-board";
 import { Recommendations } from "@/components/library/recommendations";
 import { VisitTimes } from "@/components/library/visit-times";
 import { ReviewReminder } from "@/components/library/review-reminder";
-import { PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PublicShell } from "@/components/layout/site-shell";
 import { Butterfly } from "@/components/library/library-logo";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
@@ -119,7 +119,7 @@ export default async function MyBooksPage({
 
   return (
     <PublicShell branding={branding}>
-      <div className="relative mx-auto w-full max-w-5xl px-5 py-12 sm:px-8">
+      <PageBody width="wide">
         <Butterfly className="drift pointer-events-none absolute right-4 top-8 w-10 opacity-70 sm:w-12" />
         <h1 className="garden-rule inline-block text-4xl">My books</h1>
 
@@ -136,8 +136,27 @@ export default async function MyBooksPage({
           this screen to find their own books and somebody else's month should
           never be what greets them.
         */}
-        <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
-          <p className="text-lg text-ink-soft lg:flex-1">
+        {/* ---------------------------------------------------------------- */}
+        {/* Two columns from xl up: the child's own books on the left, what    */}
+        {/* the library has to say on the right.                              */}
+        {/*                                                                   */}
+        {/* It used to be two columns for the greeting alone. The sidebar sat  */}
+        {/* in the top right and every section after it ran the full width     */}
+        {/* underneath, so on a wide screen this page was a narrow ribbon with */}
+        {/* a third of the window empty either side — and it was long because  */}
+        {/* it was narrow. The shelf, the asks, the suggestions and the        */}
+        {/* history now share the left column with the sidebar beside all of   */}
+        {/* them, which is most of the scrolling gone without cutting a card.  */}
+        {/*                                                                   */}
+        {/* Three grid children, not two, and each placed explicitly from xl   */}
+        {/* up. The sidebar has to sit BETWEEN the greeting and the shelf on a */}
+        {/* phone and BESIDE both on a wide screen, and one main column cannot */}
+        {/* do that: whatever the sidebar follows in the source is where it    */}
+        {/* lands when the columns collapse. Placed like this, a phone still   */}
+        {/* reads greeting, then the library's news, then your own books.      */}
+        {/* ---------------------------------------------------------------- */}
+        <div className="mt-8 grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_24rem] xl:gap-12">
+          <p className="text-lg text-ink-soft xl:col-start-1 xl:row-start-1">
             {active.length === 0
               ? "You have nothing borrowed right now."
               : active.length === 1
@@ -147,12 +166,15 @@ export default async function MyBooksPage({
             You can have {limit === 1 ? "one book" : `${limit} books`} at a time.
           </p>
 
-          <div className="order-last flex w-full shrink-0 flex-col gap-6 lg:order-none lg:w-[26rem]">
+          <aside
+            aria-label="From the library"
+            className="flex w-full flex-col gap-6 xl:col-start-2 xl:row-span-2 xl:row-start-1"
+          >
             {/*
-              The nudge above the board, and both below the greeting on a phone.
-              A child's own unfinished business outranks somebody else's month;
-              neither outranks the sentence telling them how many books they
-              have at home, which is what they opened this page to read.
+              The nudge above the board. A child's own unfinished business
+              outranks somebody else's month; neither outranks the sentence
+              telling them how many books they have at home, which is what they
+              opened this page to read.
             */}
             <ReviewReminder prompts={reviewPrompts} />
             {/*
@@ -163,8 +185,9 @@ export default async function MyBooksPage({
               <VisitTimes week={week} venueName={settings.venueName} />
             </div>
             <ReadersBoard readers={boardReaders} monthLabel={boardMonth} />
-          </div>
-        </div>
+          </aside>
+
+          <div className="flex min-w-0 flex-col xl:col-start-1 xl:row-start-2">
 
         {active.length === 0 ? (
           <div className="mt-8">
@@ -315,7 +338,12 @@ export default async function MyBooksPage({
               </ButtonLink>
             </p>
 
-            <ul className="mt-6 flex flex-col gap-3">
+            {/*
+              Two columns once there is room. A history row is a thumbnail and
+              three short lines — at full width each was a stripe of mostly
+              empty paper, and twenty finished books were twenty screens of it.
+            */}
+            <ul className="mt-6 grid gap-3 lg:grid-cols-2">
               {history.map((loan, index) => (
                 // Keyed by code AND position: the same physical copy can appear
                 // more than once, because borrowing it again is a new loan and
@@ -367,7 +395,9 @@ export default async function MyBooksPage({
             My library card
           </ButtonLink>
         </div>
-      </div>
+          </div>
+        </div>
+      </PageBody>
     </PublicShell>
   );
 }

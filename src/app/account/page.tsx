@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { MemberAvatar } from "@/components/library/avatar";
-import { PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PublicShell } from "@/components/layout/site-shell";
 import { StaffShell } from "@/components/layout/staff-shell";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Callout } from "@/components/ui/states";
@@ -76,7 +76,7 @@ export default async function AccountPage() {
 
   return (
     <Shell branding={branding} actor={actor} title="My library">
-      <div className="mx-auto w-full max-w-4xl px-5 py-14 sm:px-8">
+      <PageBody width="page">
         <div className="flex items-center gap-4">
           {/*
             The child's own card picture.
@@ -229,7 +229,7 @@ export default async function AccountPage() {
             </p>
           </CardBody>
         </Card>
-      </div>
+      </PageBody>
     </Shell>
   );
 }

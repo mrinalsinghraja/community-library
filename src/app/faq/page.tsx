@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { PageHeading, PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PageHeading, PublicShell } from "@/components/layout/site-shell";
 import { Card, CardBody } from "@/components/ui/card";
 import { Callout } from "@/components/ui/states";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -245,7 +245,7 @@ export default async function FaqPage() {
 
   return (
     <PublicShell branding={branding}>
-      <div className="mx-auto w-full max-w-3xl px-5 py-14 sm:px-8">
+      <PageBody width="wide">
         <PageHeading title="Questions and answers">
           Everything a family usually asks before joining — and the things worth knowing
           afterwards. If your question is not here, ask a person.
@@ -266,7 +266,7 @@ export default async function FaqPage() {
                   {section.title}
                 </h2>
 
-                <div className="mt-5 flex flex-col gap-4">
+                <div className="mt-5 grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
                   {section.items.map((item) => (
                     <Card key={item.q} tone="shelf">
                       <CardBody>
@@ -337,7 +337,7 @@ export default async function FaqPage() {
             </ul>
           </CardBody>
         </Card>
-      </div>
+      </PageBody>
     </PublicShell>
   );
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { PageHeading, PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PageHeading, PublicShell } from "@/components/layout/site-shell";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Callout } from "@/components/ui/states";
 import { BORROW_REQUEST_MESSAGES } from "@/lib/circulation";
@@ -141,7 +141,7 @@ export default async function RulesPage() {
 
   return (
     <PublicShell branding={branding}>
-      <div className="mx-auto w-full max-w-4xl px-5 py-14 sm:px-8">
+      <PageBody width="wide">
         <PageHeading title="Our simple rules">
           Short, and none of them are complicated.
         </PageHeading>
@@ -152,7 +152,7 @@ export default async function RulesPage() {
           </Callout>
         ) : (
           <>
-            <div className="mt-10 grid gap-6 md:grid-cols-2">
+            <div className="mt-10 grid gap-6 md:grid-cols-2 2xl:grid-cols-3">
               {rules.map((rule, index) => (
                 <Card key={rule.title} tone="shelf" className="lift">
                   <CardTitle icon={<Icon name={rule.icon} />}>
@@ -218,7 +218,7 @@ export default async function RulesPage() {
             ) : null}
           </>
         )}
-      </div>
+      </PageBody>
     </PublicShell>
   );
 }

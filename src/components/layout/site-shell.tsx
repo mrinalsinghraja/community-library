@@ -2,13 +2,17 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Butterfly, LibraryLogo } from "@/components/library/library-logo";
+import { cn } from "@/lib/cn";
 import { StoryCharacters } from "@/components/library/story-characters";
 import { canReachDesk, readerDestinationsFor } from "@/lib/desk-nav";
 import { LEGAL_LINKS } from "@/lib/legal-links";
 import { JOIN_HELP_MESSAGE, whatsAppLink } from "@/lib/whatsapp";
 import { signOutAction } from "@/server/actions/auth-actions";
 import { getActor } from "@/server/authz";
-import { catalogueIsPubliclyVisible, type Branding } from "@/server/lib/settings";
+import {
+  catalogueIsPubliclyVisible,
+  type Branding,
+} from "@/server/lib/settings";
 
 /**
  * The public shell: masthead, main landmark, footer.
@@ -107,7 +111,9 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
             <span className="font-display text-lg font-semibold text-ink sm:text-2xl">
               {branding.libraryName}
             </span>
-            <span className="text-sm text-ink-soft sm:text-base">{branding.communityName}</span>
+            <span className="text-sm text-ink-soft sm:text-base">
+              {branding.communityName}
+            </span>
           </span>
         </Link>
 
@@ -193,7 +199,10 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
           <ul className="flex items-center gap-1 py-1.5 sm:gap-2">
             {destinations.map((item) => (
               <li key={item.href} className="list-none">
-                <Link href={item.href} className={`${NAV_LINK} whitespace-nowrap`}>
+                <Link
+                  href={item.href}
+                  className={`${NAV_LINK} whitespace-nowrap`}
+                >
                   {item.label}
                 </Link>
               </li>
@@ -257,12 +266,14 @@ export async function SiteFooter({ branding }: { branding: Branding }) {
               priority={false}
               className="w-9 shrink-0"
             />
-            <p className="font-display text-lg font-semibold text-ink">{branding.libraryName}</p>
+            <p className="font-display text-lg font-semibold text-ink">
+              {branding.libraryName}
+            </p>
           </div>
           <p className="max-w-md">
-            A free library run by and for the {branding.communityName} community. Books are shared,
-            never sold. Joining costs nothing, and donating a book is never a condition of
-            membership.
+            A free library run by and for the {branding.communityName}{" "}
+            community. Books are shared, never sold. Joining costs nothing, and
+            donating a book is never a condition of membership.
           </p>
           {/*
             The address in the footer of every page, because this is where a
@@ -284,7 +295,10 @@ export async function SiteFooter({ branding }: { branding: Branding }) {
           <ul className="mt-4 flex flex-col gap-2.5">
             {destinations.map((item) => (
               <li key={item.href} className="list-none">
-                <Link href={item.href} className="font-bold text-primary-deep no-underline">
+                <Link
+                  href={item.href}
+                  className="font-bold text-primary-deep no-underline"
+                >
                   {item.label}
                 </Link>
               </li>
@@ -354,7 +368,10 @@ export async function SiteFooter({ branding }: { branding: Branding }) {
             <ul className="flex flex-wrap items-center gap-x-6 gap-y-2">
               {LEGAL_LINKS.map((item) => (
                 <li key={item.href} className="list-none">
-                  <Link href={item.href} className="text-ink-soft no-underline hover:text-accent-ink">
+                  <Link
+                    href={item.href}
+                    className="text-ink-soft no-underline hover:text-accent-ink"
+                  >
                     {item.label}
                   </Link>
                 </li>
@@ -369,7 +386,8 @@ export async function SiteFooter({ branding }: { branding: Branding }) {
             the wrong tone in the smallest type on the site.
           */}
           <p className="text-ink-faint">
-            © {new Date().getFullYear()} {branding.libraryName}. Free to join, run by neighbours.
+            © {new Date().getFullYear()} {branding.libraryName}. Free to join,
+            run by neighbours.
           </p>
         </div>
       </div>
@@ -404,6 +422,60 @@ export async function PublicShell({
 }
 
 /**
+ * The one place a reader page decides how wide it is.
+ *
+ * Every page used to carry its own `mx-auto w-full max-w-Nxl px-5 py-12`, and
+ * the N was chosen a page at a time: 3xl here, 4xl there, 5xl on the busiest
+ * screen in the application. On a laptop that reads as an accident and on a
+ * large monitor it is one — the desk works at 104rem while a child's own shelf
+ * was pinned to 64rem with a third of the screen empty either side, so the page
+ * was long because it was narrow.
+ *
+ * Four widths, chosen by what the page holds rather than by taste:
+ *
+ *   * `form`  — one column of fields. A wide text input is harder to fill in,
+ *               not easier, so this stays where it was.
+ *   * `prose` — paragraphs meant to be read straight through. Capped near the
+ *               line length the eye can track without losing its place.
+ *   * `page`  — a mix: some prose, some cards.
+ *   * `wide`  — grids, lists and dashboards, which get the room they can use.
+ *
+ * A `wide` page is not a licence to stretch a sentence across 88rem: the prose
+ * inside one still caps itself. Width belongs to the layout; measure belongs to
+ * the paragraph.
+ */
+export const PAGE_WIDTHS = {
+  form: "max-w-xl",
+  prose: "max-w-3xl",
+  page: "max-w-5xl",
+  wide: "max-w-[88rem]",
+} as const;
+
+export type PageWidth = keyof typeof PAGE_WIDTHS;
+
+export function PageBody({
+  width = "page",
+  className,
+  children,
+}: {
+  width?: PageWidth;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "relative mx-auto w-full px-5 py-10 sm:px-8 sm:py-12",
+        PAGE_WIDTHS[width],
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
  * A page heading with the garden rule under it, and one butterfly to the side.
  * Used at the top of every child-facing page so they are visibly one family.
  */
@@ -422,7 +494,9 @@ export function PageHeading({
       {butterfly ? (
         <Butterfly className="drift absolute -top-2 right-0 w-9 opacity-80 sm:w-12" />
       ) : null}
-      {children ? <p className="mt-7 max-w-2xl text-lg text-ink-soft">{children}</p> : null}
+      {children ? (
+        <p className="mt-7 max-w-2xl text-lg text-ink-soft">{children}</p>
+      ) : null}
     </div>
   );
 }
