@@ -280,7 +280,7 @@ export const retentionPolicySchema = z.object({
   ),
   removeGuardianAfterMonths: period(
     RETENTION_BOUNDS.removeGuardianAfterMonths,
-    "The time before a grown-up's details are erased",
+    "The time before a guardian's details are erased",
     "months",
   ),
 });

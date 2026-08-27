@@ -8,7 +8,7 @@ import {
 } from "@/server/lib/password";
 
 describe("member password policy", () => {
-  it("accepts a memorable secret word of eight characters or more", () => {
+  it("accepts a memorable password of eight characters or more", () => {
     // Eight characters, no complexity rules. A five-year-old has to be able to
     // type this on a tablet — so we ask for length, not symbols.
     // ADR-006 set the original policy; ADR-013 raised the minimum to 8.

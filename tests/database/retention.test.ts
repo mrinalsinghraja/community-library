@@ -312,7 +312,7 @@ describe("erasing a departed reader", () => {
   });
 });
 
-describe("erasing a grown-up", () => {
+describe("erasing a guardian", () => {
   it("waits until every child of theirs is archived", async () => {
     const { runRetentionPass } = await import("@/server/lib/retention");
     await setPolicy({ removeGuardianAfterMonths: 6 });
@@ -363,7 +363,7 @@ describe("erasing a grown-up", () => {
     expect(await db.guardianMember.count({ where: { guardianId: guardian.id } })).toBe(1);
   });
 
-  it("never redacts the same grown-up twice", async () => {
+  it("never redacts the same guardian twice", async () => {
     const { runRetentionPass } = await import("@/server/lib/retention");
     await setPolicy({ removeGuardianAfterMonths: 6 });
 

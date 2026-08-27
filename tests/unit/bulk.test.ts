@@ -136,11 +136,11 @@ describe("a confirmation template", () => {
   });
 
   it("handles several choices in one sentence", () => {
-    expect(fillConfirm("{child|children} and {their grown-up|each grown-up}", 1)).toBe(
-      "child and their grown-up",
+    expect(fillConfirm("{child|children} and {their guardian|each guardian}", 1)).toBe(
+      "child and their guardian",
     );
-    expect(fillConfirm("{child|children} and {their grown-up|each grown-up}", 2)).toBe(
-      "children and each grown-up",
+    expect(fillConfirm("{child|children} and {their guardian|each guardian}", 2)).toBe(
+      "children and each guardian",
     );
   });
 

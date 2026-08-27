@@ -47,7 +47,7 @@ export default async function JoinPage() {
 
         <h1 className="garden-rule inline-block text-4xl">Join {branding.libraryName}</h1>
         <p className="mt-8 text-lg text-ink-soft">
-          Let&rsquo;s create your library account! It takes a minute, and a grown-up needs to fill
+          Let&rsquo;s create your library account! It takes a minute, and a parent or guardian needs to fill
           it in.
         </p>
 

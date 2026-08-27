@@ -182,7 +182,7 @@ export function JoinForm({
       <Card>
         <h2 className="text-2xl">About you</h2>
         <p className="mt-2 text-ink-soft">
-          We need one grown-up we can contact. Your email is where we send the link to set up the
+          We need one guardian we can contact. Your email is where we send the link to set up the
           account, and how we help if the password is ever forgotten.
         </p>
 

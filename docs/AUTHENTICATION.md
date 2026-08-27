@@ -117,7 +117,7 @@ All database-backed; no Redis.
 | Password-reset requests per IP | 5 per hour |
 | Token presentations per IP | 20 per hour |
 
-Deliberately not aggressive: a child mistyping their secret word three times is
+Deliberately not aggressive: a child mistyping their password three times is
 normal, and a parent tapping an emailed link twice is normal. The reset limit is
 low because each one sends mail to a family.
 

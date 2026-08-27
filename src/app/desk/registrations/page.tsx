@@ -30,7 +30,7 @@ export const metadata: Metadata = { title: "New members" };
  *
  * Shows the whole submission, because the person deciding has to see what the
  * family actually sent: who the child is, how old they are, which flat, the
- * picture they chose, who the grown-up is and how to reach them, when it
+ * picture they chose, who the guardian is and how to reach them, when it
  * arrived, and — separately — which consents were granted and how the guardian
  * was verified.
  *
@@ -102,11 +102,11 @@ export default async function RegistrationsPage() {
                       /*
                        * The longest confirmation on any screen, deliberately.
                        * This one creates children's accounts and emails their
-                       * grown-ups — it should be read, and it should feel like
+                       * guardians — it should be read, and it should feel like
                        * something worth reading.
                        */
                       confirm:
-                        "Welcome {count} {child|children} into the library? This makes {an account|accounts} and emails {their grown-up|each grown-up} a joining link. Please make sure you have read every one of these — the software cannot tell whether you have.",
+                        "Welcome {count} {child|children} into the library? This makes {an account|accounts} and emails {their guardian|each guardian} a joining link. Please make sure you have read every one of these — the software cannot tell whether you have.",
                     },
                     {
                       value: "REJECT",
@@ -221,7 +221,7 @@ export default async function RegistrationsPage() {
                       })}
                     </ul>
 
-                    {/* How the grown-up was checked, and by whom. A strength on
+                    {/* How the guardian was checked, and by whom. A strength on
                         its own does not say whether somebody spoke to them or
                         whether they clicked a link in an email. */}
                     {verifications.length > 0 ? (

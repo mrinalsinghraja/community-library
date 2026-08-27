@@ -49,7 +49,7 @@ export default async function ActivatePage({
               {view.memberCode && view.memberCode !== "—" ? (
                 <>
                   Your library card is <strong className="text-ink">{view.memberCode}</strong>. Now
-                  choose a secret word so only you can sign in.
+                  choose a password so only you can sign in.
                 </>
               ) : (
                 "Choose a password to finish setting up your account."
@@ -61,7 +61,7 @@ export default async function ActivatePage({
             </Card>
 
             <p className="mt-6 text-base text-ink-soft">
-              Grown-ups: please choose this together and keep it somewhere safe. Nobody at the
+              Guardians: please choose this together and keep it somewhere safe. Nobody at the
               library can see it — if it is forgotten we send a new link rather than telling you the
               old one.
             </p>

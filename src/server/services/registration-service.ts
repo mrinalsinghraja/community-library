@@ -444,7 +444,7 @@ export async function approveRegistration(registrationId: string): Promise<Appro
         kind: "MEMBER",
         displayName: request.childName,
         // No email and no password: the account is INVITED until the guardian
-        // follows the activation link and a secret word is chosen.
+        // follows the activation link and a password is chosen.
         status: "INVITED",
         mustSetPassword: true,
         createdById: actor.userId,

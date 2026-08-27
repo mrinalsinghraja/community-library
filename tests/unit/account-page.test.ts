@@ -25,6 +25,12 @@ import { roleDescription, roleLabel } from "@/lib/permissions";
 const read = (...parts: string[]) => readFileSync(join(process.cwd(), "src", ...parts), "utf8");
 
 const ACCOUNT = read("app", "account", "page.tsx");
+/*
+ * The settings themselves live one page down now. The landing page is a set of
+ * doors; the details, the password and the way out are opened on purpose. What
+ * these tests hold is unchanged — only which file has to satisfy them.
+ */
+const DETAILS = read("app", "account", "details", "page.tsx");
 const PASSWORD_PAGE = read("app", "account", "password", "page.tsx");
 const STAFF_SHELL = read("components", "layout", "staff-shell.tsx");
 const LOGIN = read("app", "login", "page.tsx");
@@ -47,14 +53,18 @@ describe("finding your own account", () => {
 });
 
 describe("what the account page says", () => {
+  it("keeps the details one click away, not one URL away", () => {
+    expect(ACCOUNT).toContain('href="/account/details"');
+  });
+
   it("names roles the way a person would say them", () => {
     // `SUPER_ADMIN` is a database key being shouted at a volunteer.
-    expect(ACCOUNT).toContain("roleLabel(role)");
-    expect(ACCOUNT).not.toMatch(/\{role\}\s*<\/StatusBadge>/);
+    expect(DETAILS).toContain("roleLabel(role)");
+    expect(DETAILS).not.toMatch(/\{role\}\s*<\/StatusBadge>/);
   });
 
   it("says what each role is for", () => {
-    expect(ACCOUNT).toContain("roleDescription(role)");
+    expect(DETAILS).toContain("roleDescription(role)");
   });
 
   it("says where a reset link would actually land", () => {
@@ -63,22 +73,46 @@ describe("what the account page says", () => {
      * parent, not them. Without it they wait for an email that arrived in
      * somebody else's inbox.
      */
-    expect(ACCOUNT).toContain("account.recoveryEmail");
-    expect(ACCOUNT).toContain("account.recoveryIsGuardian");
+    expect(DETAILS).toContain("account.recoveryEmail");
+    expect(DETAILS).toContain("account.recoveryIsGuardian");
   });
 
   it("offers both routes to a new password", () => {
-    expect(ACCOUNT).toContain('href="/account/password"');
-    expect(ACCOUNT).toContain('href="/forgot"');
+    expect(DETAILS).toContain('href="/account/password"');
+    expect(DETAILS).toContain('href="/forgot"');
   });
 
   it("promises the note that goes out when it changes", () => {
-    expect(flattened(ACCOUNT)).toMatch(/we send a note to that address/i);
+    expect(flattened(DETAILS)).toMatch(/we send a note to that address/i);
   });
 
   it("never renders a password, a hash or a token", () => {
     // The summary service returns none of these; this is the second lock.
     expect(ACCOUNT).not.toMatch(/passwordHash|rawToken|\.token\b/);
+    expect(DETAILS).not.toMatch(/passwordHash|rawToken|\.token\b/);
+  });
+});
+
+describe("the way out", () => {
+  /*
+   * Signing out used to exist in exactly one place on the reader side: the foot
+   * of /account, below the password panel. On the library's shared laptop that
+   * means a child has to know their own page is where it lives and scroll past
+   * everything on it — so the realistic outcome was a tab closed on a live
+   * session. Both shells now carry it in the corner of every page.
+   */
+  it("is in the corner of every reader page, not only on the account page", () => {
+    const shell = read("components", "layout", "site-shell.tsx");
+    expect(shell).toContain("signOutAction");
+    expect(shell).toMatch(/signedIn \? \(\s*<form action=\{signOutAction\}>/);
+  });
+
+  it("is in the corner of every desk page", () => {
+    expect(STAFF_SHELL).toContain("<form action={signOutAction}>");
+  });
+
+  it("still explains what signing out does, where there is room to say it", () => {
+    expect(flattened(DETAILS)).toMatch(/deletes this session on the server/i);
   });
 });
 

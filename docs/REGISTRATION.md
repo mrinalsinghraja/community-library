@@ -28,7 +28,7 @@ Librarian → /desk/registrations
    │  • three audit rows
    ▼
 Guardian email → /activate/<token>
-   │  child chooses a secret word, with a grown-up
+   │  child chooses a password, with a guardian
    ▼
 app_user status = ACTIVE, must_set_password = false
    │

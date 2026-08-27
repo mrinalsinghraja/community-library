@@ -482,7 +482,7 @@ async function queryCopies(
        *
        * PUBLISHED only. A review waiting for the desk moves no average and
        * appears in no count — the shelf must never hint that an opinion exists
-       * before a grown-up has read it.
+       * before a guardian has read it.
        */
       LEFT JOIN LATERAL (
         SELECT avg(br.rating) AS rating_average,

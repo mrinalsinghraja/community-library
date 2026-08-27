@@ -24,7 +24,7 @@ export function ForgotForm({ cardExample }: { cardExample?: string }) {
     return (
       <div role="status" className="text-center">
         <IconMedallion name="mail" />
-        <h2 className="mt-4 text-2xl">Check with a grown-up</h2>
+        <h2 className="mt-4 text-2xl">Check with a guardian</h2>
         <p className="mt-3 text-ink-soft">{state.message}</p>
       </div>
     );

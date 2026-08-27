@@ -70,7 +70,7 @@ function toState(error: unknown): ActionState {
 const setPasswordSchema = z
   .object({
     token: z.string().min(16),
-    password: z.string().min(1, "Please choose a secret word."),
+    password: z.string().min(1, "Please choose a password."),
     confirmPassword: z.string().min(1, "Please type it a second time."),
   })
   .refine((value) => value.password === value.confirmPassword, {
@@ -109,7 +109,7 @@ export async function activateAccountAction(
 
   // Deliberately not signed in automatically: the guardian usually completes
   // this, and the child should then sign in themselves — which is also the
-  // moment they learn that their secret word works.
+  // moment they learn that their password works.
   redirect("/login?activated=1");
 }
 

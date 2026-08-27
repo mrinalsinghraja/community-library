@@ -57,15 +57,15 @@ export const CHANGEABLE_FIELDS: readonly ChangeableField[] = [
   },
   {
     key: "guardianName",
-    label: "Your grown-up's name",
+    label: "Your guardian's name",
     target: "guardian",
     maxLength: 80,
     inputType: "text",
   },
   {
     key: "guardianEmail",
-    label: "Your grown-up's email",
-    hint: "This is where we send a link if you forget your secret word.",
+    label: "Your guardian's email",
+    hint: "This is where we send a link if you forget your password.",
     target: "guardian",
     maxLength: 160,
     inputType: "email",
@@ -73,7 +73,7 @@ export const CHANGEABLE_FIELDS: readonly ChangeableField[] = [
   },
   {
     key: "guardianPhone",
-    label: "Your grown-up's phone",
+    label: "Your guardian's phone",
     target: "guardian",
     maxLength: 30,
     inputType: "tel",

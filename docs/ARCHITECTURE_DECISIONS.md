@@ -1175,7 +1175,7 @@ the second application from flat P-15.
 - The **decision** is behind `registration.review`. A librarian sees no Approve
   button and no Reject button, and reads instead: *"Waiting for Super Admin
   approval."*
-- The librarian keeps `guardian.verify`, because confirming a grown-up at the
+- The librarian keeps `guardian.verify`, because confirming a guardian at the
   desk is their job and is not a decision about membership.
 
 **Consequence.** The two failure modes swap places: an unauthorised approval is
@@ -1259,7 +1259,7 @@ family's application and the home of their consent records — with
 `created_member_user_id` cleared so it does not point at a row that is gone.
 Guardian verifications are *detached* from the member and left attached to the
 registration, because the foreign key would otherwise cascade and delete the
-library's evidence that a grown-up was ever checked; a verification that could
+library's evidence that a guardian was ever checked; a verification that could
 not survive the detach is itself a refusal. The guardian survives: only the join
 row goes.
 
@@ -1785,7 +1785,7 @@ plain, never a reason for somebody's own page to fail.
 the reset link goes to their guardian, which is the whole reason the guardian
 relationship exists — and a reader who does not know it waits for an email that
 arrived in somebody else's inbox. The account page now names the address a link
-would go to, and says plainly when it is a grown-up's.
+would go to, and says plainly when it is a guardian's.
 
 One behaviour did change. `recoveryEmailFor` returned **null** for a member with
 no guardian row, and null means nothing is sent at all. A registered child always
@@ -1794,7 +1794,7 @@ removed by hand, where the choice is between mailing the address on the account
 and silently telling nobody — which is how a person ends up locked out of a
 library with no way to find out why. The guardian is still preferred whenever
 there is one, and a test pins that the fallback has not become a way around the
-grown-up.
+guardian.
 
 `tests/database/activation-and-reset.test.ts` holds the notification: a note
 after a reset link is used and after a self-service change, to the guardian for a
@@ -2285,7 +2285,7 @@ aggregate; the database test asserts all four, because a leak in any one of them
 would show a rating the book's own page says does not exist. The author is told
 their review is no longer showing and is never told why — that is a conversation
 to have in person. It still counts as rated, so the reminder does not come back
-to ask a child to rewrite something a grown-up removed.
+to ask a child to rewrite something a guardian removed.
 
 **The reminder starts at once and stops at sixty days.** "Reminder should go off
 after 2 months" could be read either way; asking a child about a fourteen-day
@@ -2328,7 +2328,7 @@ those, which is what makes the claim checkable rather than a promise about
 rendering.
 
 
-## ADR-058 — A grown-up reads it first, and what goes up stays up
+## ADR-058 — A guardian reads it first, and what goes up stays up
 
 Supersedes the moderation half of ADR-057. Everything else in that decision —
 one opinion per work, the borrowing check, the first-name byline, the derived
@@ -2555,7 +2555,7 @@ the off switch, and it is why there is no setting to maintain instead.
 `docs/ACCOUNT_LIFECYCLE.md` §5 has said since Phase 1 that the archival step is
 deliberately not implemented, because writing it needs four answers this
 codebase must not invent: how long a departed reader's name is kept, how long a
-grown-up's contact details are kept after their last child leaves, what survives
+guardian's contact details are kept after their last child leaves, what survives
 for the library's own records, and what happens on an explicit request.
 
 That paragraph was right about the answers and wrong about the consequence. It
@@ -2584,7 +2584,7 @@ the library's own records. There is no argument for holding a face for as long
 as a lending history, and one number would have forced exactly that. The
 photograph clock runs in days; the other two run in months.
 
-The grown-up's clock is counted from **the children**, not from the grown-up: a
+The guardian's clock is counted from **the children**, not from the guardian: a
 parent whose younger child is still borrowing keeps their details however long
 ago the elder one left. The library still needs to be able to reach them.
 
@@ -2627,7 +2627,7 @@ It is the only destructive scheduled job in the application, so:
 ### The screen shows what it would do
 
 The settings card prints, beside each field, how many photographs, readers and
-grown-ups tonight's pass would erase under the periods currently saved. Deciding
+guardians tonight's pass would erase under the periods currently saved. Deciding
 a period should not be a leap in the dark. Shortening a period, or setting one
 for the first time, needs a ticked confirmation; clearing one never does,
 because stopping is not the direction that loses somebody's record.
@@ -2786,3 +2786,66 @@ exists to prevent.
 **Anything that removes the per-row buttons.** Every queue keeps them, and a
 test asserts it on all six screens. This adds a choice; it takes none away, and
 going one at a time while reading each is still how a careful librarian works.
+
+---
+
+## ADR-064 — One word for the adult, one word for the secret, one door out
+
+**2026-08-27** · Accepted
+
+### The decision
+
+Three vocabulary and navigation choices, taken together because they are all
+the same failure: the software using its own private words, in its own private
+places.
+
+**"Guardian", not "grown-up".** The database has said `guardianName`,
+`guardianEmail` and `guardianPhone` since Phase 1. The screens said "Your
+grown-up's name". A parent reading their child's record and a librarian reading
+the desk saw a word that appears nowhere in the consent record, the privacy
+notice's field list, or any form they have signed elsewhere. One word now, in
+prose and in schema. The two public pages where a family is still deciding
+whether to join — the home page and `/join` — say "a parent or guardian" once,
+because that is the phrase a parent recognises before an account exists.
+
+**"Password", not "secret word".** The child-friendly synonym cost more than it
+bought: the browser's own password manager, the phone keyboard, every other site
+a nine-year-old will ever sign in to, and the reset email all say "password".
+Two words for one thing is the confusion, not the long word. `PASSWORD_POLICY`
+kept a per-audience `label` so a member saw one noun and staff saw another; the
+form kept a `noun` variable to switch between them. Both are gone.
+
+**Sign out belongs in the corner of every page.** The desk has had it there
+since the staff shell was built. The reader side had exactly one, at the foot of
+`/account`, below the password panel — so a child on the library's shared laptop
+had to know their own page was where signing out lives and scroll past
+everything on it. The realistic outcome is a closed tab over a live session. It
+is now in the reader masthead too, quiet rather than filled, because the eye
+should still land on "My library".
+
+**And `/account` is a landing page, not a settings page.** The details on file,
+the password panel and the way out moved to `/account/details`, reachable by a
+door on the landing. Nothing about them changed — same server actions, same rule
+that a reader proposes a correction and an administrator approves it.
+
+### Why
+
+A signed-in landing page that runs on into four panels of settings is answering
+a question almost nobody arrived with. Splitting them is the ordinary shape of
+every account area a parent already uses, and it is what makes room for the
+landing page to be what it should be: where you are going next.
+
+### What this does not change
+
+**No permission, no route guard, no data.** `/account/details` sits under the
+same `/account` prefix `src/proxy.ts` already protects, and calls the same
+services with the same session-derived ownership.
+
+**`GROWN_UP` stays `GROWN_UP`.** It is a `UserStatus` meaning the *child* has
+passed the top of the library's age range — a different idea that happens to
+share a word. Renaming it would have been a migration to make a sentence read
+better, and would have made "grown up" mean two things instead of one.
+
+**The AI helper still says "an adult you trust".** It means whoever is in the
+room, not the adult registered on the account, and it should not borrow the
+account's word for that.

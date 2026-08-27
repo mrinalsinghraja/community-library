@@ -27,7 +27,7 @@ export function ResetForm({ token, minLength }: { token: string; minLength: numb
 
       <PasswordField
         name="password"
-        label="Your new secret word"
+        label="Your new password"
         error={state.fieldErrors?.password}
         minLength={minLength}
         showStrength
@@ -41,7 +41,7 @@ export function ResetForm({ token, minLength }: { token: string; minLength: numb
       />
 
       <Button type="submit" size="lg" fullWidth disabled={pending} icon={<Icon name="key" />}>
-        {pending ? "Saving…" : "Save my new secret word"}
+        {pending ? "Saving…" : "Save my new password"}
       </Button>
     </form>
   );

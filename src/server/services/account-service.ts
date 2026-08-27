@@ -859,7 +859,7 @@ export const DELETE_REFUSED_MESSAGE =
  *     is cleared so it does not point at a row that no longer exists.
  *   - **Guardian verifications.** Detached from the member and left attached to
  *     the registration, because the FK would otherwise cascade and delete the
- *     library's evidence that a grown-up was ever checked. A verification that
+ *     library's evidence that a guardian was ever checked. A verification that
  *     could not survive the detach is itself a refusal.
  *   - **The guardian.** Only the join row is removed. A parent is usually the
  *     contact for more than one child.

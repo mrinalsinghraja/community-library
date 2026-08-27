@@ -45,7 +45,7 @@ export async function signInAction(
 
   if (!parsed.success) {
     // Deliberately the same message as a wrong password: an empty field and a
-    // wrong secret word must be indistinguishable from outside.
+    // wrong password must be indistinguishable from outside.
     return { error: GENERIC_LOGIN_FAILURE };
   }
 
@@ -61,7 +61,7 @@ export async function signInAction(
        * A closed account, told plainly.
        *
        * SECURITY: `authorize` raises this only AFTER verifying the password, so
-       * reaching this branch means the person typed the right secret word. A
+       * reaching this branch means the person typed the right password. A
        * wrong guess still falls through to the generic message below and gives
        * away nothing about whether the account exists or what state it is in.
        *

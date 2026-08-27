@@ -3,8 +3,10 @@ import type { ReactNode } from "react";
 
 import { Butterfly, LibraryLogo } from "@/components/library/library-logo";
 import { StoryCharacters } from "@/components/library/story-characters";
-import { canReachDesk, deskDestinationsFor, readerDestinationsFor } from "@/lib/desk-nav";
+import { canReachDesk, readerDestinationsFor } from "@/lib/desk-nav";
+import { LEGAL_LINKS } from "@/lib/legal-links";
 import { JOIN_HELP_MESSAGE, whatsAppLink } from "@/lib/whatsapp";
+import { signOutAction } from "@/server/actions/auth-actions";
 import { getActor } from "@/server/authz";
 import { catalogueIsPubliclyVisible, type Branding } from "@/server/lib/settings";
 
@@ -147,6 +149,30 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
           >
             {signedIn ? "My library" : "Sign in"}
           </Link>
+          {/*
+            The way out, in the corner, on every page.
+
+            It used to exist in exactly one place: the bottom of /account, below
+            the password panel. A child on the library's shared laptop had to
+            know that their own page was where signing out lived, scroll past
+            everything on it, and find the button — so the realistic outcome was
+            that they closed the tab and left the session open for whoever sat
+            down next. The desk has had this control in its corner since it was
+            built; the reader side is where it was missing.
+
+            Quiet, not filled: the reader's eye should land on "My library",
+            which is where they are going. This one only has to be findable.
+          */}
+          {signedIn ? (
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                className="rounded-[var(--radius-button)] border border-control-border px-3 py-2 text-base font-semibold text-ink-soft transition-colors hover:bg-accent-wash hover:text-accent-ink"
+              >
+                Sign out
+              </button>
+            </form>
+          ) : null}
         </nav>
       </div>
 
@@ -199,20 +225,6 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
  * The green rule from the masthead is repeated at the very bottom, closing the
  * page the same way the header opens it.
  */
-/**
- * The policy links, in the order a person looks for them.
- *
- * A module constant rather than inline JSX so `tests/unit/legal.test.ts` can
- * assert that every href here is a route that exists — a footer link to a page
- * nobody built is the specific failure this row is supposed to prevent.
- */
-export const LEGAL_LINKS: readonly { href: string; label: string }[] = [
-  { href: "/privacy", label: "Privacy notice" },
-  { href: "/terms", label: "Terms of use" },
-  { href: "/accessibility", label: "Accessibility" },
-  { href: "/contact", label: "Contact us" },
-] as const;
-
 export async function SiteFooter({ branding }: { branding: Branding }) {
   const whatsapp = whatsAppLink(branding.contactPhone, JOIN_HELP_MESSAGE);
 

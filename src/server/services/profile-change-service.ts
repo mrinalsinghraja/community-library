@@ -411,7 +411,7 @@ export async function decideProfileChange(
   if (approve && touchesGuardian && !guardianId) {
     throw new RuleViolationError(
       `Member ${request.memberUserId} has no guardian to update`,
-      "This reader has no grown-up on file, so those details cannot be changed here.",
+      "This reader has no guardian on file, so those details cannot be changed here.",
     );
   }
 

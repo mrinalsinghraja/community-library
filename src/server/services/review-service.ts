@@ -40,7 +40,7 @@ import { NotFoundError, RuleViolationError, ValidationError } from "@/server/lib
  *     the reader chose to publish, or the words "A reader at the library" — and
  *     the choice is per review, because it is not the same answer every time.
  *
- *  4. **Nothing is published until a grown-up says so.** A review is written
+ *  4. **Nothing is published until a guardian says so.** A review is written
  *     PENDING and is visible to nobody but its author and the desk. A Librarian
  *     or the Super Admin approves it onto the book's page, or declines it with a
  *     note the author can read and rewrite from. Only PUBLISHED reviews reach a

@@ -13,7 +13,7 @@ const INITIAL_STATE: SignInState = {};
  * The sign-in form.
  *
  * One field accepts either identity: a library card code or the username a
- * grown-up chose. Staff type their email address into the same box. Children
+ * guardian chose. Staff type their email address into the same box. Children
  * should never have to work out *which kind* of name they have.
  *
  * The worked example in the hint is built from the library's configured card
@@ -63,7 +63,7 @@ export function LoginForm({ next, cardExample }: { next?: string; cardExample?: 
         />
       </Field>
 
-      <Field id="password" label="Your secret word" required>
+      <Field id="password" label="Your password" required>
         <div className="flex gap-2">
           <TextInput
             id="password"

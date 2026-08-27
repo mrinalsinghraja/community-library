@@ -47,7 +47,7 @@ function readSessionHandle(token: unknown): string | undefined {
 /**
  * The single message shown for every failed sign-in.
  *
- * It must not distinguish "no such reader", "wrong secret word", "account
+ * It must not distinguish "no such reader", "wrong password", "account
  * suspended" or "too many tries" — any of those would let someone confirm that
  * a particular member code belongs to a real child.
  */
@@ -59,7 +59,7 @@ export const GENERIC_LOGIN_FAILURE = "That didn't work. Check the spelling and t
  * SECURITY: this is set ONLY after the password has been verified. A wrong
  * guess is still answered with `GENERIC_LOGIN_FAILURE` and reveals nothing —
  * not whether the account exists, not whether it is closed. The only person who
- * ever sees one of these already proved they know the secret word, so telling
+ * ever sees one of these already proved they know the password, so telling
  * them "this card was retired" gives away nothing they could not learn by
  * asking the librarian, and withholding it leaves a child staring at "check the
  * spelling" for a password that is perfectly correct.
@@ -148,7 +148,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     Credentials({
       credentials: {
         identifier: { label: "Library card or username", type: "text" },
-        password: { label: "Secret word", type: "password" },
+        password: { label: "Password", type: "password" },
       },
 
       async authorize(rawCredentials, request) {

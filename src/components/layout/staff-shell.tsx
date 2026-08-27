@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { LEGAL_LINKS } from "@/components/layout/site-shell";
+import { LEGAL_LINKS } from "@/lib/legal-links";
 import { LibraryLogo } from "@/components/library/library-logo";
 import { cn } from "@/lib/cn";
 import type { PermissionKey } from "@/lib/permissions";

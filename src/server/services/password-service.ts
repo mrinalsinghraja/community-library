@@ -96,7 +96,7 @@ export interface ActivationView {
   memberCode?: string;
 }
 
-/** Decides whether to render the "choose a secret word" form. Does not consume. */
+/** Decides whether to render the "choose a password" form. Does not consume. */
 export async function inspectActivationToken(
   rawToken: string,
   requestIp: string | null,
@@ -401,7 +401,7 @@ export async function changeOwnPassword(params: {
 
   if (!user.passwordHash || !(await verifyPassword(user.passwordHash, params.currentPassword))) {
     throw new ValidationError({
-      currentPassword: "That is not the current secret word.",
+      currentPassword: "That is not the current password.",
     });
   }
 

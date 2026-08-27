@@ -176,7 +176,7 @@ describe("the privacy notice says exactly what the pass does", () => {
     const photoOnly = describeRetention({ ...UNSET_RETENTION, removePhotoAfterClosedDays: 30 });
     const joined = photoOnly.join(" ");
     expect(joined).toMatch(/photograph/i);
-    expect(joined).not.toMatch(/grown-up's name/i);
+    expect(joined).not.toMatch(/guardian's name/i);
   });
 
   it("prints days as days, because a month is not a fixed number of them", () => {

@@ -82,7 +82,7 @@ export default async function DeskChangesPage() {
                         tone: "primary",
                         notePrompt: null,
                         confirm:
-                          "Apply {count} {change|changes} to {a reader's record|readers' records}? Some of these may include a grown-up's email, which is where a forgotten-password link is sent — the rows above say which.",
+                          "Apply {count} {change|changes} to {a reader's record|readers' records}? Some of these may include a guardian's email, which is where a forgotten-password link is sent — the rows above say which.",
                       },
                       {
                         value: "REJECT",

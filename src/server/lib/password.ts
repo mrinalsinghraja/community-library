@@ -72,9 +72,15 @@ function zxcvbnScore(password: string): number {
  * lockout after 5 attempts, a per-IP cap, argon2id, and the fact that the data
  * behind a member account is a picture-book borrowing history.
  */
+/*
+ * No `label` any more. This carried one per audience — "secret word" for a
+ * member, "password" for staff — so the same field had two names depending on
+ * who was reading it. One word now, and the word is the one every browser,
+ * keyboard and reset email already uses. See ADR-064.
+ */
 export const PASSWORD_POLICY = {
-  member: { minLength: 8, maxLength: 128, label: "secret word" },
-  staff: { minLength: 12, maxLength: 128, label: "password" },
+  member: { minLength: 8, maxLength: 128 },
+  staff: { minLength: 12, maxLength: 128 },
 } as const;
 
 export type PasswordAudience = keyof typeof PASSWORD_POLICY;
@@ -121,7 +127,7 @@ export function checkPasswordPolicy(
       ok: false,
       message:
         audience === "member"
-          ? `Make your secret word a bit longer — at least ${policy.minLength} letters.`
+          ? `Make your password a bit longer — at least ${policy.minLength} letters.`
           : `Use at least ${policy.minLength} characters.`,
     };
   }

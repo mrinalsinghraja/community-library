@@ -209,14 +209,14 @@ export function activation(
       `Good news — ${params.childName} is now a member of ${context.libraryName}. Their library card number is ${params.memberCode}.`,
     ) +
     paragraph(
-      "One last step: please help them choose a secret word for signing in. Use the button below.",
+      "One last step: please help them choose a password for signing in. Use the button below.",
     ) +
     button(params.activationUrl, "Set up the account") +
     paragraph(
       `This link works once and expires in ${params.expiresInDays} days. If it stops working, just ask the librarian for a fresh one.`,
     ) +
     paragraph(
-      "Please choose the secret word together with your child, and keep it somewhere safe. Nobody at the library can see it — if it is forgotten, we send you a new link rather than telling you the old one.",
+      "Please choose the password together with your child, and keep it somewhere safe. Nobody at the library can see it — if it is forgotten, we send you a new link rather than telling you the old one.",
     );
 
   return {
@@ -227,12 +227,12 @@ export function activation(
       "",
       `${params.childName} is now a member of ${context.libraryName}. Their library card number is ${params.memberCode}.`,
       "",
-      "Please help them choose a secret word for signing in:",
+      "Please help them choose a password for signing in:",
       params.activationUrl,
       "",
       `This link works once and expires in ${params.expiresInDays} days.`,
       "",
-      "Nobody at the library can see the secret word. If it is forgotten, we send a new link rather than telling you the old one.",
+      "Nobody at the library can see the password. If it is forgotten, we send a new link rather than telling you the old one.",
     ].join("\n"),
   };
 }
@@ -360,21 +360,21 @@ export function passwordReset(
   context: EmailContext,
   params: { childName: string; resetUrl: string; expiresInHours: number },
 ): RenderedTemplate {
-  const heading = "Setting a new secret word";
+  const heading = "Setting a new password";
   const body =
     paragraph(
       `Someone asked to reset the sign-in details for ${params.childName}'s account at ${context.libraryName}.`,
     ) +
-    button(params.resetUrl, "Choose a new secret word") +
+    button(params.resetUrl, "Choose a new password") +
     paragraph(
       `This link works once and expires in ${params.expiresInHours} hours.`,
     ) +
     paragraph(
-      "If you did not ask for this, you can ignore this email — nothing has changed, and the old secret word still works.",
+      "If you did not ask for this, you can ignore this email — nothing has changed, and the old password still works.",
     );
 
   return {
-    subject: `Setting a new secret word for ${params.childName}`,
+    subject: `Setting a new password for ${params.childName}`,
     html: layout(context, heading, body),
     text: [
       `Someone asked to reset the sign-in details for ${params.childName}'s account at ${context.libraryName}.`,
@@ -392,7 +392,7 @@ export function passwordChanged(
   context: EmailContext,
   params: { childName: string },
 ): RenderedTemplate {
-  const heading = "The secret word was changed";
+  const heading = "The password was changed";
   const body =
     paragraph(
       `The sign-in details for ${params.childName}'s account at ${context.libraryName} were changed just now, and every other device has been signed out.`,

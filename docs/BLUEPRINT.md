@@ -208,7 +208,7 @@ Reject requires a reason; the parent email is soft ("we'd love to chat with you 
 Parent opens activation link → /activate/<token>
   ├─ token: hash lookup, unexpired, unconsumed, single use
   ├─ screen shows the child's own library card: photo, name, member code
-  ├─ "Pick a secret word only you know" — password + confirm, big fields, show/hide toggle
+  ├─ "Pick a password only you know" — password + confirm, big fields, show/hide toggle
   ├─ password rules for members: min 6 chars, blocked against a common-password list, no
   │  complexity theatre (a 6-year-old cannot type A1!x); protected by throttling + lockout
   ├─ sets hash, status ACTIVE, consumes token, revokes any other tokens for that user

@@ -35,7 +35,7 @@ Librarian role can never hold guardian contact details, password actions,
 settings or deletion. That last one exists so a future edit cannot quietly widen
 a role held by a child volunteer.
 
-**Passwords** — an eight-character secret word is accepted for a member and
+**Passwords** — an eight-character password is accepted for a member and
 refused for staff; the six-character words Phase 0 allowed are now rejected;
 common passwords are blocked case-insensitively; the library's own name and the
 person's own name are refused (from configuration, not a hard-coded list);

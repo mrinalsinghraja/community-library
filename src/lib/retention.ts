@@ -47,10 +47,10 @@ export interface RetentionPolicy {
    */
   removePhotoAfterClosedDays: number | null;
   /**
-   * Months after the last child linked to a grown-up has been archived before
-   * that grown-up's contact details are redacted.
+   * Months after the last child linked to a guardian has been archived before
+   * that guardian's contact details are redacted.
    *
-   * Counted from the child, never from the grown-up: a parent with a younger
+   * Counted from the child, never from the guardian: a parent with a younger
    * child still in the library is still the library's contact for them.
    */
   removeGuardianAfterMonths: number | null;
@@ -106,7 +106,7 @@ export function redactedEmail(rowId: string): string {
 /** Stands in for a flat number, which is the other half of identifying a child here. */
 export const REDACTED_APARTMENT = "removed";
 
-/** Stands in for a grown-up's name once no child of theirs is still a reader. */
+/** Stands in for a guardian's name once no child of theirs is still a reader. */
 export const REDACTED_GUARDIAN_NAME = "Former guardian";
 
 /** Stands in for a phone number. Not blank: blank reads as "never had one". */
@@ -200,7 +200,7 @@ export function describeRetention(policy: RetentionPolicy): string[] {
 
   if (policy.removeGuardianAfterMonths !== null) {
     sentences.push(
-      `A grown-up's name, email address, phone number and flat are erased ${months(policy.removeGuardianAfterMonths)} after the last child of theirs has been erased. The record that consent was given stays, because it is the evidence the library was allowed to hold anything at all.`,
+      `A guardian's name, email address, phone number and flat are erased ${months(policy.removeGuardianAfterMonths)} after the last child of theirs has been erased. The record that consent was given stays, because it is the evidence the library was allowed to hold anything at all.`,
     );
   }
 

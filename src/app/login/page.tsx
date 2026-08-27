@@ -51,7 +51,7 @@ export default async function LoginPage({
             role="status"
             className="mb-6 rounded-[var(--radius-field)] bg-success-wash px-5 py-4 text-lg font-bold text-success"
           >
-            All set up! Sign in with your library card and your new secret word. 🎉
+            All set up! Sign in with your library card and your new password. 🎉
           </p>
         ) : null}
 
@@ -60,7 +60,7 @@ export default async function LoginPage({
             role="status"
             className="mb-6 rounded-[var(--radius-field)] bg-success-wash px-5 py-4 text-lg font-bold text-success"
           >
-            Your new secret word is saved. Please sign in with it.
+            Your new password is saved. Please sign in with it.
           </p>
         ) : null}
 
@@ -69,7 +69,7 @@ export default async function LoginPage({
             role="status"
             className="mb-6 rounded-[var(--radius-field)] bg-success-wash px-5 py-4 text-lg font-bold text-success"
           >
-            Your new secret word is saved. Sign in with it now.
+            Your new password is saved. Sign in with it now.
           </p>
         ) : null}
 
@@ -85,7 +85,7 @@ export default async function LoginPage({
         <div className="mt-8 flex flex-col gap-3 text-base text-ink-soft">
           <p>
             <Link href="/forgot" className="font-bold text-primary-deep">
-              Forgotten your secret word?
+              Forgotten your password?
             </Link>{" "}
             We will email a link to your parent or guardian. Nobody at the library can see your
             password.

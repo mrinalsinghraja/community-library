@@ -292,7 +292,7 @@ export function VerificationForm({
 
   return (
     <Card>
-      <h2 className="text-2xl">Checking that a grown-up is really the parent</h2>
+      <h2 className="text-2xl">Checking that a guardian is who they say they are</h2>
 
       <p className="mt-3 rounded-lg bg-accent-wash px-4 py-3 text-base text-ink">
         <strong>
@@ -600,8 +600,8 @@ export function RetentionForm({
 
         <Field
           id="removeGuardianAfterMonths"
-          label="Erase a grown-up's contact details this many months after their last child is erased"
-          hint={`Between ${RETENTION_BOUNDS.removeGuardianAfterMonths.min} and ${RETENTION_BOUNDS.removeGuardianAfterMonths.max} months, or empty to keep them. ${dueNow.guardians} grown-up${dueNow.guardians === 1 ? "" : "s"} would be erased tonight.`}
+          label="Erase a guardian's contact details this many months after their last child is erased"
+          hint={`Between ${RETENTION_BOUNDS.removeGuardianAfterMonths.min} and ${RETENTION_BOUNDS.removeGuardianAfterMonths.max} months, or empty to keep them. ${dueNow.guardians} guardian${dueNow.guardians === 1 ? "" : "s"} would be erased tonight.`}
           error={state.fieldErrors?.removeGuardianAfterMonths}
         >
           <TextInput

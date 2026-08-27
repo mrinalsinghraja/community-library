@@ -11,7 +11,7 @@ import { PASSWORD_POLICY } from "@/server/lib/password";
 import { getBrandingSafe } from "@/server/lib/settings";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Change your secret word" };
+export const metadata: Metadata = { title: "Change your password" };
 
 export default async function ChangePasswordPage() {
   const branding = await getBrandingSafe();
@@ -27,9 +27,7 @@ export default async function ChangePasswordPage() {
     // Same rule as /account: a role's menu must not change with the page.
     <Shell branding={branding} actor={actor} title="Change password">
       <div className="mx-auto w-full max-w-xl px-5 py-14 sm:px-8">
-        <h1 className="text-4xl">
-          {isStaff ? "Change your password" : "Change your secret word"}
-        </h1>
+        <h1 className="text-4xl">Change your password</h1>
         <p className="mt-3 text-lg text-ink-soft">
           You will need the current one first. Everything gets signed out afterwards — including
           here — so you will sign in again with the new one.
@@ -57,8 +55,8 @@ export default async function ChangePasswordPage() {
         </p>
 
         <p className="mt-6 text-base text-ink-soft">
-          <Link href="/account" className="font-bold text-primary-deep">
-            Back to my library
+          <Link href="/account/details" className="font-bold text-primary-deep">
+            Back to account details
           </Link>
         </p>
       </div>

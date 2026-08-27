@@ -509,7 +509,7 @@ describe("telling somebody their password changed", () => {
   });
 
   it("still prefers the guardian when there is one", async () => {
-    // The fallback must never become a way around the grown-up.
+    // The fallback must never become a way around the guardian.
     const member = await createMember(fixture.libraryId, { displayName: "Has Both" });
     await attachGuardian(fixture.libraryId, member.id, "the-parent@example.invalid");
     await db.appUser.update({
@@ -531,7 +531,7 @@ describe("telling somebody their password changed", () => {
 // ---------------------------------------------------------------------------
 
 describe("what a person may learn about their own sign-in", () => {
-  it("tells a child that recovery reaches their grown-up, and names the address", async () => {
+  it("tells a child that recovery reaches their guardian, and names the address", async () => {
     // A reader who does not know this waits for an email that went to a parent.
     const member = await createMember(fixture.libraryId, { displayName: "Curious Reader" });
     await attachGuardian(fixture.libraryId, member.id, "summary-parent@example.invalid");

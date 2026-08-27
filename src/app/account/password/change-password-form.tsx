@@ -17,7 +17,6 @@ export function ChangePasswordForm({
   isStaff: boolean;
 }) {
   const [state, formAction, pending] = useActionState(changePasswordAction, INITIAL);
-  const noun = isStaff ? "password" : "secret word";
 
   return (
     <form action={formAction} className="flex flex-col gap-6" noValidate>
@@ -34,7 +33,7 @@ export function ChangePasswordForm({
           from becoming a permanent account takeover. */}
       <PasswordField
         name="currentPassword"
-        label={`Your current ${noun}`}
+        label="Your current password"
         error={state.fieldErrors?.currentPassword}
         minLength={1}
         autoComplete="current-password"
@@ -42,7 +41,7 @@ export function ChangePasswordForm({
 
       <PasswordField
         name="newPassword"
-        label={`Your new ${noun}`}
+        label="Your new password"
         error={state.fieldErrors?.newPassword}
         minLength={minLength}
         showStrength={!isStaff}
@@ -56,7 +55,7 @@ export function ChangePasswordForm({
       />
 
       <Button type="submit" size="lg" fullWidth disabled={pending} icon={<Icon name="key" />}>
-        {pending ? "Saving…" : `Save my new ${noun}`}
+        {pending ? "Saving…" : "Save my new password"}
       </Button>
     </form>
   );

@@ -14,7 +14,7 @@ import { Icon } from "@/components/ui/icon";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Choose a new secret word",
+  title: "Choose a new password",
   referrer: "no-referrer",
   robots: { index: false, follow: false },
 };
@@ -33,7 +33,7 @@ export default async function ResetPage({ params }: { params: Promise<{ token: s
       <div className="mx-auto w-full max-w-xl px-5 py-14 sm:px-8">
         {view.valid ? (
           <>
-            <h1 className="text-4xl">Choose a new secret word</h1>
+            <h1 className="text-4xl">Choose a new password</h1>
             <p className="mt-3 text-lg text-ink-soft">
               {view.displayName
                 ? `This is for ${view.displayName}'s account.`

@@ -401,7 +401,7 @@ The URL carries the code printed on the book's own label (`/books/MJCL-B0010`) �
 the thing a child can read off the object in their hand — not a UUID.
 
 **No child's name appears anywhere in this catalogue except on a review they
-chose to sign and a grown-up approved** — and then only a first name, never
+chose to sign and a guardian approved** — and then only a first name, never
 more. See ADR-057: the
 choice is asked per review rather than per account, `publicByline` is the single
 function that can emit it, and the alternative it returns is "A reader at the

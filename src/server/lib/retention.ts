@@ -44,8 +44,8 @@ import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
  * lending history.
  *
  * Order within a library matters and is not incidental: photographs first, then
- * readers, then grown-ups. A grown-up becomes eligible only once the last child
- * of theirs is archived, so archiving readers before looking at grown-ups means
+ * readers, then guardians. A guardian becomes eligible only once the last child
+ * of theirs is archived, so archiving readers before looking at guardians means
  * the guardian clock starts on the same night rather than the next one.
  */
 
@@ -54,7 +54,7 @@ export interface RetentionResult {
   photosRemoved: number;
   /** Readers whose personal details were erased and who became ARCHIVED. */
   readersArchived: number;
-  /** Grown-ups whose contact details were erased. */
+  /** Guardians whose contact details were erased. */
   guardiansRedacted: number;
   /** True when no library has set any period at all — the normal state today. */
   policyUnset: boolean;
@@ -302,14 +302,14 @@ async function archiveClosedReaders(
 }
 
 // ---------------------------------------------------------------------------
-// Grown-ups
+// Guardians
 // ---------------------------------------------------------------------------
 
 /**
- * Erases a grown-up's contact details once no child of theirs is a reader any
+ * Erases a guardian's contact details once no child of theirs is a reader any
  * more.
  *
- * The eligibility test is about the children, not the grown-up: every linked
+ * The eligibility test is about the children, not the guardian: every linked
  * child must be ARCHIVED, and the most recent of those archivals must be older
  * than the period. A parent whose younger child is still borrowing keeps their
  * details, however long ago the elder one left, because the library still needs

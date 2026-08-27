@@ -29,7 +29,7 @@ export function ActivateForm({ token, minLength }: { token: string; minLength: n
 
       <PasswordField
         name="password"
-        label="Choose a secret word"
+        label="Choose a password"
         error={state.fieldErrors?.password}
         minLength={minLength}
         showStrength
@@ -44,7 +44,7 @@ export function ActivateForm({ token, minLength }: { token: string; minLength: n
       />
 
       <Button type="submit" size="lg" fullWidth disabled={pending} icon={<Icon name="key" />}>
-        {pending ? "Setting it up…" : "That's my secret word"}
+        {pending ? "Setting it up…" : "That's my password"}
       </Button>
     </form>
   );

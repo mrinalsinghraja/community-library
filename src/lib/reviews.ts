@@ -184,7 +184,7 @@ export function reviewByline(
  *
  * Kept here rather than in the component for the same reason the loan wording
  * lives in `circulation.ts`: so that no template can invent a harsher version,
- * and so the guidance a child reads before writing is one string a grown-up can
+ * and so the guidance a child reads before writing is one string a guardian can
  * change without going near a React file.
  */
 export const REVIEW_MESSAGES = {

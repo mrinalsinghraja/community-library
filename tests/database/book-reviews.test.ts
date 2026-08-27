@@ -209,7 +209,7 @@ describe("who may rate a book", () => {
   });
 });
 
-describe("nothing is published until a grown-up says so", () => {
+describe("nothing is published until a guardian says so", () => {
   it("keeps a new review off the average, the count and the public list", async () => {
     expect(await ratingForTitle(sharedTitleId)).toEqual({ average: 0, count: 0 });
     expect(await reviewsForTitle(sharedTitleId)).toEqual([]);

@@ -183,7 +183,7 @@ export default async function HomePage() {
             </div>
 
             <p className="mt-5 text-base text-ink-soft">
-              One short form, filled in by a grown-up.{" "}
+              One short form, filled in by a parent or guardian.{" "}
               <Link href="/how-to-join" className="font-bold text-primary-deep">
                 See what happens next
               </Link>
@@ -243,7 +243,7 @@ export default async function HomePage() {
           <Card tone="shelf" className="lift">
             <CardTitle icon={<Icon name="reader" />}>Ask to join</CardTitle>
             <CardBody>
-              A grown-up fills in one short form. Our librarian says hello and sets up a library
+              A parent or guardian fills in one short form. Our librarian says hello and sets up a library
               card in your child&rsquo;s name.
             </CardBody>
           </Card>
@@ -494,7 +494,7 @@ export default async function HomePage() {
             {[
               {
                 icon: "hide" as const,
-                text: "We ask for as little as we can, and a grown-up fills it in — never the child.",
+                text: "We ask for as little as we can, and a parent or guardian fills it in — never the child.",
               },
               {
                 icon: "camera" as const,
@@ -520,7 +520,7 @@ export default async function HomePage() {
             <Link href="/rules" className="font-bold text-primary-deep">
               Read our rules in full
             </Link>{" "}
-            — they are short, and written to be read by a child as well as a grown-up.
+            — they are short, and written to be read by a child as well as a parent.
           </p>
         </div>
       </section>

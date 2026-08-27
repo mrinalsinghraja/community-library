@@ -32,7 +32,7 @@ export const metadata: Metadata = { title: "Reader" };
  * Contact details arrive null for an actor without `member.view_contact`; the
  * consent and verification blocks arrive null for an actor without
  * `registration.review`. A librarian therefore sees the card, the flat and the
- * grown-up's phone number — what running a library needs — and does not see the
+ * guardian's phone number — what running a library needs — and does not see the
  * evidence behind an approval decision they did not make.
  *
  * Nothing on this page is a secret: there is no password field, no hash, no
@@ -207,7 +207,7 @@ export default async function MemberDetailPage({
         <Card>
           <CardTitle icon={<Icon name="handshake" />}>Parent or guardian</CardTitle>
           {member.guardians.length === 0 ? (
-            <p className="mt-3 text-ink-soft">No grown-up is recorded for this reader.</p>
+            <p className="mt-3 text-ink-soft">No guardian is recorded for this reader.</p>
           ) : (
             <dl className="mt-4 grid gap-x-6 gap-y-3 text-base sm:grid-cols-2">
               {member.guardians.map((guardian) => (
@@ -256,7 +256,7 @@ export default async function MemberDetailPage({
               <Row label="Decided by">{member.registration.reviewedBy ?? "—"}</Row>
             </dl>
 
-            <h3 className="mt-6 text-lg">What the grown-up agreed to</h3>
+            <h3 className="mt-6 text-lg">What the guardian agreed to</h3>
             <ul className="mt-3 flex flex-col gap-2">
               {member.registration.consents.map((consent) => (
                 <li key={consent.type} className="flex flex-wrap items-center gap-2 text-base">
@@ -279,7 +279,7 @@ export default async function MemberDetailPage({
                 checked who they are" are different questions, and the whole
                 verification model exists because conflating them is the way
                 this software could do real harm. */}
-            <CardTitle icon={<Icon name="check" />}>How the grown-up was checked</CardTitle>
+            <CardTitle icon={<Icon name="check" />}>How the guardian was checked</CardTitle>
             {member.verification.length === 0 ? (
               <p className="mt-3 text-ink-soft">Nothing was recorded.</p>
             ) : (

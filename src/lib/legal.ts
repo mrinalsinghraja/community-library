@@ -94,16 +94,16 @@ export function privacyDocument(
       {
         heading: "What we hold about a child",
         paragraphs: [
-          "Only what is needed to lend a book to the right child and let a grown-up reach them. Specifically:",
+          "Only what is needed to lend a book to the right child and let a guardian reach them. Specifically:",
         ],
         bullets: [
           "Their first name or the name they chose to be known by.",
           "Their year of birth — the year only, never a full date of birth. We record this so we know a reader is roughly the right age for the library, and a year is enough for that.",
           "Their flat number, so a librarian knows where a book has gone.",
-          "A picture, if a grown-up chose to add one: either a cartoon avatar or a photograph.",
+          "A picture, if a guardian chose to add one: either a cartoon avatar or a photograph.",
           "Which books they have borrowed, when, and when each came back.",
           "Any rating or short review they have written about a book.",
-          "The name, email address and phone number of the grown-up who signed them up.",
+          "The name, email address and phone number of the guardian who signed them up.",
         ],
       },
       {
@@ -121,7 +121,7 @@ export function privacyDocument(
         paragraphs: [
           "A child's photograph is private. It is shown to that child, on their own page, and to a librarian at the desk — and to nobody else, ever.",
           "Photographs are never public, never included in anything the library publishes, and never sent to any other service. Each request for the image file is authorised on its own, so a link to it cannot be shared and made to work for somebody who is not allowed to see it.",
-          "A grown-up can remove a child's photograph at any time by asking a librarian.",
+          "A guardian can remove a child's photograph at any time by asking a librarian.",
         ],
       },
       {
@@ -136,8 +136,8 @@ export function privacyDocument(
       {
         heading: "Email",
         paragraphs: [
-          "Email to a grown-up — an invitation, a reminder that a book is due, a password reset — is sent through a delivery service called Brevo, which needs the recipient's address in order to deliver it.",
-          "We never email a child directly. Password reset links always go to the grown-up on the account.",
+          "Email to a guardian — an invitation, a reminder that a book is due, a password reset — is sent through a delivery service called Brevo, which needs the recipient's address in order to deliver it.",
+          "We never email a child directly. Password reset links always go to the guardian on the account.",
         ],
       },
       {
@@ -155,14 +155,14 @@ export function privacyDocument(
           // Generated from the settings the erasing pass actually runs on, so
           // this paragraph cannot drift away from what the software does.
           ...describeRetention(retention),
-          "A grown-up may ask for their child's record to be removed sooner. Tell a librarian and they will explain exactly what can go and what has to stay in the lending history.",
+          "A guardian may ask for their child's record to be removed sooner. Tell a librarian and they will explain exactly what can go and what has to stay in the lending history.",
         ],
       },
       {
         heading: "Correcting something",
         paragraphs: [
-          "A reader can propose a correction to their own name, flat or grown-up's contact details from their own page. Nothing changes until the administrator approves it — which is deliberate, because one of those fields is where a password reset link would be sent.",
-          `A grown-up can ask a librarian to correct anything at all. ${contactSentence(context)}`,
+          "A reader can propose a correction to their own name, flat or guardian's contact details from their own page. Nothing changes until the administrator approves it — which is deliberate, because one of those fields is where a password reset link would be sent.",
+          `A guardian can ask a librarian to correct anything at all. ${contactSentence(context)}`,
         ],
       },
       {
@@ -194,7 +194,7 @@ export function termsDocument(context: LegalContext): LegalDocument {
       {
         heading: "Who can join",
         paragraphs: [
-          "Children who live in this building, whether their family owns their flat or rents it. A grown-up fills in the form; the library does not sign a child up on the word of another child.",
+          "Children who live in this building, whether their family owns their flat or rents it. A guardian fills in the form; the library does not sign a child up on the word of another child.",
           "Any reader may borrow any book, whatever their age. The age shown on a book is a suggestion about who it was written for, not a rule about who may take it home.",
         ],
       },
@@ -222,7 +222,7 @@ export function termsDocument(context: LegalContext): LegalDocument {
       {
         heading: "Your account",
         paragraphs: [
-          "Your secret word is yours. Do not share it, and do not sign in as somebody else. If you think another person knows it, change it and tell a librarian.",
+          "Your password is yours. Do not share it, and do not sign in as somebody else. If you think another person knows it, change it and tell a librarian.",
           "Always sign out on a shared device in the library room.",
           "The library can suspend or close an account — for example when a reader grows out of the library or a family leaves. Nothing is deleted when that happens; see the privacy notice.",
         ],
