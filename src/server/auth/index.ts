@@ -7,6 +7,7 @@ import { env, isProduction } from "@/server/env";
 import { maySignIn } from "@/lib/account-lifecycle";
 import { prisma } from "@/server/db";
 import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
+import { findUserByIdentifier } from "@/server/lib/identity";
 import { fakeVerifyDelay, verifyPassword } from "@/server/lib/password";
 import { checkLoginThrottle, recordLoginAttempt } from "@/server/lib/rate-limit";
 import {
@@ -90,25 +91,6 @@ function normaliseIdentifier(raw: unknown): string {
   return typeof raw === "string" ? raw.trim().toLowerCase() : "";
 }
 
-/**
- * Finds a user by either login identity: a library card code (MJCL-R0042) or a
- * username (aarav15). Staff sign in with their email address, which is matched
- * by the same lookup.
- */
-async function findUserByIdentifier(identifier: string) {
-  const memberByCode = await prisma.memberProfile.findFirst({
-    where: { memberCode: { equals: identifier, mode: "insensitive" } },
-    select: { user: true },
-  });
-  if (memberByCode?.user) return memberByCode.user;
-
-  return prisma.appUser.findFirst({
-    where: {
-      OR: [{ username: identifier }, { email: identifier }],
-    },
-  });
-}
-
 export const { handlers, signIn, signOut, auth } = NextAuth({
   secret: env.AUTH_SECRET,
   trustHost: true,
@@ -147,7 +129,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Credentials({
       credentials: {
-        identifier: { label: "Library card or username", type: "text" },
+        identifier: { label: "Library card or email", type: "text" },
         password: { label: "Password", type: "password" },
       },
 

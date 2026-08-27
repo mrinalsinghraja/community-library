@@ -35,3 +35,34 @@ export function formatCode(prefix: string, value: number, padding: number): stri
 
   return `${trimmed}${separator}${String(value).padStart(padding, "0")}`;
 }
+
+/**
+ * What a person typed, reduced to the letters and digits in it.
+ *
+ *   squashCode("mjcl-r0001")  →  "MJCLR0001"
+ *   squashCode("MJCL R 0001") →  "MJCLR0001"
+ *
+ * A library card is read off a printed card by a nine-year-old or a parent
+ * holding a phone. The hyphen gets dropped, a space gets typed instead of it,
+ * the caps lock is off. All of those are the same card, and the software should
+ * agree with the human about that rather than about punctuation.
+ */
+export function squashCode(input: string): string {
+  return input.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+}
+
+/**
+ * Whether what somebody typed could be a card number at all.
+ *
+ * Deliberately about *shape*, never about existence: it must be safe to tell
+ * the person the answer. "Adi" is not a card number and saying so leaks
+ * nothing; "MJCL-R0042" might be one, and whether it is stays unsaid.
+ *
+ * An email address is somebody signing in as staff and is not this function's
+ * business — callers test for "@" first.
+ */
+export function looksLikeCode(input: string): boolean {
+  const squashed = squashCode(input);
+  // Letters somewhere, a digit at the end: the shape every prefix produces.
+  return /[A-Z]/.test(squashed) && /[0-9]$/.test(squashed);
+}

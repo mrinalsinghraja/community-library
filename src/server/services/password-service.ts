@@ -5,6 +5,7 @@ import { requireActor } from "@/server/authz";
 import { revokeAllSessionsForUser } from "@/server/auth/session-store";
 import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
 import { EmailService } from "@/server/lib/email";
+import { findUserByIdentifier } from "@/server/lib/identity";
 import { RateLimitedError, ValidationError } from "@/server/lib/errors";
 import {
   checkPasswordPolicy,
@@ -240,10 +241,7 @@ export async function requestPasswordReset(params: {
   if (!throttle.allowed) return;
   await recordAction("password-reset", params.requestIp);
 
-  const identifier = params.identifier.trim().toLowerCase();
-  if (!identifier) return;
-
-  const user = await findUserByIdentifier(identifier);
+  const user = await findUserByIdentifier(params.identifier);
   if (!user || user.status !== "ACTIVE") return;
 
   const recipient = await recoveryEmailFor(user.id, user.kind, user.email);
@@ -479,18 +477,6 @@ export async function changeOwnPassword(params: {
  * that accepted a different set of identifiers than login would be confusing
  * and would leak the difference.
  */
-async function findUserByIdentifier(identifier: string) {
-  const byCode = await prisma.memberProfile.findFirst({
-    where: { memberCode: { equals: identifier, mode: "insensitive" } },
-    select: { user: true },
-  });
-  if (byCode?.user) return byCode.user;
-
-  return prisma.appUser.findFirst({
-    where: { OR: [{ username: identifier }, { email: identifier }] },
-  });
-}
-
 /**
  * Where recovery mail goes.
  *

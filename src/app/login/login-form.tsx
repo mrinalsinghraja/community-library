@@ -41,11 +41,11 @@ export function LoginForm({ next, cardExample }: { next?: string; cardExample?: 
 
       <Field
         id="identifier"
-        label="Your library card or name"
+        label="Your library card number"
         hint={
           cardExample
-            ? `Like ${cardExample}, or the name you chose.`
-            : "Your library card number, or the name you chose."
+            ? `It is printed on your card, like ${cardExample}. Librarians: use your email address.`
+            : "It is printed on your card. Librarians: use your email address."
         }
         required
       >

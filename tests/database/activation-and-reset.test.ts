@@ -235,6 +235,35 @@ describe("password reset", () => {
     expect(mail.tokenFrom(TEMPLATE_IDS.PASSWORD_RESET)).toBeTruthy();
   });
 
+  /*
+   * The failure that made this test exist. A parent copied a card number off a
+   * printed card into a phone: the hyphen went missing, the capitals did not
+   * survive, a space arrived instead. Every one of those was the right card and
+   * every one of them matched nothing — and matching nothing on this form is
+   * silent, so they were told instructions had been sent and then watched an
+   * empty inbox. See ADR-065.
+   */
+  it("accepts the card as a person would type it, punctuation and case and all", async () => {
+    const member = await createMember(fixture.libraryId, { displayName: "Typed Loosely" });
+    await attachGuardian(fixture.libraryId, member.id, "typed@example.invalid");
+    const profile = await db.memberProfile.findUniqueOrThrow({ where: { userId: member.id } });
+
+    const written = [
+      profile.memberCode.toLowerCase(),
+      profile.memberCode.replace(/-/g, ""),
+      profile.memberCode.replace(/-/g, " "),
+      `  ${profile.memberCode}  `,
+    ];
+
+    for (const identifier of written) {
+      mail.reset();
+      await requestPasswordReset({ identifier, requestIp: nextIp() });
+      expect(mail.lastTo(TEMPLATE_IDS.PASSWORD_RESET)?.to, identifier).toBe(
+        "typed@example.invalid",
+      );
+    }
+  });
+
   it("says nothing and sends nothing for an identifier that does not exist", async () => {
     await requestPasswordReset({ identifier: "TST-R9999", requestIp: nextIp() });
     await requestPasswordReset({ identifier: "no-such-person", requestIp: nextIp() });

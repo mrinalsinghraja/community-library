@@ -2849,3 +2849,80 @@ better, and would have made "grown up" mean two things instead of one.
 **The AI helper still says "an adult you trust".** It means whoever is in the
 room, not the adult registered on the account, and it should not borrow the
 account's word for that.
+
+---
+
+## ADR-065 — A card number typed by a human, and a silence with a way out
+
+**2026-08-27** · Accepted
+
+### What happened
+
+A parent pressed "Email me a reset link" on their child's account page, typed
+something into `/forgot`, and was told: *"If we can recover that account, we
+have sent instructions to the parent or guardian's email address."* No email
+arrived, because none was sent. The production log is unambiguous: a
+`password-reset` throttle row exists for that minute, and there is no
+`auth.password_reset.requested` audit row and no `email_event` row after it. The
+request died between the two — at `findUserByIdentifier`.
+
+### Two causes, one symptom
+
+**The form invited an identity no reader has.** Both the sign-in and the reset
+forms said "Your library card **or name**", hinted "or the name you chose", and
+the lookup matched that against `app_user.username`. Nothing in this application
+has ever written `username` — not registration, not activation, not the desk.
+Only the development seed sets one. So "the name you chose" matched nothing, for
+every reader, always.
+
+**The card had to be typed perfectly.** The lookup was
+`memberCode equals identifier, mode: insensitive` — case-forgiving and nothing
+else. A card is copied off a printed rectangle by somebody holding a phone: the
+hyphen goes missing, a space arrives instead of it, autocapitalise does what it
+likes. Every one of those was the right card, and none of them matched.
+
+**And the silence is deliberate**, which is what turned a miss into a dead end.
+`/forgot` must answer identically whether an account exists, is suspended, or was
+never real — otherwise the box becomes a way of asking "is MJCL-R0042 a real
+child at this address?". That rule stays. It is right.
+
+### The decision
+
+**Match the card on its letters and digits.** `squashCode()` reduces both sides
+to `[A-Z0-9]`, so `mjcl r0001`, `MJCLR0001` and `MJCL-R0001` are one card. The
+comparison is a single indexed-table scan in SQL (`regexp_replace` on the stored
+column) with `LIMIT 2`, so two cards that normalise alike make the lookup refuse
+rather than pick a child.
+
+**One lookup, not two.** `src/server/auth/index.ts` and `password-service.ts`
+each kept a private copy of "who does this identifier mean". Two copies is how
+signing in and asking for a reset link come to disagree about who you are. Both
+now import `src/server/lib/identity.ts`.
+
+**Say the thing that is safe to say.** The action now rejects an identifier that
+is not *shaped* like a card number or an email address, before the silent path
+swallows it: *"That does not look like a library card number."* This discloses
+nothing — "Adi" is not a card number whether or not Adi is a reader here — and
+it converts the exact dead end that produced this ADR into a sentence.
+
+**Stop asking a signed-in reader for their own number.** `/forgot` pre-fills the
+card when a member session is present. It is their own card, and the route the
+failure arrived by was pressing a button on their own account page and then
+being asked for a number they could not see.
+
+**Stop promising a name.** Both forms now say "Your library card number", with
+"Librarians: use your email address" underneath.
+
+### What this does not change
+
+**The silence itself.** Existence is still never disclosed. The new message is
+about the shape of the string, and it is returned before any account is looked
+up, so it cannot vary with whether one exists.
+
+**The rate limit, the guardian rule, the token.** Untouched: 5 requests per IP
+per hour, the link goes to the guardian's inbox and never to the child, and it
+stays single-use and expiring.
+
+**`username` still exists.** The column is kept and the lookup still matches it,
+because an import could fill it. It is simply no longer offered to a reader as
+though they had one.

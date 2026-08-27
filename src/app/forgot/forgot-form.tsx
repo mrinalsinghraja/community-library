@@ -17,7 +17,14 @@ const INITIAL: ActionState = { status: "idle" };
  * never real. Anything else would turn this box into a way of asking "is
  * MJCL-R0042 a real child at this address?".
  */
-export function ForgotForm({ cardExample }: { cardExample?: string }) {
+export function ForgotForm({
+  cardExample,
+  defaultIdentifier,
+}: {
+  cardExample?: string;
+  /** This reader's own card, when they reached here already signed in. */
+  defaultIdentifier?: string;
+}) {
   const [state, formAction, pending] = useActionState(requestPasswordResetAction, INITIAL);
 
   if (state.status === "success") {
@@ -32,19 +39,31 @@ export function ForgotForm({ cardExample }: { cardExample?: string }) {
 
   return (
     <form action={formAction} className="flex flex-col gap-6" noValidate>
+      {/*
+        "or the name you chose" used to be here. Nothing in this application has
+        ever given a reader a username, so a child typing their own name matched
+        nothing — and on this form matching nothing is silent. See ADR-065.
+      */}
       <Field
         id="identifier"
-        label="Your library card or name"
-        hint={cardExample ? `Like ${cardExample}, or the name you chose.` : undefined}
+        label="Your library card number"
+        hint={
+          cardExample
+            ? `It is printed on your card, like ${cardExample}. Librarians: use your email address.`
+            : "It is printed on your card. Librarians: use your email address."
+        }
+        error={state.fieldErrors?.identifier}
         required
       >
         <TextInput
           id="identifier"
           name="identifier"
           autoComplete="username"
-          autoCapitalize="none"
+          autoCapitalize="characters"
           autoCorrect="off"
           spellCheck={false}
+          defaultValue={defaultIdentifier}
+          invalid={Boolean(state.fieldErrors?.identifier)}
           required
         />
       </Field>

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { looksLikeCode } from "@/lib/codes";
 import { isAppError, toFriendlyMessage, ValidationError } from "@/server/lib/errors";
 import {
   activateAccount,
@@ -118,6 +119,32 @@ export async function requestPasswordResetAction(
   formData: FormData,
 ): Promise<ActionState> {
   const identifier = String(formData.get("identifier") ?? "").trim();
+
+  /*
+   * A shape check, before the silent path swallows everything.
+   *
+   * The service below is deliberately mute: it answers the same way whether the
+   * account exists, is suspended, or was never real, because anything else
+   * turns this box into a way of asking "is MJCL-R0042 a real child at this
+   * address?". That is right, and it has one bad consequence — somebody who
+   * typed their *name* into a box asking for a card number is told instructions
+   * were sent, and then waits for an email that was never going to arrive.
+   *
+   * This says nothing about any account. It says the thing typed is not the
+   * shape of a card number, which is true of "Adi" whether or not Adi exists.
+   */
+  if (!identifier) {
+    return { status: "error", fieldErrors: { identifier: "Please type your library card number." } };
+  }
+  if (!identifier.includes("@") && !looksLikeCode(identifier)) {
+    return {
+      status: "error",
+      fieldErrors: {
+        identifier:
+          "That does not look like a library card number. It is on your card, and looks like a few letters and then some numbers.",
+      },
+    };
+  }
 
   // Never throws, never reveals. The same response is returned whether the
   // account exists, is suspended, or was never real.
