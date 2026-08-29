@@ -2,11 +2,19 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PrintLabelsButton } from "@/app/admin/books/labels/print-button";
+import { BookFilterFields } from "@/components/desk/book-filter-fields";
 import { StaffShell } from "@/components/layout/staff-shell";
 import { Card } from "@/components/ui/card";
-import { Field, Select, TextInput } from "@/components/ui/field";
+import { Field, Select } from "@/components/ui/field";
 import { Callout } from "@/components/ui/states";
-import { dateOnlyInTimezone, endOfDayInTimezone, formatInTimezone, nowInTimezone } from "@/lib/dates";
+import {
+  bookFilterProblems,
+  bookFilterParams,
+  describeBookFilter,
+  isFilteringBooks,
+  parseBookFilter,
+} from "@/lib/book-filter";
+import { dateOnlyInTimezone, formatInTimezone, nowInTimezone } from "@/lib/dates";
 import {
   LABEL_SIZES,
   LABEL_SIZE_LABELS,
@@ -18,17 +26,18 @@ import {
 } from "@/lib/labels";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { requirePermissionForPage } from "@/server/page-guards";
+import { listCategories } from "@/server/services/catalogue-service";
 import { countBookLabels } from "@/server/services/label-service";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Print shelf labels" };
 
 /** The last seven days, which is the run this screen was built for. */
-function defaultRange(timezone: string): { from: string; to: string } {
+function defaultRange(timezone: string): { addedFrom: string; addedTo: string } {
   const today = nowInTimezone(timezone);
   const iso = (value: Date) => formatInTimezone(value, timezone, "yyyy-MM-dd");
   const weekAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
-  return { from: iso(weekAgo), to: iso(today) };
+  return { addedFrom: iso(weekAgo), addedTo: iso(today) };
 }
 
 /**
@@ -66,15 +75,23 @@ export default async function PrintLabelsPage({
     return (Array.isArray(value) ? value[0] : value)?.trim() ?? "";
   };
 
-  const fallback = defaultRange(settings.timezone);
-  // A date is only accepted once it parses as a real day in the library's
-  // timezone; "2026-02-31" falls back rather than becoming an Invalid Date.
-  const fromRaw = read("from") || fallback.from;
-  const toRaw = read("to") || fallback.to;
+  /*
+   * The same filter the book list uses, so "Print labels" from that screen
+   * lands here already narrowed to what was on it.
+   *
+   * The seven-day default only applies to a bare visit. Somebody who arrived
+   * with a filter asked a question, and answering a different one because this
+   * screen has a favourite week would be worse than useless — it would print
+   * the wrong stickers.
+   */
+  const parsed = parseBookFilter(params);
+  const categories = await listCategories(actor.libraryId);
+  const category = categories.find((entry) => entry.id === parsed.categoryId);
+  const filter = isFilteringBooks(parsed)
+    ? { ...parsed, categoryId: category?.id ?? "" }
+    : { ...parsed, ...defaultRange(settings.timezone) };
 
-  const fromDay = dateOnlyInTimezone(fromRaw, settings.timezone);
-  const toDay = dateOnlyInTimezone(toRaw, settings.timezone);
-  const backwards = fromDay && toDay ? fromDay > toDay : false;
+  const problems = bookFilterProblems(filter);
 
   const sizeRaw = read("size");
   const size: LabelSize = isLabelSize(sizeRaw) ? sizeRaw : "standard";
@@ -82,12 +99,15 @@ export default async function PrintLabelsPage({
   // for plain paper, and plain paper needs a line to cut along.
   const cutGuides = read("guides") !== "0";
 
-  const labelCount = backwards
-    ? 0
-    : await countBookLabels(
-        fromDay ?? undefined,
-        toDay ? endOfDayInTimezone(toDay, settings.timezone) : undefined,
-      );
+  const labelCount = problems.length > 0 ? 0 : await countBookLabels(filter);
+
+  const scope = describeBookFilter(filter, {
+    categoryName: category?.name,
+    formatDay: (day) => {
+      const parsedDay = dateOnlyInTimezone(day, settings.timezone);
+      return parsedDay ? formatInTimezone(parsedDay, settings.timezone, "d MMM yyyy") : day;
+    },
+  });
 
   const perSheet = labelsPerSheet(size);
   const sheetCount = Math.max(1, Math.ceil(labelCount / perSheet));
@@ -97,7 +117,9 @@ export default async function PrintLabelsPage({
     <StaffShell branding={branding} actor={actor} title="Print shelf labels">
       <div className="flex flex-col gap-5">
         <p className="max-w-prose text-lg text-ink-soft">
-          A sheet of stickers for the books that came in — the book number in
+          A sheet of stickers for any set of books you can describe — the whole
+          shelf, one category, an age band, a run of book IDs, or everything one
+          family gave. The book number goes on in
           large type, the title underneath, then the shelf and the reading age,
           so a book can be found on the shelf and put back on the right one. A
           book that was given carries its donor&rsquo;s credit and the month it
@@ -106,14 +128,8 @@ export default async function PrintLabelsPage({
 
         <Card>
           <form method="get" className="flex flex-col gap-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field id="from" label="Added from" hint="The first day to include.">
-                <TextInput id="from" name="from" type="date" defaultValue={fromRaw} />
-              </Field>
-
-              <Field id="to" label="Added up to" hint="Included, so one day prints that day.">
-                <TextInput id="to" name="to" type="date" defaultValue={toRaw} />
-              </Field>
+            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+              <BookFilterFields filter={filter} categories={categories} />
             </div>
 
             <Field id="size" label="Label size" hint={describeLabelSize(size)}>
@@ -143,42 +159,54 @@ export default async function PrintLabelsPage({
               </span>
             </label>
 
-            <div>
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 type="submit"
                 className="rounded-[var(--radius-button)] border border-control-border bg-surface px-5 py-2.5 text-base font-semibold text-ink"
               >
                 Count these
               </button>
+              {isFilteringBooks(filter) ? (
+                <Link href="/admin/books/labels?codeFrom=1" className="text-sm font-semibold text-primary-deep">
+                  Every book
+                </Link>
+              ) : null}
             </div>
           </form>
         </Card>
 
-        {backwards ? (
-          <Callout tone="warn" title="Those dates are the wrong way round">
-            The first date is after the last one. Swap them and count again.
+        {problems.length > 0 ? (
+          <Callout tone="warn" title="Check those boxes">
+            <ul className="flex flex-col gap-1">
+              {problems.map((problem) => (
+                <li key={problem}>{problem}</li>
+              ))}
+            </ul>
           </Callout>
         ) : null}
 
         {tooMany ? (
           <Callout tone="warn" title="That is a lot of labels">
             {labelCount} labels is more than the {MAX_LABELS} this can make in
-            one go. Narrow the dates and print in batches.
+            one go. Narrow it down and print in batches.
           </Callout>
         ) : null}
 
-        {!backwards && !tooMany ? (
+        {problems.length === 0 && !tooMany ? (
           <Card tone="primary">
             <div className="flex flex-col gap-3">
               <p className="text-lg text-ink" aria-live="polite">
                 {labelCount === 0
-                  ? "No books were added between those dates."
+                  ? "No books match that. Try widening it."
                   : `${labelCount} ${labelCount === 1 ? "book" : "books"} — ${sheetCount} ${sheetCount === 1 ? "sheet" : "sheets"} of A4, ${perSheet} to a sheet.`}
               </p>
 
+              {/* What is about to be printed, in words, so the sheet is not a
+                  surprise and the same sentence ends up in its footer. */}
+              <p className="text-base text-ink-soft">{scope}</p>
+
               <PrintLabelsButton
-                from={fromRaw}
-                to={toRaw}
+                filter={bookFilterParams(filter)}
                 size={size}
                 cutGuides={cutGuides}
                 labelCount={labelCount}

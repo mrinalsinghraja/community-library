@@ -8,22 +8,20 @@ import { DataTable, StaffShell } from "@/components/layout/staff-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { Callout, EmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { BookFilterFields, FilterSelect } from "@/components/desk/book-filter-fields";
 import {
-  AGE_GROUPS,
-  CONDITIONS,
-  PAGE_SIZES,
-  STATUSES,
-  ageGroupLabel,
-  conditionLabel,
-  isAgeGroup,
-  isCondition,
-  statusDefinition,
-} from "@/lib/catalogue";
+  bookFilterParams,
+  bookFilterProblems,
+  isFilteringBooks,
+  parseBookFilter,
+} from "@/lib/book-filter";
+import { PAGE_SIZES, ageGroupLabel, conditionLabel, statusDefinition } from "@/lib/catalogue";
 import { formatInTimezone } from "@/lib/dates";
 import { bookListUrl, noticeCode } from "@/lib/return-to";
 import { requireAnyPermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import {
+  bookFilterToQuery,
   listBooksForStaff,
   listCategories,
   type CatalogueSort,
@@ -69,38 +67,38 @@ export default async function AdminBooksPage({
     return (Array.isArray(value) ? value[0] : value)?.trim() ?? "";
   };
 
-  const search = read("q");
-  const categoryId = read("category");
-  const ageGroupRaw = read("age");
-  const conditionRaw = read("condition");
-  const statusRaw = read("status");
-  const sortRaw = read("sort");
-  const includeArchived = read("archived") === "1";
-  const page = Number.parseInt(read("page"), 10) || 1;
-
   const categories = await listCategories(actor.libraryId);
 
-  // Anything unrecognised in the query string is dropped rather than passed on.
-  // A hand-edited URL narrows the list or does nothing; it never reaches SQL.
+  /*
+   * One filter, parsed once, shared with the label sheet and the export.
+   *
+   * Anything unrecognised in the query string is dropped rather than passed on,
+   * and every value is checked against a vocabulary this application defined. A
+   * hand-edited URL narrows the list or does nothing; it never reaches SQL as
+   * something the code did not expect.
+   */
+  const parsed = parseBookFilter(params);
+  // The shelf is the one value only this page can check: a filter carries an
+  // id, and an id for another library's shelf is not a shelf.
+  const category = categories.find((entry) => entry.id === parsed.categoryId);
+  const filter = { ...parsed, categoryId: category?.id ?? "" };
+  const problems = bookFilterProblems(filter);
+
+  const sortRaw = read("sort");
+  const page = Number.parseInt(read("page"), 10) || 1;
+
+  // Anything unrecognised is dropped rather than passed on.
   const sort: CatalogueSort =
     sortRaw === "title" || sortRaw === "author" || sortRaw === "code" ? sortRaw : "newest";
-  // Looked up rather than cast: the value that reaches the service is one this
-  // application defined, not a string that arrived in a URL.
-  const status = STATUSES.find((entry) => entry.value === statusRaw)?.value;
 
   const result = await listBooksForStaff({
-    search,
-    categoryId: categories.some((category) => category.id === categoryId) ? categoryId : undefined,
-    ageGroup: isAgeGroup(ageGroupRaw) ? ageGroupRaw : undefined,
-    condition: isCondition(conditionRaw) ? conditionRaw : undefined,
-    status,
-    includeArchived,
+    ...bookFilterToQuery(filter, settings.timezone),
     sort,
     page,
     pageSize: PAGE_SIZES.desk,
   });
 
-  const filtering = Boolean(search || categoryId || ageGroupRaw || conditionRaw || statusRaw);
+  const filtering = isFilteringBooks(filter);
 
   /*
    * This list, as a link the book form can hold and come back to.
@@ -119,22 +117,16 @@ export default async function AdminBooksPage({
   const saved = noticeCode(read("saved"));
 
   /*
-   * The filters, as the export route will read them back.
+   * The filters, as the export route and the label sheet read them back.
    *
-   * Built from the values this page already validated rather than from the raw
-   * query string, so "export everything" means the list on the screen and not
-   * whatever a hand-edited URL asked for. The route validates them again on
-   * arrival — a filter that travels through a browser is an input, not a fact.
+   * Built from the filter this page already validated rather than from the raw
+   * query string, so "export everything" and "print labels for this" both mean
+   * the list on the screen and not whatever a hand-edited URL asked for. Each
+   * of them validates again on arrival — a filter that travels through a
+   * browser is an input, not a fact.
    */
-  const exportFilter: Record<string, string> = {
-    ...(search ? { search } : {}),
-    ...(categoryId ? { category: categoryId } : {}),
-    ...(isAgeGroup(ageGroupRaw) ? { age: ageGroupRaw } : {}),
-    ...(isCondition(conditionRaw) ? { condition: conditionRaw } : {}),
-    ...(status ? { status } : {}),
-    ...(includeArchived ? { archived: "1" } : {}),
-    sort,
-  };
+  const exportFilter: Record<string, string> = { ...bookFilterParams(filter), sort };
+  const labelsHref = `/admin/books/labels?${new URLSearchParams(bookFilterParams(filter)).toString()}`;
 
   return (
     <StaffShell branding={branding} actor={actor} title="Books">
@@ -153,7 +145,7 @@ export default async function AdminBooksPage({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-base text-ink-soft">
           {result.total === 1 ? "1 book" : `${result.total} books`}
-          {includeArchived ? " (including archived)" : ""}
+          {filter.includeArchived ? " (including archived)" : ""}
         </p>
         <div className="flex flex-wrap items-center gap-3">
           {/*
@@ -162,7 +154,7 @@ export default async function AdminBooksPage({
             number on the cover before it can go on a shelf.
           */}
           {actor.permissions.has("report.view") ? (
-            <ButtonLink href="/admin/books/labels" variant="secondary" icon={<Icon name="card" />}>
+            <ButtonLink href={labelsHref} variant="secondary" icon={<Icon name="card" />}>
               Print labels
             </ButtonLink>
           ) : null}
@@ -184,48 +176,7 @@ export default async function AdminBooksPage({
         */
         className="mt-5 grid gap-x-4 gap-y-3 rounded-[var(--radius-card)] bg-surface-sunk px-4 py-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6"
       >
-        <label className="flex flex-col gap-1 sm:col-span-2">
-          <span className="text-sm font-semibold text-ink-soft">Search</span>
-          <input
-            type="search"
-            name="q"
-            defaultValue={search}
-            placeholder="Title, author or book ID"
-            className="min-h-10 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-3 text-base"
-          />
-        </label>
-
-        <FilterSelect label="Shelf" name="category" value={categoryId}>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </FilterSelect>
-
-        <FilterSelect label="Age" name="age" value={ageGroupRaw}>
-          {AGE_GROUPS.map((group) => (
-            <option key={group.value} value={group.value}>
-              {group.label}
-            </option>
-          ))}
-        </FilterSelect>
-
-        <FilterSelect label="Condition" name="condition" value={conditionRaw}>
-          {CONDITIONS.map((condition) => (
-            <option key={condition.value} value={condition.value}>
-              {condition.label}
-            </option>
-          ))}
-        </FilterSelect>
-
-        <FilterSelect label="Status" name="status" value={statusRaw}>
-          {STATUSES.map((entry) => (
-            <option key={entry.value} value={entry.value}>
-              {entry.staffLabel}
-            </option>
-          ))}
-        </FilterSelect>
+        <BookFilterFields filter={filter} categories={categories} />
 
         <FilterSelect label="Sort by" name="sort" value={sort} includeAny={false}>
           <option value="newest">Newest first</option>
@@ -234,17 +185,6 @@ export default async function AdminBooksPage({
           <option value="code">Book ID</option>
         </FilterSelect>
 
-        <label className="flex items-center gap-2.5 self-end pb-1.5">
-          <input
-            type="checkbox"
-            name="archived"
-            value="1"
-            defaultChecked={includeArchived}
-            className="size-6 rounded border-2 border-control-border"
-          />
-          <span className="text-sm font-semibold text-ink">Include archived</span>
-        </label>
-
         <div className="flex items-center gap-3 self-end pb-0.5 sm:col-span-2 lg:col-span-1">
           <button
             type="submit"
@@ -252,13 +192,23 @@ export default async function AdminBooksPage({
           >
             Apply
           </button>
-          {filtering || includeArchived ? (
+          {filtering ? (
             <Link href="/admin/books" className="text-sm font-semibold text-primary-deep">
               Clear
             </Link>
           ) : null}
         </div>
       </form>
+
+      {problems.length > 0 ? (
+        <Callout tone="warn" title="Check those boxes" className="mt-5">
+          <ul className="flex flex-col gap-1">
+            {problems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+        </Callout>
+      ) : null}
 
       <div className="mt-6">
         {result.items.length === 0 ? (
@@ -393,34 +343,5 @@ export default async function AdminBooksPage({
         </nav>
       ) : null}
     </StaffShell>
-  );
-}
-
-/** A labelled filter dropdown with an "any" option, unless it is the sort control. */
-function FilterSelect({
-  label,
-  name,
-  value,
-  includeAny = true,
-  children,
-}: {
-  label: string;
-  name: string;
-  value: string;
-  includeAny?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-sm font-semibold text-ink-soft">{label}</span>
-      <select
-        name={name}
-        defaultValue={value}
-        className="min-h-10 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-2.5 text-base"
-      >
-        {includeAny ? <option value="">Any</option> : null}
-        {children}
-      </select>
-    </label>
   );
 }

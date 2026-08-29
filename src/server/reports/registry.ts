@@ -1,13 +1,11 @@
 import "server-only";
 
 import {
-  STATUSES,
   ageGroupLabel,
   conditionLabel,
-  isAgeGroup,
-  isCondition,
   statusDefinition,
 } from "@/lib/catalogue";
+import { parseBookFilter } from "@/lib/book-filter";
 import { isLoanFilter } from "@/lib/circulation";
 import { dueCountdown } from "@/lib/due-countdown";
 import type { ReportKey } from "@/lib/reports";
@@ -18,7 +16,11 @@ import { getCurrentLibrary } from "@/server/lib/settings";
 import type { ReportColumn } from "@/server/reports/table";
 import { listAuditEvents } from "@/server/services/audit-service";
 import { listMembers } from "@/server/services/account-service";
-import { listBooksForStaff, type CatalogueSort } from "@/server/services/catalogue-service";
+import {
+  bookFilterToQuery,
+  listBooksForStaff,
+  type CatalogueSort,
+} from "@/server/services/catalogue-service";
 import {
   listLoansForStaff,
   listPendingBorrowRequests,
@@ -158,13 +160,14 @@ async function loadBooks(actor: Actor, filter: ReportFilter) {
       ? sortRaw
       : undefined;
 
+  /*
+   * Parsed by the same function the books screen uses, so a spreadsheet is the
+   * list that was on the screen. Two parsers is how an export quietly starts
+   * meaning something slightly different from the page it was taken from.
+   */
+  const { settings } = await getCurrentLibrary();
   const page = await listBooksForStaff({
-    search: filter.search || undefined,
-    categoryId: filter.category || undefined,
-    ageGroup: isAgeGroup(filter.age) ? filter.age : undefined,
-    condition: isCondition(filter.condition) ? filter.condition : undefined,
-    status: STATUSES.find((entry) => entry.value === filter.status)?.value,
-    includeArchived: filter.archived === "1",
+    ...bookFilterToQuery(parseBookFilter(filter), settings.timezone),
     sort,
     page: 1,
     pageSize: MAX_EXPORT_ROWS,

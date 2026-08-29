@@ -2,7 +2,7 @@ import { PDFDocument } from "pdf-lib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { __setSessionHandle } from "../stubs/auth-stub";
-import { endOfDayInTimezone } from "@/lib/dates";
+import { EMPTY_BOOK_FILTER, type BookFilter } from "@/lib/book-filter";
 import { labelsPerSheet } from "@/lib/labels";
 import { createSession } from "@/server/auth/session-store";
 import { AUDIT_ACTIONS } from "@/server/lib/audit";
@@ -30,12 +30,14 @@ import {
  * timezone. A unit test of the wrapper would prove the wrapper works and say
  * nothing about whether "books added last week" returns last week's books.
  *
- * Three properties are under test:
+ * Four properties are under test:
  *
  *   1. A range means that range — inclusive at both ends, and nothing outside.
- *   2. A reader cannot print labels, whatever the screen does or does not show.
- *   3. Printing is recorded without the audit log becoming a copy of the
- *      catalogue.
+ *   2. Every way of choosing books means what it says: a shelf, an age, a run
+ *      of book IDs, a donation month, a family.
+ *   3. A reader cannot print labels, whatever the screen does or does not show.
+ *   4. Printing is recorded without the audit log becoming a copy of the
+ *      catalogue — and without becoming a record of who searched for whom.
  */
 
 const TIMEZONE = "Asia/Kolkata";
@@ -77,12 +79,14 @@ async function addBookOn(day: string, title: string) {
   return created;
 }
 
-/** The instants the route derives from two typed dates. */
-function range(from: string, to: string) {
-  return {
-    from: new Date(`${from}T00:00:00.000+05:30`),
-    to: endOfDayInTimezone(new Date(`${to}T00:00:00.000+05:30`), TIMEZONE),
-  };
+/** A filter as a librarian would have left the screen. */
+function filter(overrides: Partial<BookFilter> = {}): BookFilter {
+  return { ...EMPTY_BOOK_FILTER, ...overrides };
+}
+
+/** The two typed dates, as the added-on range the screen sends. */
+function range(from: string, to: string): BookFilter {
+  return filter({ addedFrom: from, addedTo: to });
 }
 
 beforeAll(async () => {
@@ -111,23 +115,17 @@ afterAll(async () => {
 describe("the date range", () => {
   it("includes both ends of the week", async () => {
     await actingAs(librarian.id);
-    const { from, to } = range("2026-08-17", "2026-08-23");
-
-    expect(await countBookLabels(from, to)).toBe(3);
+    expect(await countBookLabels(range("2026-08-17", "2026-08-23"))).toBe(3);
   });
 
   it("leaves out what falls outside it", async () => {
     await actingAs(librarian.id);
-    const { from, to } = range("2026-08-18", "2026-08-22");
-
-    expect(await countBookLabels(from, to)).toBe(1);
+    expect(await countBookLabels(range("2026-08-18", "2026-08-22"))).toBe(1);
   });
 
   it("treats a single day as that day rather than as nothing", async () => {
     await actingAs(librarian.id);
-    const { from, to } = range("2026-08-20", "2026-08-20");
-
-    expect(await countBookLabels(from, to)).toBe(1);
+    expect(await countBookLabels(range("2026-08-20", "2026-08-20"))).toBe(1);
   });
 
   it("counts every book when no dates are given", async () => {
@@ -137,20 +135,15 @@ describe("the date range", () => {
 
   it("counts nothing for a week with no books in it", async () => {
     await actingAs(librarian.id);
-    const { from, to } = range("2026-09-10", "2026-09-17");
-
-    expect(await countBookLabels(from, to)).toBe(0);
+    expect(await countBookLabels(range("2026-09-10", "2026-09-17"))).toBe(0);
   });
 });
 
 describe("the sheet", () => {
   it("prints one label per copy in the range", async () => {
     await actingAs(librarian.id);
-    const { from, to } = range("2026-08-17", "2026-08-23");
-
     const file = await printBookLabels({
-      from,
-      to,
+      filter: range("2026-08-17", "2026-08-23"),
       size: "standard",
       cutGuides: true,
       selectedIds: [],
@@ -165,6 +158,7 @@ describe("the sheet", () => {
   it("names the file after the library and the day", async () => {
     await actingAs(librarian.id);
     const file = await printBookLabels({
+      filter: filter(),
       size: "standard",
       cutGuides: true,
       selectedIds: [],
@@ -180,6 +174,7 @@ describe("the sheet", () => {
     });
 
     const file = await printBookLabels({
+      filter: filter(),
       size: "standard",
       cutGuides: true,
       selectedIds: [middle.id],
@@ -191,6 +186,7 @@ describe("the sheet", () => {
   it("opens as a real PDF with the sheets it claims", async () => {
     await actingAs(librarian.id);
     const file = await printBookLabels({
+      filter: filter(),
       size: "small",
       cutGuides: false,
       selectedIds: [],
@@ -207,7 +203,7 @@ describe("who may print them", () => {
     await actingAs(reader.id, "MEMBER");
 
     await expect(
-      printBookLabels({ size: "standard", cutGuides: true, selectedIds: [] }),
+      printBookLabels({ filter: filter(), size: "standard", cutGuides: true, selectedIds: [] }),
     ).rejects.toThrow();
   });
 
@@ -220,9 +216,12 @@ describe("who may print them", () => {
 describe("what the log records", () => {
   it("records the print without copying the catalogue into it", async () => {
     await actingAs(librarian.id);
-    const { from, to } = range("2026-08-17", "2026-08-23");
-
-    await printBookLabels({ from, to, size: "large", cutGuides: true, selectedIds: [] });
+    await printBookLabels({
+      filter: range("2026-08-17", "2026-08-23"),
+      size: "large",
+      cutGuides: true,
+      selectedIds: [],
+    });
 
     const entry = await db.auditLog.findFirstOrThrow({
       where: { libraryId: fixture.libraryId, action: AUDIT_ACTIONS.BOOK_LABELS_PRINTED },
@@ -232,7 +231,7 @@ describe("what the log records", () => {
     const metadata = entry.metadata as Record<string, unknown>;
     expect(metadata.labelCount).toBe(3);
     expect(metadata.size).toBe("large");
-    expect(metadata.scope).toBe("range");
+    expect(metadata.scope).toBe("filter");
 
     // No book codes, no titles. The log says a sheet was printed; it does not
     // become a second copy of the shelf.
@@ -248,7 +247,7 @@ describe("what the log records", () => {
     });
 
     await countBookLabels();
-    await countBookLabels(...Object.values(range("2026-08-17", "2026-08-23")));
+    await countBookLabels(range("2026-08-17", "2026-08-23"));
 
     const after = await db.auditLog.count({
       where: { action: AUDIT_ACTIONS.BOOK_LABELS_PRINTED },
@@ -286,6 +285,7 @@ describe("the donor's credit on the label", () => {
   async function labelText(copyId: string) {
     await actingAs(librarian.id);
     const file = await printBookLabels({
+      filter: filter(),
       size: "standard",
       cutGuides: false,
       selectedIds: [copyId],
@@ -364,5 +364,175 @@ describe("the donor's credit on the label", () => {
 
     // Printing a sheet is not a second place the donor register lives.
     expect(JSON.stringify(entry.metadata)).not.toContain("Priya");
+  });
+});
+
+/**
+ * Choosing books by everything except when they were catalogued.
+ *
+ * Every one of these is a SQL predicate, and three of them are predicates that
+ * did not exist before: a numeric range pulled out of the end of a book code, a
+ * donation date, and a donor. They are checked against a real database because
+ * that is the only place the claim can be true — a librarian who prints
+ * "everything the Nairs gave" and gets somebody else's books has printed
+ * stickers that are wrong in a way nobody notices until the books are back on
+ * the shelf.
+ */
+describe("the other ways of choosing books", () => {
+  let comics: string;
+  let stories: string;
+
+  beforeAll(async () => {
+    await actingAs(librarian.id);
+    const categories = await db.bookCategory.findMany({ where: { libraryId: fixture.libraryId } });
+    stories = categories[0].id;
+    comics = categories[1]?.id ?? categories[0].id;
+
+    await createBook(
+      bookInput({
+        title: "A Comic For The Nairs",
+        categoryId: comics,
+        ageGroup: "AGE_5_7",
+        donorName: "Kavya Borthakur",
+        donorFlat: "Z-9001",
+        donatedOn: "2026-07-15",
+      }),
+    );
+    await createBook(
+      bookInput({
+        title: "A Story From Another Flat",
+        categoryId: stories,
+        ageGroup: "AGE_12_16",
+        donorName: "Ritu Phukan",
+        donorFlat: "Y-8002",
+        donatedOn: "2026-08-02",
+      }),
+    );
+  });
+
+  it("counts every book when nothing is chosen", async () => {
+    await actingAs(librarian.id);
+    const everything = await countBookLabels();
+
+    expect(everything).toBe(await db.bookCopy.count({ where: { libraryId: fixture.libraryId } }));
+    expect(everything).toBeGreaterThan(6);
+  });
+
+  it("narrows to one shelf", async () => {
+    await actingAs(librarian.id);
+    const onComics = await countBookLabels(filter({ categoryId: comics }));
+
+    expect(onComics).toBe(1);
+    expect(onComics).toBeLessThan(await countBookLabels());
+  });
+
+  it("narrows to a reading age", async () => {
+    await actingAs(librarian.id);
+    expect(await countBookLabels(filter({ ageGroup: "AGE_5_7" }))).toBe(1);
+    expect(await countBookLabels(filter({ ageGroup: "AGE_12_16" }))).toBe(1);
+  });
+
+  it("narrows to when a family gave the book, not when it was catalogued", async () => {
+    await actingAs(librarian.id);
+
+    // One donation in July, one on 2 August; both books were catalogued today.
+    // A filter that quietly read created_at would answer nought to both.
+    expect(
+      await countBookLabels(filter({ donatedFrom: "2026-07-01", donatedTo: "2026-07-31" })),
+    ).toBe(1);
+    expect(
+      await countBookLabels(filter({ donatedFrom: "2026-08-01", donatedTo: "2026-08-05" })),
+    ).toBe(1);
+    expect(
+      await countBookLabels(filter({ donatedFrom: "2026-07-01", donatedTo: "2026-08-05" })),
+    ).toBe(2);
+  });
+
+  it("counts a donation on the first and last day of the range", async () => {
+    await actingAs(librarian.id);
+    expect(
+      await countBookLabels(filter({ donatedFrom: "2026-07-15", donatedTo: "2026-07-15" })),
+    ).toBe(1);
+  });
+
+  it("narrows to a family by name, partly typed and in any case", async () => {
+    await actingAs(librarian.id);
+    expect(await countBookLabels(filter({ donorName: "borthakur" }))).toBe(1);
+    expect(await countBookLabels(filter({ donorName: "KAVYA" }))).toBe(1);
+    expect(await countBookLabels(filter({ donorName: "Nobody Here" }))).toBe(0);
+  });
+
+  it("narrows to a flat", async () => {
+    await actingAs(librarian.id);
+    expect(await countBookLabels(filter({ donorFlat: "Z-9001" }))).toBe(1);
+    expect(await countBookLabels(filter({ donorFlat: "Y-8002" }))).toBe(1);
+  });
+
+  it("leaves out books nobody gave when a donor is asked about", async () => {
+    await actingAs(librarian.id);
+    // Most of the fixture was bought. A donor question is about given books.
+    expect(await countBookLabels(filter({ donorName: "a" }))).toBeLessThan(
+      await countBookLabels(),
+    );
+  });
+
+  it("does not let a typed percent sign match the whole register", async () => {
+    await actingAs(librarian.id);
+    expect(await countBookLabels(filter({ donorName: "%" }))).toBe(0);
+    expect(await countBookLabels(filter({ donorFlat: "%" }))).toBe(0);
+  });
+
+  it("narrows to a run of book IDs", async () => {
+    await actingAs(librarian.id);
+    const all = await db.bookCopy.findMany({
+      where: { libraryId: fixture.libraryId },
+      select: { copyCode: true },
+      orderBy: { copyCode: "asc" },
+    });
+    const number = (code: string) => Number.parseInt(/(\d+)$/.exec(code)![1], 10);
+    const first = number(all[0].copyCode);
+    const third = number(all[2].copyCode);
+
+    expect(await countBookLabels(filter({ codeFrom: String(first), codeTo: String(third) }))).toBe(3);
+    expect(await countBookLabels(filter({ codeFrom: all[0].copyCode, codeTo: all[2].copyCode }))).toBe(3);
+    expect(await countBookLabels(filter({ codeFrom: String(first), codeTo: String(first) }))).toBe(1);
+  });
+
+  it("prints the sheet the filter describes, and says so in its footer", async () => {
+    await actingAs(librarian.id);
+    const file = await printBookLabels({
+      filter: filter({ donorFlat: "Z-9001" }),
+      size: "standard",
+      cutGuides: false,
+      selectedIds: [],
+    });
+
+    expect(file.labelCount).toBe(1);
+    const text = drawnText(file.bytes);
+    expect(text).toContain("A Comic For The Nairs");
+    expect(text).toContain("Z-9001");
+    expect(text).not.toContain("A Story From Another Flat");
+  });
+
+  it("keeps what was typed about a family out of the audit log", async () => {
+    await actingAs(librarian.id);
+    await printBookLabels({
+      filter: filter({ donorName: "Kavya Borthakur", donorFlat: "Z-9001" }),
+      size: "standard",
+      cutGuides: false,
+      selectedIds: [],
+    });
+
+    const entry = await db.auditLog.findFirstOrThrow({
+      where: { libraryId: fixture.libraryId, action: AUDIT_ACTIONS.BOOK_LABELS_PRINTED },
+      orderBy: { occurredAt: "desc" },
+    });
+
+    const serialised = JSON.stringify(entry.metadata);
+    // Which filters were used, never what was typed into them. The log must not
+    // become the place that records who went looking for which family.
+    expect(serialised).toContain("donor");
+    expect(serialised).not.toContain("Kavya");
+    expect(serialised).not.toContain("Z-9001");
   });
 });

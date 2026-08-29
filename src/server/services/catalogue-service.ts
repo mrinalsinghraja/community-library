@@ -12,7 +12,8 @@ import {
   SELECTABLE_STATUSES,
   type Page,
 } from "@/lib/catalogue";
-import { dateOnlyInTimezone } from "@/lib/dates";
+import { bookNumber, type BookFilter } from "@/lib/book-filter";
+import { dateOnlyInTimezone, endOfDayInTimezone } from "@/lib/dates";
 import { NO_RATINGS, type RatingSummary } from "@/lib/reviews";
 import { prisma } from "@/server/db";
 import {
@@ -304,12 +305,71 @@ export interface CatalogueQuery {
    */
   addedFrom?: Date;
   addedTo?: Date;
+  /**
+   * When the family gave the book, rather than when the desk catalogued it.
+   * Instants, resolved from typed days in the library's timezone, same rule.
+   */
+  donatedFrom?: Date;
+  donatedTo?: Date;
+  /**
+   * A range of book IDs, as the numbers in them: 1 to 20 is MJCL-B0001 to
+   * MJCL-B0020. Numbers rather than codes because comparing codes as text goes
+   * wrong the day the padding changes and B9 sorts after B10.
+   */
+  codeFrom?: number;
+  codeTo?: number;
+  /**
+   * Staff only, and deliberately not part of `search`.
+   *
+   * `search` is the box on the child's shelf as well as the desk's, so a donor
+   * name in it would let anybody type a neighbour's flat number and read back
+   * what that family gave. These fields are set only by screens that already
+   * demand the catalogue-management permissions, and `browseCatalogue` builds
+   * its own query object rather than passing a caller's through.
+   */
+  donorName?: string;
+  donorFlat?: string;
   sort?: CatalogueSort;
   page?: number;
   pageSize?: number;
 }
 
 export type CatalogueSort = "newest" | "title" | "author" | "code" | "loved" | "borrowed";
+
+/**
+ * Turns what a librarian typed into what the database is asked.
+ *
+ * One conversion, called by the book list, the label sheet and the export, so
+ * that "print labels for what I am looking at" means exactly that. The days
+ * become instants here because this is the layer that knows the library's
+ * timezone: a day typed into a box is a day in Bengaluru, and both ends are
+ * inclusive, so choosing the same date twice means that one day rather than
+ * nothing at all.
+ */
+export function bookFilterToQuery(filter: BookFilter, timezone: string): CatalogueQuery {
+  const from = (day: string) => (day ? (dateOnlyInTimezone(day, timezone) ?? undefined) : undefined);
+  const to = (day: string) => {
+    const parsed = day ? dateOnlyInTimezone(day, timezone) : null;
+    return parsed ? endOfDayInTimezone(parsed, timezone) : undefined;
+  };
+
+  return {
+    search: filter.search || undefined,
+    categoryId: filter.categoryId || undefined,
+    ageGroup: filter.ageGroup || undefined,
+    condition: filter.condition || undefined,
+    status: filter.status || undefined,
+    addedFrom: from(filter.addedFrom),
+    addedTo: to(filter.addedTo),
+    donatedFrom: from(filter.donatedFrom),
+    donatedTo: to(filter.donatedTo),
+    codeFrom: bookNumber(filter.codeFrom) ?? undefined,
+    codeTo: bookNumber(filter.codeTo) ?? undefined,
+    donorName: filter.donorName || undefined,
+    donorFlat: filter.donorFlat || undefined,
+    includeArchived: filter.includeArchived,
+  };
+}
 
 /**
  * Sort is chosen from a fixed list and never interpolated from user input.
@@ -395,6 +455,47 @@ function buildWhere(libraryId: string, query: CatalogueQuery): Prisma.Sql {
   // so a single-day range covers that day rather than nothing at all.
   if (query.addedFrom) clauses.push(Prisma.sql`c.created_at >= ${query.addedFrom}`);
   if (query.addedTo) clauses.push(Prisma.sql`c.created_at <= ${query.addedTo}`);
+
+  /*
+   * The donation, asked about as one EXISTS rather than off the join.
+   *
+   * `buildWhere` is used by the COUNT query too, and that query joins only the
+   * copy and the title — a clause reading `d.donor_name` would be valid in one
+   * of the two queries and a syntax error in the other. EXISTS also says the
+   * right thing on its own: filtering by donor means books that were given.
+   */
+  const donation: Prisma.Sql[] = [];
+  if (query.donatedFrom) donation.push(Prisma.sql`d.donated_at >= ${query.donatedFrom}`);
+  if (query.donatedTo) donation.push(Prisma.sql`d.donated_at <= ${query.donatedTo}`);
+  if (query.donorName?.trim()) {
+    donation.push(Prisma.sql`lower(d.donor_name) LIKE ${likeTerm(query.donorName)}`);
+  }
+  if (query.donorFlat?.trim()) {
+    donation.push(Prisma.sql`lower(d.donor_apartment) LIKE ${likeTerm(query.donorFlat)}`);
+  }
+  if (donation.length > 0) {
+    clauses.push(Prisma.sql`EXISTS (
+      SELECT 1 FROM donation d
+       WHERE d.copy_id = c.id
+         AND ${Prisma.join(donation, " AND ")}
+    )`);
+  }
+
+  /*
+   * The number in the book ID, compared as a number.
+   *
+   * A code with no digits in it cannot be inside a numeric range, so it drops
+   * out of both ends rather than sorting to one of them.
+   */
+  if (query.codeFrom !== undefined || query.codeTo !== undefined) {
+    const number = Prisma.sql`nullif(substring(c.copy_code from '[0-9]+$'), '')::bigint`;
+    if (query.codeFrom !== undefined) {
+      clauses.push(Prisma.sql`coalesce(${number}, -1) >= ${query.codeFrom}`);
+    }
+    if (query.codeTo !== undefined) {
+      clauses.push(Prisma.sql`coalesce(${number}, -1) <= ${query.codeTo}`);
+    }
+  }
 
   if (query.categoryId) clauses.push(Prisma.sql`t.category_id = ${query.categoryId}`);
   if (query.ageGroup) clauses.push(Prisma.sql`t.age_group = ${query.ageGroup}::"AgeGroup"`);

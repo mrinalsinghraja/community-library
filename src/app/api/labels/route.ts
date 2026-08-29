@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { dateOnlyInTimezone, endOfDayInTimezone } from "@/lib/dates";
+import { bookFilterProblems, parseBookFilter } from "@/lib/book-filter";
 import { MAX_LABELS, isLabelSize } from "@/lib/labels";
 import { isAppError } from "@/server/lib/errors";
-import { getCurrentLibrary } from "@/server/lib/settings";
 import { printBookLabels } from "@/server/services/label-service";
 
 /**
@@ -44,8 +43,7 @@ function isSameOrigin(request: Request): boolean {
 }
 
 interface LabelBody {
-  from?: unknown;
-  to?: unknown;
+  filter?: unknown;
   size?: unknown;
   cutGuides?: unknown;
   selectedIds?: unknown;
@@ -57,6 +55,24 @@ function readIds(value: unknown): string[] {
     .filter((entry): entry is string => typeof entry === "string")
     .filter((entry) => entry.length > 0 && entry.length <= 64)
     .slice(0, MAX_LABELS);
+}
+
+/**
+ * The filter, read the same way the screens read it.
+ *
+ * The body is JSON rather than a query string, so it is reduced to the shape
+ * `parseBookFilter` takes and handed to the same validator the book list uses.
+ * One definition of what a filter may say, whichever door the request came in
+ * through — an alternative parser here is how a screen and an endpoint start
+ * disagreeing about what "archived" means.
+ */
+function readFilter(value: unknown) {
+  const source = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const params: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(source)) {
+    if (typeof entry === "string") params[key] = entry;
+  }
+  return parseBookFilter(params);
 }
 
 export async function POST(request: Request) {
@@ -74,31 +90,19 @@ export async function POST(request: Request) {
   const size = typeof body.size === "string" && isLabelSize(body.size) ? body.size : "standard";
 
   /*
-   * A date the librarian typed is a day in the library's own timezone, not an
-   * instant in UTC. Resolving it here — once, against the library's setting —
-   * is what makes "books added today" mean today in Bengaluru. Both ends are
-   * inclusive: `to` becomes the last instant of that day, so choosing the same
-   * date twice prints that one day rather than nothing.
+   * A day the librarian typed is a day in the library's own timezone, not an
+   * instant in UTC — but that resolution happens inside the service, which is
+   * the layer that reads the setting. This route only refuses a filter that
+   * cannot mean anything, so the person gets a sentence rather than an empty
+   * sheet.
    */
-  const { settings } = await getCurrentLibrary();
-  const day = (value: unknown): Date | null =>
-    typeof value === "string" && value ? dateOnlyInTimezone(value, settings.timezone) : null;
-
-  const fromDay = day(body.from);
-  const toDay = day(body.to);
-
-  if (fromDay && toDay && fromDay > toDay) {
-    return NextResponse.json(
-      { error: "The first date is after the last date. Swap them and try again." },
-      { status: 400 },
-    );
-  }
+  const filter = readFilter(body.filter);
+  const [problem] = bookFilterProblems(filter);
+  if (problem) return NextResponse.json({ error: problem }, { status: 400 });
 
   try {
     const file = await printBookLabels({
-      // `dateOnlyInTimezone` already lands on the first instant of the day.
-      from: fromDay ?? undefined,
-      to: toDay ? endOfDayInTimezone(toDay, settings.timezone) : undefined,
+      filter,
       size,
       cutGuides: body.cutGuides !== false,
       selectedIds: readIds(body.selectedIds),

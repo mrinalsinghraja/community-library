@@ -278,7 +278,9 @@ describe("which rows come out", () => {
       report: "books",
       format: "xlsx",
       selectedIds: [],
-      filter: { search: title.title },
+      // The books export speaks the book list's own query string — `q` is what
+      // is in the URL of the screen this file is taken from.
+      filter: { q: title.title },
     });
 
     expect(file.rowCount).toBe(1);

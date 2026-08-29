@@ -19,19 +19,18 @@
  * an open redirect, which is the failure this is shaped to prevent.
  */
 
+import { BOOK_FILTER_KEYS } from "@/lib/book-filter";
+
 export const BOOK_LIST_PATH = "/admin/books";
 
-/** The query keys the book list understands. Everything else is dropped. */
-const LIST_KEYS = [
-  "q",
-  "category",
-  "age",
-  "condition",
-  "status",
-  "sort",
-  "archived",
-  "page",
-] as const;
+/**
+ * The query keys the book list understands. Everything else is dropped.
+ *
+ * Taken from the filter's own definition rather than typed out again: a filter
+ * this list can show but cannot carry is a filter a librarian loses every time
+ * they edit a book, which is exactly the thing this file exists to prevent.
+ */
+const LIST_KEYS = [...BOOK_FILTER_KEYS, "sort", "page"] as const;
 
 /** Nothing legitimate is longer than this; a filter value is a word or an id. */
 const VALUE_MAX = 100;

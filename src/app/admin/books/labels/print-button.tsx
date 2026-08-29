@@ -9,7 +9,7 @@ import type { LabelSize } from "@/lib/labels";
 /**
  * Asks for the sheet and hands it to the browser.
  *
- * The only client component on this screen. The dates, the size and the cut
+ * The only client component on this screen. The filter, the size and the cut
  * guides all live in the query string and are read by the server, so the form
  * works with JavaScript switched off right up to this button — which needs
  * script because a download is a POST whose response is a file rather than a
@@ -17,18 +17,17 @@ import type { LabelSize } from "@/lib/labels";
  *
  * It says what it is about to make before it makes it. A person who is about to
  * spend three sheets of paper should be told it is three sheets while they can
- * still change the dates.
+ * still change their mind.
  */
 export function PrintLabelsButton({
-  from,
-  to,
+  filter,
   size,
   cutGuides,
   labelCount,
   sheetCount,
 }: {
-  from: string;
-  to: string;
+  /** The filter exactly as the screen's own links carry it. */
+  filter: Record<string, string>;
   size: LabelSize;
   cutGuides: boolean;
   labelCount: number;
@@ -44,7 +43,7 @@ export function PrintLabelsButton({
       const response = await fetch("/api/labels", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from, to, size, cutGuides, selectedIds: [] }),
+        body: JSON.stringify({ filter, size, cutGuides, selectedIds: [] }),
       });
 
       if (!response.ok) {

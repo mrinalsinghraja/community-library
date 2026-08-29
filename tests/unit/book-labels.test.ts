@@ -331,9 +331,23 @@ describe("how the labels are wired", () => {
   });
 
   it("resolves a typed date in the library's timezone, not UTC", () => {
-    expect(route).toContain("dateOnlyInTimezone");
-    expect(route).toContain("settings.timezone");
-    expect(route).not.toContain("new Date(body.from");
+    // Moved from the route into the service when the filter grew: the layer
+    // that reads the setting is the layer that should turn a day into an
+    // instant. Wherever it lives, it must not be `new Date(...)` on a string
+    // somebody typed — that is UTC, and this library is not in UTC.
+    const service = read("src/server/services/catalogue-service.ts");
+
+    expect(service).toContain("dateOnlyInTimezone");
+    expect(service).toContain("endOfDayInTimezone");
+    expect(route).not.toContain("new Date(body.");
+  });
+
+  it("reads the filter with the same parser the book list uses", () => {
+    // Two parsers is how a screen and an endpoint start disagreeing about what
+    // "archived" means, on a request that never went through the screen.
+    expect(route).toContain("parseBookFilter");
+    expect(route).toContain("bookFilterProblems");
+    expect(service).toContain("bookFilterToQuery");
   });
 
   it("gates the screen on the permission rather than a role name", () => {
