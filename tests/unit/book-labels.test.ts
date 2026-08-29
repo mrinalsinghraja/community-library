@@ -18,6 +18,8 @@ import {
 } from "@/lib/labels";
 import { buildLabelSheet, wrapText, type LabelRow } from "@/server/reports/label-sheet";
 
+import { drawnBaselines, drawnText } from "../pdf-text";
+
 /**
  * Shelf labels.
  *
@@ -354,40 +356,10 @@ describe("what is actually printed on a label", () => {
    * stays wrong for years, so "the code draws a third line" is not the claim
    * worth testing — "the third line is in the file" is.
    *
-   * pdf-lib flate-compresses its content streams, so they are inflated here and
-   * the drawn strings read out of them.
+   * `drawnText` and `drawnBaselines` do the inflating and the hex decoding, and
+   * live in `tests/pdf-text.ts` because the database tests make the same claim
+   * about the same files.
    */
-  async function drawnText(bytes: Buffer): Promise<string> {
-    const { inflateSync } = await import("node:zlib");
-    const raw = bytes.toString("latin1");
-
-    let drawn = "";
-    let at = 0;
-    for (;;) {
-      const start = raw.indexOf("stream", at);
-      if (start === -1) break;
-      let from = start + "stream".length;
-      if (raw.charCodeAt(from) === 13) from += 1;
-      if (raw.charCodeAt(from) === 10) from += 1;
-
-      const end = raw.indexOf("endstream", from);
-      if (end === -1) break;
-
-      try {
-        const content = inflateSync(Buffer.from(raw.slice(from, end), "latin1")).toString("latin1");
-        // pdf-lib writes every string as `<hex> Tj`, so the drawn words have to
-        // be decoded rather than read straight out of the stream.
-        for (const match of content.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) {
-          drawn += `${Buffer.from(match[1], "hex").toString("latin1")}\n`;
-        }
-      } catch {
-        // Not a flate stream (a font, an object stream) — skip it.
-      }
-      at = end + 1;
-    }
-    return drawn;
-  }
-
   it("prints the shelf and the reading age under the title", async () => {
     const { bytes } = await sheet([
       {
@@ -398,7 +370,7 @@ describe("what is actually printed on a label", () => {
       },
     ]);
 
-    const text = await drawnText(bytes);
+    const text = drawnText(bytes);
     expect(text).toContain("TST-B0007");
     expect(text).toContain("The Gruffalo");
     // One line, the two facts joined — this is what a librarian re-shelving a
@@ -406,12 +378,105 @@ describe("what is actually printed on a label", () => {
     expect(text).toMatch(/Stories.{0,3}5.{0,3}7 years/);
   });
 
+  it("prints the donor and the month the book arrived", async () => {
+    const { bytes } = await sheet([
+      {
+        code: "TST-B0009",
+        title: "The Gruffalo",
+        shelf: "Stories",
+        age: "5–7 years",
+        donor: "Donated by Meera Nair · A-1204",
+        donatedOn: "Aug 2026",
+      },
+    ]);
+
+    const text = drawnText(bytes);
+    expect(text).toContain("Meera Nair");
+    expect(text).toContain("A-1204");
+    expect(text).toContain("Aug 2026");
+  });
+
+  it("prints no credit at all for a book that was bought", async () => {
+    const { bytes } = await sheet([
+      { code: "TST-B0010", title: "Cabin Fever", shelf: "Comics", age: "8–11 years" },
+    ]);
+
+    const text = drawnText(bytes);
+    expect(text).toContain("TST-B0010");
+    expect(text).not.toMatch(/Donated/);
+  });
+
+  it("keeps the code, the title and the shelf when the label runs out of room", async () => {
+    /*
+     * The smallest preset with everything on it. What matters is not that all
+     * five lines fit — they may not — but that the lines given up are the
+     * optional ones, in order, and that nothing is drawn below the label.
+     */
+    const { bytes } = await sheet(
+      [
+        {
+          code: "TST-B0011",
+          title: "Charlie and the Great Glass Elevator",
+          shelf: "Stories",
+          age: "8–11 years",
+          donor: "Donated by Meera Nair · A-1204",
+          donatedOn: "Aug 2026",
+        },
+      ],
+      { size: "small" },
+    );
+
+    const text = drawnText(bytes);
+    expect(text).toContain("TST-B0011");
+    expect(text).toMatch(/Charlie/);
+    expect(text).toMatch(/Stories/);
+  });
+
+  it("draws every line inside the label it belongs to", async () => {
+    /*
+     * The real failure this guards. A label with a code, two lines of title, a
+     * shelf, a credit and a month is the tallest block the sheet can be asked
+     * for, and a block taller than its cell prints over the sticker below it —
+     * a wasted sheet nobody notices until it is out of the printer.
+     *
+     * So the baselines are read back out of the PDF and checked against the
+     * cell they belong to, rather than the arithmetic being repeated here.
+     */
+    for (const size of LABEL_SIZES) {
+      const { bytes } = await sheet(
+        [
+          {
+            code: "TST-B0012",
+            title: "Charlie and the Great Glass Elevator",
+            shelf: "Stories",
+            age: "8–11 years",
+            donor: "Donated by Meera Nair · A-1204",
+            donatedOn: "Aug 2026",
+          },
+        ],
+        { size },
+      );
+
+      const cell = labelCellSize(size);
+      const cellTop = PAGE_HEIGHT - SHEET_MARGIN;
+      const baselines = drawnBaselines(bytes)
+        // The sheet footer sits in the margin, below every label, on purpose.
+        .filter((y) => y > SHEET_MARGIN);
+
+      expect(baselines.length).toBeGreaterThan(1);
+      for (const y of baselines) {
+        expect(y).toBeLessThanOrEqual(cellTop);
+        expect(y).toBeGreaterThan(cellTop - cell.height);
+      }
+    }
+  });
+
   it("prints the half it has when a book has only one of them", async () => {
     const { bytes } = await sheet([
       { code: "TST-B0008", title: "Untitled", shelf: "", age: "All Ages" },
     ]);
 
-    const text = await drawnText(bytes);
+    const text = drawnText(bytes);
     expect(text).toContain("All Ages");
     // No orphaned separator when one half is missing.
     expect(text).not.toMatch(/\u00b7\s*All Ages/);

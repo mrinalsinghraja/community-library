@@ -352,6 +352,56 @@ export function donorAcknowledgement(donation: {
   }
 }
 
+/**
+ * The same credit, shortened for a printed label, with the month it arrived.
+ *
+ * Three things change on the way to a sticker. The emoji goes, because a label
+ * is drawn with one of the PDF standard fonts and 📚 is not in them. The name
+ * and the flat are joined with a middot rather than "from", because a label is
+ * read at a glance by somebody holding the book rather than read as a sentence.
+ * And the month is carried alongside rather than inside the credit, so the
+ * renderer can set it smaller.
+ *
+ * What does not change is the rule. `displayConsent` is the donor's decision,
+ * and this switch is the only place that reads it — a sticker inside a book
+ * cover is a more permanent publication than a web page, so it gets the same
+ * answer and not a looser one.
+ *
+ * `donatedOn` is already formatted in the library's timezone by the caller: a
+ * month is a fact about a calendar somewhere, and this module has no timezone.
+ */
+export function donorLabelCredit(
+  donation: {
+    donorName: string;
+    donorApartment: string | null;
+    displayConsent: DonorDisplayConsent;
+  } | null,
+  donatedOn: string | null,
+): { credit: string; when: string } | null {
+  if (!donation) return null;
+  const when = donatedOn ?? "";
+
+  switch (donation.displayConsent) {
+    case "NAMED":
+      return {
+        credit: donation.donorApartment
+          ? `Donated by ${donation.donorName} · ${donation.donorApartment}`
+          : `Donated by ${donation.donorName}`,
+        when,
+      };
+    case "APARTMENT_ONLY":
+      return { credit: `Donated by a family in ${donation.donorApartment}`, when };
+    case "ANONYMOUS":
+      /*
+       * No name, no flat — and no month either. The donor register already
+       * publishes which families gave in a given year, and a month printed
+       * inside a book is one more column to line up against it. An anonymous
+       * donor is still thanked.
+       */
+      return { credit: "Donated by a neighbour", when: "" };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Paging
 // ---------------------------------------------------------------------------

@@ -98,8 +98,10 @@ export default async function PrintLabelsPage({
       <div className="flex flex-col gap-5">
         <p className="max-w-prose text-lg text-ink-soft">
           A sheet of stickers for the books that came in — the book number in
-          large type with the title underneath, so a book can be found on the
-          shelf and put back on the right one.
+          large type, the title underneath, then the shelf and the reading age,
+          so a book can be found on the shelf and put back on the right one. A
+          book that was given carries its donor&rsquo;s credit and the month it
+          arrived, in whichever form that family agreed to.
         </p>
 
         <Card>

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 
 import {
   LABEL_PRESETS,
@@ -30,6 +30,13 @@ import { winAnsi } from "@/server/reports/winansi";
  * a title on it still had to be looked up before it could be re-shelved, which
  * is the one job a shelf label exists to save. It stays small and grey: it is
  * read by somebody already holding the book, not from across the room.
+ *
+ * Under that, where the book was given rather than bought, the credit the donor
+ * agreed to and the month it arrived. It is the oldest thing a library does
+ * with a donated book — a line inside the cover saying who it came from — and
+ * the child who opens the book is the person it is for. The credit is set at
+ * the title's size because it is meant to be read, the month smaller because it
+ * is a footnote to it.
  */
 
 const INK = rgb(0.11, 0.13, 0.12);
@@ -55,6 +62,18 @@ export interface LabelRow {
    */
   shelf: string;
   age: string;
+  /**
+   * "Donated by Meera Nair · A-1204", already decided by the caller.
+   *
+   * Decided, not composed: whether a donor may be named at all is the donor's
+   * own choice, read in one place in `src/lib/catalogue.ts`. This file is
+   * handed a string it may print, or nothing. A renderer that knew what
+   * `APARTMENT_ONLY` meant would be a second place that could get it wrong,
+   * and the thing it would get wrong is stuck inside somebody's book.
+   */
+  donor?: string;
+  /** "Aug 2026". Empty when there is no donation, or the donor is anonymous. */
+  donatedOn?: string;
 }
 
 export interface LabelSheetRequest {
@@ -233,28 +252,53 @@ export async function buildLabelSheet(request: LabelSheetRequest): Promise<Rende
       );
 
       /*
-       * The two lines are measured, then centred in the label.
+       * The block is measured, then centred in the label.
        *
-       * Hanging them from the top is what the first version did, and it left
-       * most of every sticker blank — a one-line title on a standard label sat
-       * in the top third with two centimetres of nothing under it. A label is
-       * cut out and looked at on its own, so the block has to sit in the middle
-       * of the piece of paper somebody is actually holding.
+       * Hanging it from the top is what the first version did, and it left most
+       * of every sticker blank — a one-line title on a standard label sat in the
+       * top third with two centimetres of nothing under it. A label is cut out
+       * and looked at on its own, so the block has to sit in the middle of the
+       * piece of paper somebody is actually holding.
        */
-      /*
-       * "Stories · 8–11 years", or whichever half of it exists. One line, never
-       * wrapped: a shelf name that will not fit is shortened by `wrapText`
-       * rather than allowed to push the block out of the label.
-       */
-      const meta = [row.shelf, row.age].filter(Boolean).join(" · ");
-      const metaLines = meta
-        ? wrapText(safe(meta), regular, preset.metaSize, innerWidth, 1)
-        : [];
 
-      const blockHeight =
-        codeSize +
-        titleLines.length * preset.titleSize * LINE_GAP +
-        metaLines.length * preset.metaSize * LINE_GAP;
+      /*
+       * Everything under the title, in the order it is drawn and — read
+       * backwards — the order it is given up when the label runs out of room.
+       *
+       * Each is one line and never wrapped: a shelf name or a donor's name that
+       * will not fit is shortened by `wrapText` rather than allowed to push the
+       * block into the label below it.
+       *
+       * The order is the label's job, ranked. "Stories · 8–11 years" is the one
+       * thing a code and a title cannot say — which shelf this goes back on —
+       * so it is the last to go. The credit is a thank-you and the month is the
+       * detail of the thank-you, so the month goes first.
+       */
+      const extras: { text: string; size: number; color: RGB }[] = [];
+      const addExtra = (value: string | undefined, size: number, color: RGB) => {
+        if (!value) return;
+        const [fitted] = wrapText(safe(value), regular, size, innerWidth, 1);
+        if (fitted) extras.push({ text: fitted, size, color });
+      };
+
+      addExtra([row.shelf, row.age].filter(Boolean).join(" · "), preset.metaSize, INK_SOFT);
+      addExtra(row.donor, preset.titleSize, INK_SOFT);
+      addExtra(row.donatedOn, preset.metaSize, INK_SOFT);
+
+      const fixedHeight = codeSize + titleLines.length * preset.titleSize * LINE_GAP;
+      const heightOf = (candidates: typeof extras) =>
+        fixedHeight + candidates.reduce((total, entry) => total + entry.size * LINE_GAP, 0);
+
+      /*
+       * The code and the title are never dropped. Everything else is, one line
+       * at a time, until the block fits between the padding at both ends —
+       * because the alternative is ink printed over the next label along, and a
+       * sheet of stickers that overlap is a wasted sheet.
+       */
+      const available = cell.height - preset.padding * 2;
+      while (extras.length > 0 && heightOf(extras) > available) extras.pop();
+
+      const blockHeight = heightOf(extras);
       // Rows fill from the top of the page; PDF's origin is the bottom.
       const cellTop = PAGE_HEIGHT - SHEET_MARGIN - line * cell.height;
       const blockTop = cellTop - Math.max(preset.padding, (cell.height - blockHeight) / 2);
@@ -264,24 +308,27 @@ export async function buildLabelSheet(request: LabelSheetRequest): Promise<Rende
         page.drawText(code, { x: left, y: codeBaseline, size: codeSize, font: bold, color: BRAND });
       }
 
-      titleLines.forEach((text, lineIndex) => {
+      let baseline = codeBaseline;
+
+      titleLines.forEach((text) => {
+        baseline -= preset.titleSize * LINE_GAP;
         page.drawText(text, {
           x: left,
-          y: codeBaseline - preset.titleSize * LINE_GAP * (lineIndex + 1),
+          y: baseline,
           size: preset.titleSize,
           font: regular,
           color: INK,
         });
       });
 
-      const titleBottom = codeBaseline - preset.titleSize * LINE_GAP * titleLines.length;
-      metaLines.forEach((text, lineIndex) => {
-        page.drawText(text, {
+      extras.forEach((extra) => {
+        baseline -= extra.size * LINE_GAP;
+        page.drawText(extra.text, {
           x: left,
-          y: titleBottom - preset.metaSize * LINE_GAP * (lineIndex + 1),
-          size: preset.metaSize,
+          y: baseline,
+          size: extra.size,
           font: regular,
-          color: INK_SOFT,
+          color: extra.color,
         });
       });
     });

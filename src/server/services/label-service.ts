@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ageGroupLabel } from "@/lib/catalogue";
+import { ageGroupLabel, donorLabelCredit } from "@/lib/catalogue";
 import { formatInTimezone } from "@/lib/dates";
 import { MAX_LABELS, labelFilename, type LabelSize } from "@/lib/labels";
 import { requirePermission } from "@/server/authz";
@@ -26,9 +26,13 @@ import { listBooksForStaff } from "@/server/services/catalogue-service";
  * catalogue extract in a different shape, and it must never become the way
  * somebody prints a list they were not allowed to open.
  *
- * There is nothing personal on a label — a book code, a title, the shelf and
- * the reading age; no donor, no reader, no flat. That is worth stating because it is what makes this the one
- * export that can be left lying on the desk.
+ * Nothing about a reader is on a label — no borrower, no loan, no member code.
+ * The one personal thing that is on it is the donor's credit, and it is there
+ * on the donor's own terms: `donorLabelCredit` reads the consent recorded at
+ * intake, and a family who asked for their flat only, or for nothing at all,
+ * gets exactly that printed. Everything else — the code, the title, the shelf,
+ * the reading age — is already on the public shelf. That is what still makes
+ * this the one export that can be left lying on the desk.
  */
 
 export interface LabelRequest {
@@ -105,12 +109,35 @@ export async function printBookLabels(request: LabelRequest): Promise<LabelFile>
      * `ageGroupLabel` is the catalogue's own vocabulary and there is exactly one
      * copy of it — a renderer that knew what `AGE_8_11` meant would be a second.
      */
-    rows: rows.map((row) => ({
-      code: row.copyCode,
-      title: row.title,
-      shelf: row.categoryName,
-      age: ageGroupLabel(row.ageGroup),
-    })),
+    rows: rows.map((row) => {
+      /*
+       * Keyed off the consent, not off the name. A row with a donor name but no
+       * recorded choice is not a donation this may credit — and because the
+       * column is only ever null when there is no donation at all, guarding on
+       * it costs nothing and closes the case where that stops being true.
+       */
+      const credit = donorLabelCredit(
+        row.donorDisplayConsent
+          ? {
+              donorName: row.donorName ?? "",
+              donorApartment: row.donorApartment,
+              displayConsent: row.donorDisplayConsent,
+            }
+          : null,
+        // The month is resolved here because a month is a fact about a calendar
+        // somewhere, and only the library knows which one.
+        row.donatedAt ? formatInTimezone(row.donatedAt, settings.timezone, "MMM yyyy") : null,
+      );
+
+      return {
+        code: row.copyCode,
+        title: row.title,
+        shelf: row.categoryName,
+        age: ageGroupLabel(row.ageGroup),
+        donor: credit?.credit ?? "",
+        donatedOn: credit?.when ?? "",
+      };
+    }),
     size: request.size,
     // Read from settings, never written as a literal — the lint rule that keeps
     // this library's name out of `src/` applies here as much as anywhere.

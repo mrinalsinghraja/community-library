@@ -12,6 +12,7 @@ import {
   ageGroupLabel,
   borrowCountLabel,
   conditionLabel,
+  donorLabelCredit,
   isAgeGroup,
   isCondition,
   isSelectableStatus,
@@ -277,5 +278,71 @@ describe("what Version 1 deliberately does not store", () => {
     // A schema with no counter cannot grow a leaderboard by accident, and this
     // is the test that keeps it that way.
     expect(donationModel).not.toMatch(/count|total|rank|score|leaderboard/i);
+  });
+});
+
+/**
+ * The credit that goes on a printed label.
+ *
+ * Tested hard because of where it ends up. A web page renders again on the next
+ * request and a mistake lasts a minute; a sticker is glued inside a book and a
+ * mistake lasts as long as the library holds it. The consent recorded at intake
+ * is the whole subject here — a donor who asked not to be named must not be
+ * named by a printer.
+ */
+describe("crediting a donor on a label", () => {
+  const named = {
+    donorName: "Meera Nair",
+    donorApartment: "A-1204",
+    displayConsent: "NAMED" as const,
+  };
+
+  it("prints the name and the flat, and the month under them", () => {
+    expect(donorLabelCredit(named, "Aug 2026")).toEqual({
+      credit: "Donated by Meera Nair · A-1204",
+      when: "Aug 2026",
+    });
+  });
+
+  it("prints the name alone when no flat was recorded", () => {
+    expect(donorLabelCredit({ ...named, donorApartment: null }, "Aug 2026")?.credit).toBe(
+      "Donated by Meera Nair",
+    );
+  });
+
+  it("prints the flat and no name when that is what the family agreed to", () => {
+    const credit = donorLabelCredit({ ...named, displayConsent: "APARTMENT_ONLY" }, "Aug 2026");
+
+    expect(credit?.credit).toBe("Donated by a family in A-1204");
+    expect(credit?.credit).not.toContain("Meera");
+  });
+
+  it("prints neither name nor flat nor month for a donor who asked for none", () => {
+    const credit = donorLabelCredit({ ...named, displayConsent: "ANONYMOUS" }, "Aug 2026");
+
+    expect(credit?.credit).toBe("Donated by a neighbour");
+    expect(credit?.credit).not.toContain("Meera");
+    expect(credit?.credit).not.toContain("A-1204");
+    // The register already publishes who gave in a given year. A month inside
+    // the book would be one more column to line up against it.
+    expect(credit?.when).toBe("");
+  });
+
+  it("says nothing at all about a book nobody gave", () => {
+    expect(donorLabelCredit(null, "Aug 2026")).toBeNull();
+  });
+
+  it("still credits a donation whose month was never recorded", () => {
+    expect(donorLabelCredit(named, null)).toEqual({
+      credit: "Donated by Meera Nair · A-1204",
+      when: "",
+    });
+  });
+
+  it("carries no emoji, because a label is drawn in a font that has none", () => {
+    for (const consent of ["NAMED", "APARTMENT_ONLY", "ANONYMOUS"] as const) {
+      const credit = donorLabelCredit({ ...named, displayConsent: consent }, "Aug 2026");
+      expect(credit?.credit).not.toMatch(/\p{Extended_Pictographic}/u);
+    }
   });
 });
