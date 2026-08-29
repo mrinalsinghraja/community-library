@@ -6,7 +6,7 @@ import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DeskSelection, SelectionCheckbox } from "@/components/desk/selection-toolbar";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
 import { ButtonLink } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/states";
+import { Callout, EmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   AGE_GROUPS,
@@ -20,6 +20,7 @@ import {
   statusDefinition,
 } from "@/lib/catalogue";
 import { formatInTimezone } from "@/lib/dates";
+import { bookListUrl, noticeCode } from "@/lib/return-to";
 import { requireAnyPermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import {
@@ -102,6 +103,22 @@ export default async function AdminBooksPage({
   const filtering = Boolean(search || categoryId || ageGroupRaw || conditionRaw || statusRaw);
 
   /*
+   * This list, as a link the book form can hold and come back to.
+   *
+   * Built from the query string rather than from a header, because a librarian
+   * on page three of the damaged comics should land back on page three of the
+   * damaged comics — and because `Referer` is not sent on every navigation and
+   * is not something to build a screen on.
+   */
+  const listUrl = bookListUrl(params);
+  const openFrom = (href: string) => `${href}?from=${encodeURIComponent(listUrl)}`;
+
+  // Set by the redirect after a save. Read back as a book code or as nothing,
+  // never as whatever somebody typed after `?added=`.
+  const added = noticeCode(read("added"));
+  const saved = noticeCode(read("saved"));
+
+  /*
    * The filters, as the export route will read them back.
    *
    * Built from the values this page already validated rather than from the raw
@@ -121,6 +138,18 @@ export default async function AdminBooksPage({
 
   return (
     <StaffShell branding={branding} actor={actor} title="Books">
+      {added || saved ? (
+        <Callout
+          tone="success"
+          title={added ? "Added 🎉" : "Saved"}
+          className="mb-5"
+        >
+          {added
+            ? `${added} is on the shelf list. Print its label when you are ready.`
+            : `${saved} has been updated.`}
+        </Callout>
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-base text-ink-soft">
           {result.total === 1 ? "1 book" : `${result.total} books`}
@@ -138,7 +167,7 @@ export default async function AdminBooksPage({
             </ButtonLink>
           ) : null}
           {actor.permissions.has("book.create") ? (
-            <ButtonLink href="/admin/books/new" icon={<Icon name="plus" />}>
+            <ButtonLink href={openFrom("/admin/books/new")} icon={<Icon name="plus" />}>
               Add a book
             </ButtonLink>
           ) : null}
@@ -243,7 +272,7 @@ export default async function AdminBooksPage({
               title="Our shelves are waiting for more adventures!"
               action={
                 actor.permissions.has("book.create") ? (
-                  <ButtonLink href="/admin/books/new" icon={<Icon name="plus" />}>
+                  <ButtonLink href={openFrom("/admin/books/new")} icon={<Icon name="plus" />}>
                     Add the first book
                   </ButtonLink>
                 ) : null
@@ -283,7 +312,7 @@ export default async function AdminBooksPage({
                       </span>
                       <span className="min-w-0">
                         <Link
-                          href={`/admin/books/${book.copyId}`}
+                          href={openFrom(`/admin/books/${book.copyId}`)}
                           className="font-bold text-primary-deep"
                         >
                           {book.title}
@@ -338,7 +367,11 @@ export default async function AdminBooksPage({
             const query = new URLSearchParams();
             for (const [key, value] of Object.entries(params)) {
               const single = Array.isArray(value) ? value[0] : value;
-              if (single && key !== "page") query.set(key, single);
+              // The save banner belongs to the page that was saved from, not to
+              // every page the librarian walks to afterwards.
+              if (single && key !== "page" && key !== "added" && key !== "saved") {
+                query.set(key, single);
+              }
             }
             query.set("page", String(number));
 

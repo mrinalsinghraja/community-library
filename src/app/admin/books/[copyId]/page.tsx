@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Callout } from "@/components/ui/states";
 import { formatInTimezone } from "@/lib/dates";
 import { isAppError } from "@/server/lib/errors";
+import { safeBookListReturn } from "@/lib/return-to";
 import { requirePermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { getBookForStaff, listCategories } from "@/server/services/catalogue-service";
@@ -26,13 +27,17 @@ export const metadata: Metadata = { title: "Edit book" };
  */
 export default async function EditBookPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ copyId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const actor = await requirePermissionForPage("book.edit", {
     signedOutTo: "/login?next=/admin/books",
   });
   const { copyId } = await params;
+  const from = (await searchParams).from;
+  const returnTo = safeBookListReturn(Array.isArray(from) ? from[0] : from);
   const branding = await getBrandingSafe();
   const { settings } = await getCurrentLibrary();
 
@@ -81,6 +86,7 @@ export default async function EditBookPage({
               icon: category.icon,
             }))}
             today={formatInTimezone(new Date(), settings.timezone, "yyyy-MM-dd")}
+            returnTo={returnTo}
             values={{
               copyId: book.copyId,
               copyCode: book.copyCode,

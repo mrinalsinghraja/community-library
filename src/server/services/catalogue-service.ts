@@ -958,7 +958,7 @@ export async function createBook(input: BookInput): Promise<CreatedBook> {
  * correct, and is why the screen says so. Copy-level fields (condition, status)
  * and the donation belong to this object alone.
  */
-export async function updateBook(copyId: string, input: BookInput): Promise<void> {
+export async function updateBook(copyId: string, input: BookInput): Promise<{ copyCode: string }> {
   const actor = await requirePermission("book.edit");
   const parsed = parseBookInput(input);
   const { settings } = await getCurrentLibrary();
@@ -1112,6 +1112,10 @@ export async function updateBook(copyId: string, input: BookInput): Promise<void
   });
 
   if (coverChanged && previousCoverId) await purgeScheduledMedia(previousCoverId);
+
+  // Returned so the screen can name the book it just saved without asking for
+  // it again. The code was already loaded to do the work.
+  return { copyCode: existing.copyCode };
 }
 
 /**

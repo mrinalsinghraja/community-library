@@ -373,7 +373,9 @@ describe("who may manage the catalogue", () => {
 
     await actingAs(librarian.id);
     await expect(listBooksForStaff()).resolves.toMatchObject({ total: 1 });
-    await expect(updateBook(created.copyId, bookInput({ condition: "FAIR" }))).resolves.toBeUndefined();
+    await expect(updateBook(created.copyId, bookInput({ condition: "FAIR" }))).resolves.toEqual({
+      copyCode: created.copyCode,
+    });
     await expect(archiveBook(created.copyId, "fell apart")).resolves.toBeUndefined();
   });
 

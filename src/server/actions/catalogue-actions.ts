@@ -1,6 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+
+import { bookListWithNotice, safeBookListReturn } from "@/lib/return-to";
 
 import { toFriendlyMessage, ValidationError } from "@/server/lib/errors";
 import { requirePermission } from "@/server/authz";
@@ -27,6 +30,16 @@ import {
  * no library id and no role arrives in a form field. The actor is resolved from
  * the session inside the service, every time.
  *
+ * Adding and editing a book both end in `redirect` rather than in a success
+ * state. Two reasons, and the second is the one that matters: a form left
+ * sitting there still holds the book that was just saved, so the next press of
+ * a save button adds a second copy of it — and the librarian's next job is
+ * never this book again, it is the list they were working through.
+ *
+ * `redirect` throws, so it is called after the try/catch rather than inside it.
+ * Called inside, the catch would treat the redirect as a failure, report "not
+ * saved" for a book that was saved, and purge the cover that was just stored.
+ *
  * NOTE: a "use server" file may export only async functions. Exporting a const
  * from one of these makes every action in the file fail at module evaluation,
  * and `next build` compiles it happily — it only shows up on the first real
@@ -37,8 +50,6 @@ export interface BookFormState {
   status: "idle" | "success" | "error";
   message?: string;
   fieldErrors?: Record<string, string>;
-  /** Set on a successful add, so the screen can show the code that was issued. */
-  createdCode?: string;
 }
 
 /** Pulls the book fields out of a FormData. Presentation in, domain out. */
@@ -57,6 +68,17 @@ function readBookInput(formData: FormData): BookInput {
     // wording the desk uses. An absent checkbox is unticked.
     donorAnonymous: formData.get("donorAnonymous") !== null,
   };
+}
+
+/**
+ * The list the librarian came from, as they sent it back.
+ *
+ * Checked rather than used: `safeBookListReturn` accepts the book list and
+ * nothing else, so a hand-written POST cannot turn "save this book" into a
+ * redirect to somebody else's website.
+ */
+function readReturnTo(formData: FormData): string {
+  return safeBookListReturn(String(formData.get("returnTo") ?? ""));
 }
 
 /**
@@ -101,6 +123,7 @@ export async function createBookAction(
   formData: FormData,
 ): Promise<BookFormState> {
   let coverMediaId = "";
+  let destination: string;
 
   try {
     // Also checked inside createBook. Called here only so an unauthorized
@@ -113,19 +136,15 @@ export async function createBookAction(
     revalidatePath("/admin/books");
     revalidatePath("/books");
 
-    return {
-      status: "success",
-      createdCode: created.copyCode,
-      message: created.createdNewTitle
-        ? `Added ${created.title} as ${created.copyCode}.`
-        : `Added another copy of ${created.title} as ${created.copyCode}.`,
-    };
+    destination = bookListWithNotice(readReturnTo(formData), "added", created.copyCode);
   } catch (error) {
     // The cover was stored before the failure. Purge it now rather than leaving
     // a picture nobody asked for sitting in storage until the nightly sweep.
     if (coverMediaId) await purgeScheduledMedia(coverMediaId).catch(() => undefined);
     return toErrorState(error);
   }
+
+  redirect(destination);
 }
 
 export async function updateBookAction(
@@ -134,21 +153,24 @@ export async function updateBookAction(
 ): Promise<BookFormState> {
   const copyId = String(formData.get("copyId") ?? "");
   let coverMediaId = "";
+  let destination: string;
 
   try {
     const actor = await requirePermission("book.edit");
     coverMediaId = await storeCoverIfPresent(formData, actor.libraryId, actor.userId);
 
-    await updateBook(copyId, { ...readBookInput(formData), coverMediaId });
+    const saved = await updateBook(copyId, { ...readBookInput(formData), coverMediaId });
 
     revalidatePath("/admin/books");
     revalidatePath("/books");
 
-    return { status: "success", message: "Saved." };
+    destination = bookListWithNotice(readReturnTo(formData), "saved", saved.copyCode);
   } catch (error) {
     if (coverMediaId) await purgeScheduledMedia(coverMediaId).catch(() => undefined);
     return toErrorState(error);
   }
+
+  redirect(destination);
 }
 
 export async function removeBookCoverAction(

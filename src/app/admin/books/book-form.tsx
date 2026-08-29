@@ -65,12 +65,21 @@ export function BookForm({
   categories,
   values,
   today,
+  returnTo,
 }: {
   mode: "create" | "edit";
   categories: BookFormCategory[];
   values?: BookFormValues;
   /** Today in the library's timezone, as YYYY-MM-DD. Never the browser's idea of it. */
   today: string;
+  /**
+   * The book list this form was opened from, filters and page and all.
+   *
+   * Saving goes back to it, and so does Cancel — the two ways out of this form
+   * lead to the same place, because a librarian working down a filtered list
+   * should not be able to lose it by pressing the wrong one.
+   */
+  returnTo: string;
 }) {
   const [state, formAction] = useActionState(
     mode === "create" ? createBookAction : updateBookAction,
@@ -87,6 +96,9 @@ export function BookForm({
      */
     <form action={formAction} className="flex flex-col gap-6">
       {values ? <input type="hidden" name="copyId" value={values.copyId} /> : null}
+      {/* Read back through `safeBookListReturn`, which accepts the book list
+          and nothing else — this field crosses a browser. */}
+      <input type="hidden" name="returnTo" value={returnTo} />
 
       {state.status === "error" && state.message ? (
         <Callout tone="warn" title="Not saved yet">
@@ -94,11 +106,12 @@ export function BookForm({
         </Callout>
       ) : null}
 
-      {state.status === "success" ? (
-        <Callout tone="success" title={mode === "create" ? "Added 🎉" : "Saved"}>
-          {state.message}
-        </Callout>
-      ) : null}
+      {/*
+        No success banner here. A saved book redirects to the list and says so
+        there, because the next thing the librarian needs is the list — and a
+        form left open still holding a saved book is how a second copy of it
+        gets added by somebody pressing save twice.
+      */}
 
       <Field
         id={field("title")}
@@ -341,7 +354,7 @@ export function BookForm({
       <div className="flex flex-wrap items-center gap-3">
         <SaveButton mode={mode} />
         <Link
-          href="/admin/books"
+          href={returnTo}
           className="rounded-[var(--radius-button)] border border-control-border px-6 py-3.5 text-lg font-bold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
         >
           Cancel

@@ -4,6 +4,7 @@ import { BookForm } from "@/app/admin/books/book-form";
 import { StaffShell } from "@/components/layout/staff-shell";
 import { Card } from "@/components/ui/card";
 import { formatInTimezone } from "@/lib/dates";
+import { safeBookListReturn } from "@/lib/return-to";
 import { requirePermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { listCategories } from "@/server/services/catalogue-service";
@@ -19,10 +20,16 @@ export const metadata: Metadata = { title: "Add a book" };
  * so two people cataloguing at the same desk cannot be handed the same number,
  * and nobody has to remember where the numbering got to.
  */
-export default async function NewBookPage() {
+export default async function NewBookPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const actor = await requirePermissionForPage("book.create", {
     signedOutTo: "/login?next=/admin/books/new",
   });
+  const from = (await searchParams).from;
+  const returnTo = safeBookListReturn(Array.isArray(from) ? from[0] : from);
   const branding = await getBrandingSafe();
   const { settings } = await getCurrentLibrary();
   const categories = await listCategories(actor.libraryId);
@@ -40,6 +47,7 @@ export default async function NewBookPage() {
           // Today in the *library's* timezone. A server in another part of the
           // world must not pre-fill yesterday's date.
           today={formatInTimezone(new Date(), settings.timezone, "yyyy-MM-dd")}
+          returnTo={returnTo}
         />
       </Card>
     </StaffShell>
