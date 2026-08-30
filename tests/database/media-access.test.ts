@@ -307,8 +307,10 @@ describe("replacement", () => {
 
     await actingAs(librarian.id);
     const { mediaId: newMediaId } = await replaceMemberPhoto({
+      // A different size from the first, so this is visibly a second file --
+      // and inside the band, which a child's photograph now has.
       memberUserId: child.id,
-      bytes: pngBytes(128),
+      bytes: pngBytes(200 * 1024),
     });
 
     expect(newMediaId).not.toBe(oldMediaId);

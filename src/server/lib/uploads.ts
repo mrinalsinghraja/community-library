@@ -1,6 +1,6 @@
 import "server-only";
 
-import { CHILD_PHOTO_MAX_BYTES } from "@/lib/child-photo";
+import { CHILD_PHOTO_MAX_BYTES, CHILD_PHOTO_MIN_BYTES } from "@/lib/child-photo";
 import { COVER_MAX_BYTES, COVER_MIN_BYTES } from "@/lib/cover-image";
 import { describeSize } from "@/lib/file-size";
 
@@ -49,8 +49,11 @@ export interface UploadRules {
 
 export const UPLOAD_RULES: Record<UploadPurpose, UploadRules> = {
   [UPLOAD_PURPOSES.CHILD_PHOTO]: {
-    // Set in @/lib/child-photo, which explains why it has to stay below the
-    // Server Action body limit rather than above it.
+    // Both ends live in @/lib/child-photo, which explains the band and why it
+    // has to stay well below the Server Action body limit rather than above it.
+    // The picker reads the same two numbers, so it can never offer a size this
+    // would then refuse.
+    minBytes: CHILD_PHOTO_MIN_BYTES,
     maxBytes: CHILD_PHOTO_MAX_BYTES,
     visibility: "PRIVATE",
     allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],

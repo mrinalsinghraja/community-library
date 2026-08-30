@@ -5,10 +5,15 @@ import { useEffect, useId, useRef, useState } from "react";
 import { MemberAvatar } from "@/components/library/avatar";
 import { Button } from "@/components/ui/button";
 import { AVATARS } from "@/lib/avatars";
-import { CHILD_PHOTO_MAX_BYTES, MAX_PHOTO_EDGE } from "@/lib/child-photo";
+import {
+  CHILD_PHOTO_MAX_BYTES,
+  CHILD_PHOTO_MIN_BYTES,
+  COMPRESS_TOOL_URL,
+  MAX_PHOTO_EDGE,
+} from "@/lib/child-photo";
 import { cn } from "@/lib/cn";
 import { describeSize } from "@/lib/file-size";
-import { downscaleImage } from "@/lib/image-downscale";
+import { downscaleImage, type DownscaleOptions } from "@/lib/image-downscale";
 import { Icon } from "@/components/ui/icon";
 
 /**
@@ -40,6 +45,68 @@ import { Icon } from "@/components/ui/icon";
  * Shrinking is still not a control. `validateUpload` checks the bytes that
  * actually arrive, and refuses independently.
  */
+/**
+ * What the picker says about the picture that was just chosen.
+ *
+ * `problem` is the size being outside the band — the one thing here that asks
+ * the parent to go back and choose again, so it is the one thing said in red.
+ * `offerTool` is narrower still: a way to make a picture smaller helps nobody
+ * whose picture is too small.
+ */
+interface PhotoNote {
+  text: string;
+  problem: boolean;
+  offerTool?: boolean;
+}
+
+/**
+ * The sizes to try, largest first, looking for one inside the band.
+ *
+ * A single pass is not enough. An ordinary phone portrait re-encoded at 1200px
+ * lands comfortably under 500 KB, but a dense one — a busy background, a lot of
+ * fine texture — does not, and sending that parent away to another website for
+ * a picture this code could have fitted itself would be a poor way to treat
+ * them. So it steps down and tries again, and only gives up when a picture is
+ * genuinely beyond what a browser re-encode can do.
+ *
+ * Each step re-encodes the ORIGINAL, never the previous result: re-compressing
+ * a JPEG that has already been compressed adds its own damage on top, and the
+ * child in the picture is the one who pays for that.
+ *
+ * The floor is never passed to the shrinker. Handing it 100 KB would make it
+ * return the original whenever its own result came out under — so a 4 MB
+ * photograph of a plain wall would stay 4 MB and then be refused for being too
+ * big, which is the opposite of helping.
+ */
+const SHRINK_LADDER: readonly DownscaleOptions[] = [
+  { maxEdge: MAX_PHOTO_EDGE, quality: 0.82, minBytes: 0 },
+  { maxEdge: 900, quality: 0.78, minBytes: 0 },
+  { maxEdge: 700, quality: 0.72, minBytes: 0 },
+];
+
+/**
+ * Shrinks a picture towards the band, and says what it settled on.
+ *
+ * Stops at the first attempt that lands inside, so an ordinary photograph costs
+ * one re-encode. If nothing fits, it hands back the closest it managed and lets
+ * the picker say so plainly.
+ */
+async function shrinkToBand(file: File): Promise<{ file: File; changed: boolean }> {
+  let best: { file: File; changed: boolean } = { file, changed: false };
+
+  for (const step of SHRINK_LADDER) {
+    const attempt = await downscaleImage(file, step);
+    if (attempt.file.size < best.file.size) best = attempt;
+
+    if (attempt.file.size <= CHILD_PHOTO_MAX_BYTES) {
+      // Small enough. Anything further down the ladder would only be softer.
+      return attempt.file.size >= CHILD_PHOTO_MIN_BYTES ? attempt : best;
+    }
+  }
+
+  return best;
+}
+
 export function PhotoPicker({
   avatarKey,
   onAvatarChange,
@@ -65,44 +132,46 @@ export function PhotoPicker({
   const chosenFile = useRef<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [tooBig, setTooBig] = useState<string | null>(null);
+  const [note, setNote] = useState<PhotoNote | null>(null);
   const inputId = useId();
 
   async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
     if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setTooBig(null);
 
     if (!file) {
       chosenFile.current = null;
       setPreviewUrl(null);
       setFileName(null);
+      setNote(null);
       onPhotoChange(false);
       return;
     }
 
-    // No floor: a card picture is a small round avatar, and a portrait that
-    // shrinks to 40 KB is a perfectly good one.
-    const { file: prepared } = await downscaleImage(file, {
-      maxEdge: MAX_PHOTO_EDGE,
-      minBytes: 0,
-    });
+    // Said before the shrinking, not after. Preparing a phone photograph takes
+    // a second or two, and a picker that shows nothing in that gap is a picker
+    // a parent taps twice.
+    setNote({ text: "Checking the picture…", problem: false });
+
+    const { file: prepared, changed } = await shrinkToBand(file);
 
     /*
-     * A picture still too big after shrinking — a browser without a canvas, a
-     * format the codec would not read — is refused here, in a sentence, rather
-     * than by the framework in a page that says nothing useful. The photo is
-     * optional, so the parent loses nothing by carrying on with an avatar.
+     * Outside the band, the picture is let go of rather than left attached to
+     * fail later at the desk. The photo is optional, so a parent loses nothing
+     * by carrying on with an avatar — and the sentence says the size, both ends
+     * of the rule, and where to fix it.
      */
-    if (prepared.size > CHILD_PHOTO_MAX_BYTES) {
-      chosenFile.current = null;
+    if (prepared.size > CHILD_PHOTO_MAX_BYTES || prepared.size < CHILD_PHOTO_MIN_BYTES) {
+      const tooBig = prepared.size > CHILD_PHOTO_MAX_BYTES;
       clearPhoto();
-      setTooBig(
-        `That picture is ${describeSize(prepared.size)}, which is too big to send. ` +
-          `Please choose one under ${describeSize(CHILD_PHOTO_MAX_BYTES)}, or carry on ` +
-          `with an avatar instead.`,
-      );
+      setNote({
+        text: tooBig
+          ? `That picture is ${describeSize(prepared.size)} — too big for a library card.`
+          : `That picture is only ${describeSize(prepared.size)} — too small to stay sharp on a library card.`,
+        problem: true,
+        offerTool: tooBig,
+      });
       return;
     }
 
@@ -121,6 +190,12 @@ export function PhotoPicker({
     chosenFile.current = prepared;
     setPreviewUrl(URL.createObjectURL(prepared));
     setFileName(prepared.name);
+    setNote({
+      text: changed
+        ? `Ready — ${describeSize(prepared.size)}, made smaller on your phone.`
+        : `Ready — ${describeSize(prepared.size)}.`,
+      problem: false,
+    });
     onPhotoChange(true);
   }
 
@@ -148,6 +223,7 @@ export function PhotoPicker({
     chosenFile.current = null;
     setPreviewUrl(null);
     setFileName(null);
+    setNote(null);
     // Clearing the input matters: without it the browser would still submit the
     // file the parent just said they did not want.
     if (inputRef.current) inputRef.current.value = "";
@@ -158,9 +234,9 @@ export function PhotoPicker({
     <div>
       <input type="hidden" name="avatarKey" value={avatarKey} />
 
-      {error || tooBig ? (
+      {error ? (
         <p role="alert" className="mb-4 text-base font-bold text-danger">
-          {error ?? tooBig}
+          {error}
         </p>
       ) : null}
 
@@ -219,6 +295,48 @@ export function PhotoPicker({
           className="sr-only"
         />
 
+        {/*
+          Said next to the button that was pressed, not at the top of the card.
+          A size a parent has to act on is no use above the fold of a section
+          they have already scrolled past.
+        */}
+        {note ? (
+          <p
+            role={note.problem ? "alert" : undefined}
+            className={cn(
+              "mt-4 text-base",
+              note.problem ? "font-bold text-danger" : "text-ink-soft",
+            )}
+          >
+            {note.text}
+            {note.problem ? (
+              <>
+                {" "}
+                Please choose one between {describeSize(CHILD_PHOTO_MIN_BYTES)} and{" "}
+                {describeSize(CHILD_PHOTO_MAX_BYTES)}, or carry on with an avatar
+                instead.
+              </>
+            ) : null}
+            {note.offerTool ? (
+              <>
+                {" "}
+                You can shrink it with{" "}
+                <a
+                  href={COMPRESS_TOOL_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                >
+                  Compress Image
+                </a>{" "}
+                — it opens in a new tab, works inside your own browser, and the
+                picture is never uploaded anywhere. Give it a target size of{" "}
+                {describeSize(CHILD_PHOTO_MAX_BYTES)}.
+              </>
+            ) : null}
+          </p>
+        ) : null}
+
         {previewUrl ? (
           <div className="mt-4 flex flex-wrap items-center gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element -- local object URL, never uploaded to render */}
@@ -250,12 +368,14 @@ export function PhotoPicker({
             >
               Choose a photo
             </Button>
-            {/* The size is read from the rule rather than typed, because the
-                two saying different things is how a parent ends up sending a
+            {/* Both ends read from the rule rather than typed, because the two
+                saying different things is how a parent ends up sending a
                 picture the library cannot accept. */}
             <p className="mt-2 text-sm text-ink-soft">
-              JPG, PNG or WebP, up to {describeSize(CHILD_PHOTO_MAX_BYTES)}. Large
-              photos are made smaller on your phone before they are sent.
+              JPG, PNG or WebP, between {describeSize(CHILD_PHOTO_MIN_BYTES)} and{" "}
+              {describeSize(CHILD_PHOTO_MAX_BYTES)}. Large photos are made smaller on
+              your phone before they are sent, and we will tell you the size as soon
+              as you choose one.
             </p>
           </div>
         )}

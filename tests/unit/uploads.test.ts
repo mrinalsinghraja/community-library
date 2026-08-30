@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { CHILD_PHOTO_MAX_BYTES, CHILD_PHOTO_MIN_BYTES } from "@/lib/child-photo";
 import { describeSize } from "@/lib/file-size";
 import { ValidationError } from "@/server/lib/errors";
 import {
@@ -36,14 +37,23 @@ function technicalError(run: () => unknown): string {
   throw new Error("Expected the upload to be rejected, but it was accepted");
 }
 
-/** Minimal byte sequences with the right magic numbers. */
-function jpeg(sizeBytes = 64): Uint8Array {
+/**
+ * Minimal byte sequences with the right magic numbers.
+ *
+ * The default size clears the largest floor any purpose sets, because these
+ * fixtures exist to exercise type sniffing and metadata stripping — a test of
+ * those failing on a size rule tells nobody anything. Tests that are about size
+ * pass their own.
+ */
+const BIG_ENOUGH = CHILD_PHOTO_MIN_BYTES + 1;
+
+function jpeg(sizeBytes = BIG_ENOUGH): Uint8Array {
   const bytes = new Uint8Array(sizeBytes);
   bytes.set([0xff, 0xd8, 0xff, 0xe0], 0);
   return bytes;
 }
 
-function png(sizeBytes = 64): Uint8Array {
+function png(sizeBytes = BIG_ENOUGH): Uint8Array {
   const bytes = new Uint8Array(sizeBytes);
   bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
   return bytes;
@@ -190,6 +200,10 @@ function jpegWithExif(): Uint8Array {
     0xff, 0xc0, 0x00, 0x05, 0x08, 0x00, 0x01,              // SOF0 (structural)
     0xff, 0xda, 0x00, 0x04, 0x01, 0x00,                    // SOS
     0x11, 0x22, 0x33, 0x44,                                // "pixels"
+    // Padding, so a fixture built to test metadata stripping is not refused for
+    // being under the size floor. It sits inside the scan data, where a decoder
+    // ignores it and where the stripper copies everything through untouched.
+    ...new Array<number>(BIG_ENOUGH).fill(0x55),
     0xff, 0xd9,                                            // EOI
   ]);
 }
@@ -209,6 +223,9 @@ function pngWithMetadata(): Uint8Array {
     ...chunk("tEXt", [...Buffer.from("Comment\0taken at home", "latin1")]),
     ...chunk("eXIf", [...Buffer.from("GPSLatitude 12.9716", "latin1")]),
     ...chunk("IDAT", [0x78, 0x9c, 0x01, 0x02]),
+    // Padding, for the same reason as the JPEG above: a second IDAT is a
+    // perfectly ordinary thing for a PNG to carry.
+    ...chunk("IDAT", new Array<number>(BIG_ENOUGH).fill(0x55)),
     ...chunk("IEND", []),
   ]);
 }
@@ -342,12 +359,25 @@ describe("how big a book cover has to be", () => {
     expect(result.mimeType).toBe("image/jpeg");
   });
 
-  it("applies no floor to a child's photograph", () => {
-    // A parent photographs a child on whatever phone they have. The rule that
-    // exists for jackets is not a rule about families.
-    expect(UPLOAD_RULES.child_photo.minBytes).toBeUndefined();
-    const result = validateUpload({ bytes: jpeg(20 * 1024), purpose: "child_photo" });
+  it("gives a child's photograph a band of its own", () => {
+    /*
+     * This used to say a child's photograph had no floor at all: a parent
+     * photographs a child on whatever phone they have, and the rule that exists
+     * for jackets is not a rule about families. The library asked for a band —
+     * 100 KB to 500 KB — so a card picture is neither soft nor a download every
+     * reader pays for, and the picker now shrinks a phone photograph into the
+     * middle of it before it is ever sent.
+     */
+    expect(UPLOAD_RULES.child_photo.minBytes).toBe(CHILD_PHOTO_MIN_BYTES);
+    expect(UPLOAD_RULES.child_photo.maxBytes).toBe(CHILD_PHOTO_MAX_BYTES);
+
+    const result = validateUpload({ bytes: jpeg(240 * 1024), purpose: "child_photo" });
     expect(result.mimeType).toBe("image/jpeg");
+
+    expect(friendlyFileError(() => validateUpload({ bytes: jpeg(20 * 1024), purpose: "child_photo" })))
+      .toContain(`over ${describeSize(CHILD_PHOTO_MIN_BYTES)}`);
+    expect(friendlyFileError(() => validateUpload({ bytes: jpeg(900 * 1024), purpose: "child_photo" })))
+      .toContain(`under ${describeSize(CHILD_PHOTO_MAX_BYTES)}`);
   });
 
   it("never lets the browser produce a file the server would refuse", () => {

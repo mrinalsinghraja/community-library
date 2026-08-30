@@ -81,3 +81,79 @@ describe("the book cover rule", () => {
     expect(UPLOAD_RULES[UPLOAD_PURPOSES.BOOK_COVER].maxBytes).toBe(COVER_MAX_BYTES);
   });
 });
+
+describe("what the picker tells a parent about the size", () => {
+  const PICKER = readFileSync(
+    join(process.cwd(), "src", "components", "library", "photo-picker.tsx"),
+    "utf8",
+  );
+
+  it("says the size as soon as a picture is chosen", () => {
+    // Both ends of the answer: while the shrinking runs, and once it is done.
+    expect(PICKER).toContain('text: "Checking the picture…"');
+    expect(PICKER).toContain("`Ready — ${describeSize(prepared.size)}.`");
+  });
+
+  it("refuses both ends of the band, not only the big one", () => {
+    expect(PICKER).toContain(
+      "prepared.size > CHILD_PHOTO_MAX_BYTES || prepared.size < CHILD_PHOTO_MIN_BYTES",
+    );
+  });
+
+  it("says a size outside the band in red, and announces it", () => {
+    // Colour is not a message on its own -- the sentence names the size and
+    // both ends of the rule, and role="alert" reads it to anybody who cannot
+    // see the colour at all.
+    expect(PICKER).toContain('note.problem ? "font-bold text-danger" : "text-ink-soft"');
+    expect(PICKER).toContain('role={note.problem ? "alert" : undefined}');
+  });
+
+  it("offers the shrinking tool only when shrinking would help", () => {
+    // A way to make a picture smaller helps nobody whose picture is too small.
+    expect(PICKER).toContain("offerTool: tooBig");
+    expect(PICKER).toContain("href={COMPRESS_TOOL_URL}");
+    expect(PICKER).toContain('rel="noopener noreferrer"');
+  });
+
+  it("tells a parent the tool keeps the picture on their own device", () => {
+    /*
+     * The one claim here that must not be wrong. This is a page asking a parent
+     * to hand over a photograph of their child, and it is now pointing them at
+     * another site to prepare it — so the sentence has to be true of that site.
+     * It is: the tool has no upload path at all.
+     */
+    expect(PICKER).toContain("never uploaded anywhere");
+  });
+
+  it("shrinks without a floor, so a big photo is never kept at full size", () => {
+    /*
+     * Handing the shrinker the 100 KB floor would make it return the ORIGINAL
+     * whenever its own result came out under -- so a 4 MB photograph of a plain
+     * wall would stay 4 MB and then be refused for being too big, which is the
+     * opposite of helping.
+     */
+    const steps = PICKER.match(/minBytes: 0/g) ?? [];
+    expect(steps.length).toBe(3);
+  });
+
+  it("tries more than once before sending a parent away", () => {
+    /*
+     * A dense photograph does not fit at the first size tried, and telling that
+     * parent to go and use another website for a picture this code could have
+     * fitted itself would be a poor way to treat them. The ladder steps down
+     * and tries again; the tool is what is left when none of it worked.
+     */
+    expect(PICKER).toContain("SHRINK_LADDER");
+    expect(PICKER).toMatch(/for \(const step of SHRINK_LADDER\)/);
+  });
+
+  it("re-encodes the original at each step, never the previous result", () => {
+    // Compressing an already-compressed JPEG adds its own damage on top, and
+    // the child in the picture is the one who pays for it.
+    expect(PICKER).toContain("await downscaleImage(file, step)");
+  });
+
+  it("stops as soon as one fits, so an ordinary photo costs one re-encode", () => {
+    expect(PICKER).toContain("if (attempt.file.size <= CHILD_PHOTO_MAX_BYTES)");
+  });
+});

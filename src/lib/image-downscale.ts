@@ -48,7 +48,7 @@ import { COVER_MIN_BYTES } from "@/lib/cover-image";
 export const MAX_COVER_EDGE = 1400;
 
 /** JPEG quality. 0.82 is the point where jacket text is still crisp. */
-const COVER_QUALITY = 0.82;
+export const COVER_QUALITY = 0.82;
 
 /**
  * Below this, re-encoding would cost quality and save nothing worth having.
@@ -74,6 +74,14 @@ export interface DownscaleOptions {
    * good round avatar.
    */
   minBytes?: number;
+  /**
+   * JPEG quality, 0 to 1. Defaults to what a book jacket needs.
+   *
+   * An argument because the photograph path walks a short ladder of edges and
+   * qualities looking for one that lands inside the size band the library
+   * accepts — see `PhotoPicker`.
+   */
+  quality?: number;
 }
 
 /**
@@ -85,7 +93,11 @@ export interface DownscaleOptions {
  */
 export async function downscaleImage(
   file: File,
-  { maxEdge = MAX_COVER_EDGE, minBytes = COVER_MIN_BYTES }: DownscaleOptions = {},
+  {
+    maxEdge = MAX_COVER_EDGE,
+    minBytes = COVER_MIN_BYTES,
+    quality = COVER_QUALITY,
+  }: DownscaleOptions = {},
 ): Promise<DownscaleResult> {
   const unchanged: DownscaleResult = { file, changed: false };
 
@@ -129,7 +141,7 @@ export async function downscaleImage(
     context.drawImage(bitmap, 0, 0, width, height);
 
     const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/jpeg", COVER_QUALITY);
+      canvas.toBlob(resolve, "image/jpeg", quality);
     });
 
     // Bigger than what we started with happens with small, flat images. Keep
