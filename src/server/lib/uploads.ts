@@ -1,7 +1,7 @@
 import "server-only";
 
 import { CHILD_PHOTO_MAX_BYTES } from "@/lib/child-photo";
-import { COVER_MAX_BYTES, COVER_MIN_BYTES } from "@/lib/cover-image";
+import { COVER_MAX_BYTES } from "@/lib/cover-image";
 import { describeSize } from "@/lib/file-size";
 
 import { generateToken, sha256Bytes } from "@/server/lib/crypto";
@@ -85,10 +85,15 @@ export const UPLOAD_RULES: Record<UploadPurpose, UploadRules> = {
    * different question being asked.
    */
   [UPLOAD_PURPOSES.BOOK_COVER]: {
-    // Both ends, and the reasoning for them, live in @/lib/cover-image — the
-    // browser's downscaler reads the same numbers so it can never produce a
-    // file this would refuse.
-    minBytes: COVER_MIN_BYTES,
+    /*
+     * The ceiling only, for the same reason as the child photograph above: what
+     * arrives has been re-encoded by the cover field, and a 4 MB photograph of
+     * a plain jacket legitimately comes out at 80 KB. This used to carry the
+     * floor as well, and the downscaler avoided tripping it by handing back the
+     * ORIGINAL whenever its own result came out under — which turned a picture
+     * that was too small into one that was too big. The floor is now asked of
+     * the file the librarian chose. See @/lib/shrink-to-band.
+     */
     maxBytes: COVER_MAX_BYTES,
     visibility: "PRIVATE",
     allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],

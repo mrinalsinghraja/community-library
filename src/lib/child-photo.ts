@@ -69,12 +69,3 @@ export const CHILD_PHOTO_MAX_BYTES = 500 * 1024;
  * looks at 2000px. It is about landing inside the band with the least damage.
  */
 export const MAX_PHOTO_EDGE = 2000;
-
-/**
- * Where a parent with a picture that is too big can shrink it.
- *
- * Named here rather than typed into the copy so it is one thing to change. It
- * runs entirely in the browser and has no upload path at all — which is the
- * only reason it can be suggested for a photograph of somebody's child.
- */
-export const COMPRESS_TOOL_URL = "https://tools.msrx.co.in/image/compress-image";

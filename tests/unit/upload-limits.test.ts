@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { CHILD_PHOTO_MAX_BYTES, MAX_PHOTO_EDGE } from "@/lib/child-photo";
+import { CHILD_PHOTO_MAX_BYTES } from "@/lib/child-photo";
 import { COVER_MAX_BYTES } from "@/lib/cover-image";
 import { UPLOAD_PURPOSES, UPLOAD_RULES } from "@/server/lib/uploads";
 
@@ -82,151 +82,166 @@ describe("the book cover rule", () => {
   });
 });
 
-describe("what the picker tells a parent about the size", () => {
-  const PICKER = readFileSync(
-    join(process.cwd(), "src", "components", "library", "photo-picker.tsx"),
-    "utf8",
-  );
+describe("shrinking a picture into the band", () => {
+  const SHRINK = readFileSync(join(process.cwd(), "src", "lib", "shrink-to-band.ts"), "utf8");
+  const DOWNSCALE = readFileSync(join(process.cwd(), "src", "lib", "image-downscale.ts"), "utf8");
 
-  it("names the file and says its size as soon as it is chosen", () => {
-    // Before anything is done to it: a parent who picked the wrong file from a
-    // camera roll of near-identical thumbnails should find out from the name.
-    expect(PICKER).toContain("`${file.name} — ${describeSize(file.size)}. Checking the picture…`");
-    expect(PICKER).toContain("`${prepared.name} — ${sizeStory(file, prepared)}. Ready.`");
+  it("is one piece of code, used by both forms", () => {
+    // A parent's card picture and a librarian's book jacket met the same traps.
+    // It would be a waste for only one of them to remember the lessons.
+    for (const file of [
+      ["src", "components", "library", "photo-picker.tsx"],
+      ["src", "app", "admin", "books", "book-form.tsx"],
+    ]) {
+      expect(readFileSync(join(process.cwd(), ...file), "utf8")).toContain(
+        'from "@/lib/shrink-to-band"',
+      );
+    }
   });
 
-  it("shows both sizes when the picture was shrunk", () => {
+  it("shrinks from the top down, so it can never undershoot", () => {
     /*
-     * The failure this closes: a parent chose a 6.6 MB photograph and was told
-     * "only 90 KB — too small". Both numbers were true and the sentence read as
-     * plainly wrong, with no way to tell whether the page had looked at the
-     * file they meant.
-     */
-    expect(PICKER).toContain("function sizeStory(original: File, prepared: File)");
-    expect(PICKER).toContain("made smaller on your phone from ${describeSize(original.size)}");
-    expect(PICKER).toMatch(/sizeStory\(file, prepared\)[\s\S]{0,120}Too big/);
-  });
-
-  it("judges the floor on the file as chosen, before any shrinking", () => {
-    /*
-     * A byte count stops being a proxy for detail the moment this application
-     * picks the encoding. A 2.9 MB photograph of a plain subject re-encoded at
-     * 2000px / q0.92 measures 74 KB and is an excellent card picture; clearing
-     * a 100 KB floor would take q0.98 and 219 KB for no visible difference.
-     *
-     * So the floor asks about the picture the parent chose -- which is the
-     * thing it was ever really about -- and it asks before a single re-encode,
-     * which is also the fastest answer this picker can give.
-     */
-    expect(PICKER).toContain("if (file.size < CHILD_PHOTO_MIN_BYTES)");
-    expect(PICKER.indexOf("if (file.size < CHILD_PHOTO_MIN_BYTES)")).toBeLessThan(
-      PICKER.indexOf("await shrinkToBand(file)"),
-    );
-  });
-
-  it("judges the ceiling on the file that would be sent", () => {
-    // The ceiling is about what the library stores and every reader downloads,
-    // so it is the one end that belongs on the prepared bytes.
-    expect(PICKER).toContain("if (prepared.size > CHILD_PHOTO_MAX_BYTES)");
-  });
-
-  it("never refuses a picture for being small after shrinking it", () => {
-    // The bug this closes: a 6.6 MB photograph shrunk to 90 KB and the parent
-    // was told their picture was too small about a file we had just made.
-    expect(PICKER).not.toContain("prepared.size < CHILD_PHOTO_MIN_BYTES");
-  });
-
-  it("says a size outside the band in red, and announces it", () => {
-    // Colour is not a message on its own -- the sentence names the size and
-    // both ends of the rule, and role="alert" reads it to anybody who cannot
-    // see the colour at all.
-    expect(PICKER).toContain('note.problem ? "font-bold text-danger" : "text-ink-soft"');
-    expect(PICKER).toContain('role={note.problem ? "alert" : undefined}');
-  });
-
-  it("offers the shrinking tool only when shrinking would help", () => {
-    /*
-     * A way to make a picture smaller helps nobody whose picture is too small,
-     * so the too-small refusal carries no link -- and the too-big one is
-     * reached only after every rung of the ladder failed, which is the one
-     * case where another tool is the genuine help rather than an excuse.
-     */
-    expect(PICKER).toContain("href={COMPRESS_TOOL_URL}");
-    expect(PICKER).toContain('rel="noopener noreferrer"');
-
-    const tooSmall = PICKER.slice(PICKER.indexOf("if (file.size < CHILD_PHOTO_MIN_BYTES)"));
-    expect(tooSmall.slice(0, tooSmall.indexOf("return;"))).not.toContain("offerTool");
-
-    const tooBig = PICKER.slice(PICKER.indexOf("if (prepared.size > CHILD_PHOTO_MAX_BYTES)"));
-    expect(tooBig.slice(0, tooBig.indexOf("return;"))).toContain("offerTool: true");
-  });
-
-  it("tells a parent the tool keeps the picture on their own device", () => {
-    /*
-     * The one claim here that must not be wrong. This is a page asking a parent
-     * to hand over a photograph of their child, and it is now pointing them at
-     * another site to prepare it — so the sentence has to be true of that site.
-     * It is: the tool has no upload path at all.
-     */
-    expect(PICKER).toContain("never uploaded anywhere");
-  });
-
-  it("shrinks without a floor, so a big photo is never kept at full size", () => {
-    /*
-     * Handing the shrinker the 100 KB floor would make it return the ORIGINAL
-     * whenever its own result came out under -- so a 4 MB photograph of a plain
-     * wall would stay 4 MB and then be refused for being too big, which is the
-     * opposite of helping.
-     */
-    // Every rung, not most of them: one rung that forgot would be the bug back.
-    const rungs = (PICKER.match(/maxEdge: /g) ?? []).length;
-    expect(rungs).toBeGreaterThanOrEqual(4);
-    expect((PICKER.match(/minBytes: 0/g) ?? []).length).toBe(rungs);
-  });
-
-  it("tries more than once before sending a parent away", () => {
-    /*
-     * A dense photograph does not fit at the first size tried, and telling that
-     * parent to go and use another website for a picture this code could have
-     * fitted itself would be a poor way to treat them. The ladder steps down
-     * and tries again; the tool is what is left when none of it worked.
-     */
-    expect(PICKER).toContain("SHRINK_LADDER");
-    expect(PICKER).toMatch(/for \(const step of SHRINK_LADDER\)/);
-  });
-
-  it("shrinks from the top down, so it can never undershoot into the floor", () => {
-    /*
-     * The bug this closes. A ladder that started at 1200px turned a 6.6 MB
-     * photograph of a plain subject into 90 KB -- under the floor -- and there
-     * was no way back up, so the parent was told their picture was too small
+     * The bug this closes. A ladder that started at its smallest size turned a
+     * 6.6 MB photograph of a plain subject into 90 KB -- under the floor -- and
+     * had no way back up, so somebody was told their picture was too small
      * about a file this code had just made from a perfectly good one.
      *
-     * Ordered biggest result first, the first step that fits under the ceiling
-     * is by construction the largest that fits, which is also the one most
-     * likely to clear the floor and the one with the least quality removed.
+     * Ordered biggest result first, the first rung that fits under the ceiling
+     * is by construction the largest that fits, which is also the one with the
+     * least quality removed.
      */
-    const edges = [...PICKER.matchAll(/maxEdge: (MAX_PHOTO_EDGE|\d+)/g)].map((m) =>
-      m[1] === "MAX_PHOTO_EDGE" ? MAX_PHOTO_EDGE : Number(m[1]),
-    );
-    expect(edges.length).toBeGreaterThanOrEqual(4);
-    expect(edges).toEqual([...edges].sort((a, b) => b - a));
-    expect(edges[0]).toBe(MAX_PHOTO_EDGE);
+    const qualities = [...SHRINK.matchAll(/quality: ([\d.]+)/g)].map((m) => Number(m[1]));
+    expect(qualities.length).toBeGreaterThanOrEqual(4);
+    expect(qualities).toEqual([...qualities].sort((a, b) => b - a));
+
+    const factors = [...SHRINK.matchAll(/topEdge \* ([\d.]+)/g)].map((m) => Number(m[1]));
+    expect(factors).toEqual([...factors].sort((a, b) => b - a));
+    expect(Math.max(...factors)).toBeLessThan(1);
   });
 
   it("leaves a picture already under the ceiling completely alone", () => {
     // Re-encoding it could only make it smaller, and smaller is the direction
-    // the floor lives in: nothing to gain, a rejection to lose.
-    expect(PICKER).toContain("if (file.size <= CHILD_PHOTO_MAX_BYTES) return { file, changed: false }");
+    // the floor lives in: nothing to gain, a needlessly softened picture to
+    // lose.
+    expect(SHRINK).toContain("if (file.size <= maxBytes) return { file, changed: false };");
   });
 
   it("re-encodes the original at each step, never the previous result", () => {
-    // Compressing an already-compressed JPEG adds its own damage on top, and
-    // the child in the picture is the one who pays for it.
-    expect(PICKER).toContain("await downscaleImage(file, step)");
+    // Compressing an already-compressed JPEG stacks its damage.
+    expect(SHRINK).toContain("await downscaleImage(file, step)");
   });
 
-  it("stops as soon as one fits, so an ordinary photo costs one re-encode", () => {
-    expect(PICKER).toContain("if (attempt.file.size <= CHILD_PHOTO_MAX_BYTES) return attempt;");
+  it("stops as soon as one fits, so an ordinary picture costs one re-encode", () => {
+    expect(SHRINK).toContain("if (attempt.file.size <= maxBytes) return attempt;");
+  });
+
+  it("shows both sizes when the picture was shrunk", () => {
+    /*
+     * The failure this closes: somebody chose a 6.6 MB photograph and was told
+     * "only 90 KB -- too small". Both numbers were true and the sentence read
+     * as plainly wrong, with no way to tell whether the page had looked at the
+     * file they meant.
+     */
+    expect(SHRINK).toContain("export function sizeStory(original: File, prepared: File)");
+    expect(SHRINK).toContain("made smaller on your device from ${describeSize(original.size)}");
+  });
+
+  it("has no floor of its own left in the shrinker", () => {
+    /*
+     * `downscaleImage` used to hand back the ORIGINAL whenever its result came
+     * out under a floor, so it never produced a file the server would refuse as
+     * too small. That turned a picture that was too small into one that was too
+     * big. A floor asked of a file this code re-encoded cannot be answered
+     * honestly, so there is none here at all.
+     */
+    expect(DOWNSCALE).not.toContain("minBytes");
+  });
+});
+
+describe("what each form tells the person choosing", () => {
+  const FORMS = {
+    photo: {
+      source: readFileSync(
+        join(process.cwd(), "src", "components", "library", "photo-picker.tsx"),
+        "utf8",
+      ),
+      floor: "CHILD_PHOTO_MIN_BYTES",
+      ceiling: "CHILD_PHOTO_MAX_BYTES",
+    },
+    cover: {
+      source: readFileSync(
+        join(process.cwd(), "src", "app", "admin", "books", "book-form.tsx"),
+        "utf8",
+      ),
+      floor: "COVER_MIN_BYTES",
+      ceiling: "COVER_MAX_BYTES",
+    },
+  };
+
+  it.each(Object.entries(FORMS))(
+    "%s: names the file and says its size before anything is done to it",
+    (_which, form) => {
+      expect(form.source).toContain("${file.name} — ${describeSize(file.size)}");
+    },
+  );
+
+  it.each(Object.entries(FORMS))("%s: judges the floor on the file as chosen", (_which, form) => {
+    /*
+     * A byte count stops being a proxy for detail the moment this application
+     * picks the encoding. A 2.9 MB photograph of a plain subject re-encodes to
+     * 74 KB and is a fine picture; clearing a 100 KB floor would take quality
+     * 0.98 and 219 KB for no visible difference. So the floor asks about the
+     * picture that was chosen, and asks before a single re-encode.
+     */
+    expect(form.source).toContain(`if (file.size < ${form.floor})`);
+    expect(form.source.indexOf(`if (file.size < ${form.floor})`)).toBeLessThan(
+      form.source.indexOf("await shrinkToBand(file"),
+    );
+  });
+
+  it.each(Object.entries(FORMS))(
+    "%s: judges the ceiling on the file that would be sent",
+    (_which, form) => {
+      expect(form.source).toContain(`if (prepared.size > ${form.ceiling})`);
+    },
+  );
+
+  it.each(Object.entries(FORMS))(
+    "%s: never refuses a picture for being small after shrinking it",
+    (_which, form) => {
+      expect(form.source).not.toContain(`prepared.size < ${form.floor}`);
+    },
+  );
+
+  it.each(Object.entries(FORMS))("%s: says a refusal in red, and announces it", (_which, form) => {
+    // Colour is not a message on its own -- the sentence names the size and the
+    // rule, and role="alert" reads it to anybody who cannot see the colour.
+    expect(form.source).toMatch(/note\??\.problem \? "alert"/);
+    expect(form.source).toMatch(/note\??\.problem\s*\?\s*"(text-base )?font-bold text-danger"/);
+  });
+
+  it.each(Object.entries(FORMS))(
+    "%s: offers the shrinking tool only when shrinking would help",
+    (_which, form) => {
+      // A way to make a picture smaller helps nobody whose picture is too small.
+      expect(form.source).toContain("href={COMPRESS_TOOL_URL}");
+      expect(form.source).toContain('rel="noopener noreferrer"');
+
+      const tooSmall = form.source.slice(form.source.indexOf(`if (file.size < ${form.floor})`));
+      expect(tooSmall.slice(0, tooSmall.indexOf("return;"))).not.toContain("offerTool");
+
+      const tooBig = form.source.slice(form.source.indexOf(`if (prepared.size > ${form.ceiling})`));
+      expect(tooBig.slice(0, tooBig.indexOf("return;"))).toContain("offerTool: true");
+    },
+  );
+
+  it("tells a parent the tool keeps the picture on their own device", () => {
+    /*
+     * The one claim here that must not be wrong. This is a page asking a parent
+     * to hand over a photograph of their child, and it is pointing them at
+     * another site to prepare it -- so the sentence has to be true of that
+     * site. It is: the tool has no upload path at all.
+     */
+    expect(FORMS.photo.source).toContain("never uploaded anywhere");
   });
 });

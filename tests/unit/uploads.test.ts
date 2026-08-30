@@ -338,15 +338,22 @@ describe("how big a book cover has to be", () => {
     return out;
   };
 
-  it("refuses a picture under the floor, and says how small it was", () => {
-    try {
-      validateUpload({ bytes: jpeg(40 * 1024), purpose: "book_cover" });
-      throw new Error("expected a refusal");
-    } catch (error) {
-      expect(String((error as { fieldErrors?: Record<string, string> }).fieldErrors?.file)).toMatch(
-        /only 40 KB/,
-      );
-    }
+  it("sets no floor on what arrives, and says why in one place", () => {
+    /*
+     * The floor is real and still enforced -- in the cover field, against the
+     * file the librarian chose, before any shrinking runs. It cannot be
+     * enforced here: what arrives has been re-encoded by that field, and a 4 MB
+     * photograph of a plain jacket legitimately comes out at 80 KB. Refusing
+     * that would mean refusing a file this application produced.
+     *
+     * The old arrangement proved it. The downscaler avoided tripping this floor
+     * by handing back the ORIGINAL whenever its own result came out under --
+     * which turned a picture that was too small into one that was too big.
+     */
+    expect(UPLOAD_RULES.book_cover.minBytes).toBeUndefined();
+
+    const shrunk = validateUpload({ bytes: jpeg(80 * 1024), purpose: "book_cover" });
+    expect(shrunk.mimeType).toBe("image/jpeg");
   });
 
   it("refuses a picture over the ceiling", () => {
@@ -380,21 +387,17 @@ describe("how big a book cover has to be", () => {
       .toContain(`under ${describeSize(CHILD_PHOTO_MAX_BYTES)}`);
   });
 
-  it("never lets the browser produce a file the server would refuse", () => {
+  it("still tells a librarian how small a picture was, in the field", () => {
     /*
-     * The trap this closes: the cover field downscales in the browser, and a
-     * flat jacket at 1400px can land under the floor — so the librarian would
-     * be told their picture was too small about a file the application had
-     * just made from a perfectly good one.
+     * Moving the floor off the server did not drop it. It is asked earlier and
+     * of a better subject -- the file as chosen -- and the sentence names the
+     * file and the size, where the librarian can still pick another.
      */
-    const downscale = readFileSync(
-      join(process.cwd(), "src", "lib", "image-downscale.ts"),
+    const form = readFileSync(
+      join(process.cwd(), "src", "app", "admin", "books", "book-form.tsx"),
       "utf8",
     );
-    // The floor is now an argument, because the same function also shrinks a
-    // child's photograph, which has none. A cover still gets the cover floor by
-    // default -- that default is the guarantee.
-    expect(downscale).toContain("minBytes = COVER_MIN_BYTES");
-    expect(downscale).toMatch(/minBytes > 0 && blob\.size < minBytes && file\.size >= minBytes/);
+    expect(form).toContain("if (file.size < COVER_MIN_BYTES)");
+    expect(form).toContain("Too small to read on a phone");
   });
 });

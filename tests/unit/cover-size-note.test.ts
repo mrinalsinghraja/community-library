@@ -4,17 +4,17 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * The note under a chosen cover picture, and which of its wordings is a refusal.
+ * The note under a chosen cover picture.
  *
- * Three of the four things this note says are progress -- getting ready, ready,
- * resized. One is a dead end: the file cannot be used, and the librarian has to
- * go back to the picker. That one is said in red.
+ * How the shrinking works, and which of the two size questions is asked where,
+ * is pinned in `tests/unit/upload-limits.test.ts` for both forms at once — the
+ * cover field and the registration form's photo picker share that code. What is
+ * left here is the cover's own: it is the one of the two that is also editing
+ * an existing book, so its note has to survive a refused save.
  *
  * The form is a client component and this repository has no DOM test
  * environment, so these read the source the same way
- * `tests/unit/book-intake-consent.test.ts` does. The failure they guard against
- * is quiet: a later edit that returns the note to a plain string would lose the
- * distinction without breaking anything visible in a build.
+ * `tests/unit/book-intake-consent.test.ts` does.
  */
 
 const FORM = readFileSync(
@@ -28,32 +28,25 @@ describe("the cover picture note", () => {
     expect(FORM).toMatch(/problem:\s*boolean/);
   });
 
-  it("marks both size refusals as problems", () => {
-    // A picture under the floor and a picture over the ceiling are the same
-    // kind of answer -- neither can be saved -- so neither may be styled as
-    // progress.
-    const refusals = FORM.match(/problem:\s*true/g) ?? [];
-    expect(refusals).toHaveLength(2);
-
-    expect(FORM).toMatch(/usually too small to[\s\S]*?problem:\s*true/);
-    expect(FORM).toMatch(/Please choose one under[\s\S]*?problem:\s*true/);
-  });
-
   it("does not call an ordinary ready message a problem", () => {
-    expect(FORM).toMatch(/Ready\.",\s*\n\s*problem:\s*false/);
+    expect(FORM).toMatch(/Ready\.`,\s*\n\s*problem:\s*false/);
   });
 
-  it("says a refusal in red", () => {
-    expect(FORM).toContain('note.problem ? "font-bold text-danger" : undefined');
+  it("names the file once, not twice", () => {
+    // The note carries the filename now, so the "Chosen:" line above it would
+    // be the same word twice in two lines.
+    expect(FORM).not.toContain("Chosen: {chosen}");
+    expect(FORM).toContain("{note?.text ?? chosen}");
   });
 
-  it("announces a refusal as well as colouring it", () => {
+  it("keeps the chosen picture attached across a refused save", () => {
     /*
-     * Colour alone is not a message. Somebody reading this page with a screen
-     * reader, or with any of the several kinds of colour blindness, gets
-     * nothing from `text-danger` -- so the same condition also sets
-     * `role="alert"`, and the sentence names the size and the rule in words.
+     * React empties every uncontrolled field once the form's action returns,
+     * this component's own state included -- so without re-attaching, the
+     * thumbnail would sit on screen over an empty input and the second save
+     * would store no cover while looking exactly like the first.
      */
-    expect(FORM).toContain('role={note.problem ? "alert" : undefined}');
+    expect(FORM).toContain("const chosenFile = useRef<File | null>(null)");
+    expect(FORM).toContain("input.files = transfer.files");
   });
 });

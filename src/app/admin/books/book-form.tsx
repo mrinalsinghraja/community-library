@@ -9,7 +9,8 @@ import { Field, Select, TextInput } from "@/components/ui/field";
 import { Callout } from "@/components/ui/states";
 import { COVER_MAX_BYTES, COVER_MIN_BYTES } from "@/lib/cover-image";
 import { describeSize } from "@/lib/file-size";
-import { downscaleImage, formatBytes } from "@/lib/image-downscale";
+import { MAX_COVER_EDGE } from "@/lib/image-downscale";
+import { COMPRESS_TOOL_URL, shrinkToBand, sizeStory } from "@/lib/shrink-to-band";
 import { AGE_GROUPS, CATALOGUE_LIMITS, CONDITIONS, SELECTABLE_STATUSES, statusDefinition } from "@/lib/catalogue";
 import {
   createBookAction,
@@ -424,6 +425,8 @@ function SaveButton({ mode }: { mode: "create" | "edit" }) {
 interface CoverNote {
   text: string;
   problem: boolean;
+  /** A way to make a picture smaller helps nobody whose picture is too small. */
+  offerTool?: boolean;
 }
 
 /**
@@ -439,9 +442,15 @@ interface CoverNote {
  * And it is shrunk, in the browser, before it is ever submitted — a phone
  * photograph of a book jacket is routinely 4 MB and 4000 pixels wide, which is
  * four megabytes every child then downloads to render a two-centimetre
- * thumbnail. See `src/lib/image-downscale.ts`: it is a courtesy to the network,
- * never a security control, and every server-side rule still runs on whatever
- * actually arrives.
+ * thumbnail. See `src/lib/shrink-to-band.ts`, shared with the registration
+ * form's photo picker: it is a courtesy to the network, never a security
+ * control, and every server-side rule still runs on whatever actually arrives.
+ *
+ * The floor is asked of the picture the librarian CHOSE and the ceiling of the
+ * picture that would be SENT, which is not fussiness — asking the floor of the
+ * result meant a 4 MB photograph of a plain jacket, which re-encodes to 80 KB,
+ * was handed back at its original size and then refused for being too big. The
+ * shared module carries the full reasoning.
  *
  * If the browser cannot do it, the original file is submitted unchanged and
  * everything still works. Nothing here is allowed to stop a book being
@@ -491,6 +500,24 @@ function CoverField({
     input.files = transfer.files;
   });
 
+  /**
+   * Lets go of the chosen picture, keeping whatever the note says about it.
+   *
+   * A refusal that left the file attached used to be harmless: the server
+   * refused the same picture a moment later. It is not harmless now — the
+   * floor moved off the server, so a 15 KB thumbnail shown in red would have
+   * been stored anyway by a librarian who pressed Save regardless. A cover is
+   * optional, so letting go costs nothing and the book still saves.
+   */
+  function releasePicture() {
+    chosenFile.current = null;
+    setPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
   async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
@@ -507,9 +534,33 @@ function CoverField({
     }
 
     setChosen(file.name);
-    setNote({ text: "Getting the picture ready…", problem: false });
 
-    const { file: prepared, changed } = await downscaleImage(file);
+    /*
+     * The floor, asked of the file as chosen and before any shrinking runs.
+     * A picture under it is almost always a thumbnail lifted from a search
+     * result — sharp at 80 pixels, mush at 300 — and nothing this code can do
+     * to it will put back detail that was never there.
+     */
+    if (file.size < COVER_MIN_BYTES) {
+      releasePicture();
+      setNote({
+        text:
+          `${file.name} — ${describeSize(file.size)}. Too small to read on a phone: ` +
+          `please choose one over ${describeSize(COVER_MIN_BYTES)}.`,
+        problem: true,
+      });
+      return;
+    }
+
+    setNote({
+      text: `${file.name} — ${describeSize(file.size)}. Getting the picture ready…`,
+      problem: false,
+    });
+
+    const { file: prepared, changed } = await shrinkToBand(file, {
+      topEdge: MAX_COVER_EDGE,
+      maxBytes: COVER_MAX_BYTES,
+    });
 
     /*
      * Put the smaller file back into the input, so the ordinary form submission
@@ -527,36 +578,26 @@ function CoverField({
     setPreviewUrl(URL.createObjectURL(prepared));
 
     /*
-     * Said here, before the form is submitted, because the server's refusal
-     * arrives after a page round trip with the file input already emptied — so
-     * a librarian meets the rule at the point where they can still choose a
-     * different picture. The server still refuses independently; this is a
-     * courtesy, not the gate.
+     * The ceiling, asked of what would actually be sent, and reached only when
+     * every rung of the ladder failed — a picture beyond what a browser
+     * re-encode can manage, or one the browser could not decode at all. Said
+     * here rather than left to the server, whose refusal arrives after a page
+     * round trip; the server still refuses independently.
      */
-    if (prepared.size < COVER_MIN_BYTES) {
-      setNote({
-        text:
-          `That picture is only ${describeSize(prepared.size)}, which is usually too small to ` +
-          `read on a phone. Please choose one over ${describeSize(COVER_MIN_BYTES)}.`,
-        problem: true,
-      });
-      return;
-    }
-
     if (prepared.size > COVER_MAX_BYTES) {
+      releasePicture();
       setNote({
         text:
-          `That picture is ${describeSize(prepared.size)}. Please choose one under ` +
-          `${describeSize(COVER_MAX_BYTES)}.`,
+          `${file.name} — ${sizeStory(file, prepared)}. Still too big: please ` +
+          `choose one under ${describeSize(COVER_MAX_BYTES)}.`,
         problem: true,
+        offerTool: true,
       });
       return;
     }
 
     setNote({
-      text: changed
-        ? `Ready — resized to ${formatBytes(prepared.size)} so it loads quickly.`
-        : "Ready.",
+      text: `${file.name} — ${sizeStory(file, prepared)}. Ready.`,
       problem: false,
     });
   }
@@ -566,7 +607,7 @@ function CoverField({
       id={fieldId}
       label="Cover picture"
       error={error}
-      hint={`Optional. A photo of the front cover is plenty — books without one get a drawn cover instead. Between ${describeSize(COVER_MIN_BYTES)} and ${describeSize(COVER_MAX_BYTES)}; anything larger is shrunk for you.`}
+      hint={`Optional. A photo of the front cover is plenty — books without one get a drawn cover instead. Choose one over ${describeSize(COVER_MIN_BYTES)}; anything larger than ${describeSize(COVER_MAX_BYTES)} is shrunk for you.`}
     >
       <input
         id={fieldId}
@@ -578,7 +619,7 @@ function CoverField({
         className="min-h-14 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-4 py-3 text-base file:me-4 file:rounded-full file:border-0 file:bg-primary file:px-4 file:py-2 file:text-base file:font-bold file:text-white"
       />
 
-      {chosen ? (
+      {chosen || note ? (
         <div className="flex items-center gap-4">
           {previewUrl ? (
             <span className="w-16 shrink-0 overflow-hidden rounded-[var(--radius-field)] shadow-lift">
@@ -591,24 +632,38 @@ function CoverField({
               />
             </span>
           ) : null}
-          <span className="text-base text-ink-soft">
-            Chosen: {chosen}
-            {note ? (
+          {/*
+            The note names the file, so there is no "Chosen:" line above it
+            saying the same word twice.
+
+            A size the library cannot use is said in red and announced, because
+            it is the one note here that asks for another go at the file picker.
+            Colour is never the only carrier: the words say what is wrong on
+            their own, and `role="alert"` reads it out to anybody who cannot see
+            the colour at all.
+          */}
+          <span
+            role={note?.problem ? "alert" : undefined}
+            className={
+              note?.problem ? "text-base font-bold text-danger" : "text-base text-ink-soft"
+            }
+          >
+            {note?.text ?? chosen}
+            {note?.offerTool ? (
               <>
-                <br />
-                {/*
-                 * A size the library cannot use is said in red and announced,
-                 * because it is the one note here that asks for another go at
-                 * the file picker. Colour is never the only carrier: the words
-                 * say what is wrong on their own, and `role="alert"` reads it
-                 * out to anybody who cannot see the colour at all.
-                 */}
-                <span
-                  role={note.problem ? "alert" : undefined}
-                  className={note.problem ? "font-bold text-danger" : undefined}
+                {" "}
+                You can shrink it with{" "}
+                <a
+                  href={COMPRESS_TOOL_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
                 >
-                  {note.text}
-                </span>
+                  Compress Image
+                </a>{" "}
+                — it opens in a new tab, works inside your own browser, and the
+                picture is never uploaded anywhere. Give it a target size of{" "}
+                {describeSize(COVER_MAX_BYTES)}.
               </>
             ) : null}
           </span>

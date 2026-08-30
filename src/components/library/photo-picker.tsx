@@ -8,12 +8,11 @@ import { AVATARS } from "@/lib/avatars";
 import {
   CHILD_PHOTO_MAX_BYTES,
   CHILD_PHOTO_MIN_BYTES,
-  COMPRESS_TOOL_URL,
   MAX_PHOTO_EDGE,
 } from "@/lib/child-photo";
 import { cn } from "@/lib/cn";
 import { describeSize } from "@/lib/file-size";
-import { downscaleImage, type DownscaleOptions } from "@/lib/image-downscale";
+import { COMPRESS_TOOL_URL, shrinkToBand, sizeStory } from "@/lib/shrink-to-band";
 import { Icon } from "@/components/ui/icon";
 
 /**
@@ -57,83 +56,6 @@ interface PhotoNote {
   text: string;
   problem: boolean;
   offerTool?: boolean;
-}
-
-/**
- * The sizes to try, biggest result first.
- *
- * Ordered so each step produces a smaller file than the one before it, which is
- * what lets the search below be a simple walk: take the first result that fits
- * under the ceiling, and it is by construction the *largest* one that fits —
- * so it is also the one most likely to clear the floor, and the one that has
- * had the least quality taken out of it.
- *
- * The direction is the whole point, and it is the fix for a real failure. A
- * ladder that started at 1200px handed back 90 KB for a 6.6 MB photograph of a
- * plain subject: under the floor, and the parent was then told their picture
- * was too small about a file this code had just produced from a perfectly good
- * one. There was no way back up. Starting high cannot go wrong that way.
- *
- * Each step re-encodes the ORIGINAL, never the previous result: re-compressing
- * a JPEG that has already been compressed adds its own damage on top, and the
- * child in the picture is the one who pays for that.
- *
- * The floor is never passed to the shrinker either. Handing it 100 KB would
- * make it return the original whenever its own result came out under — so a
- * 6 MB photograph would stay 6 MB and be refused for being too big, which is
- * the opposite of helping.
- */
-const SHRINK_LADDER: readonly DownscaleOptions[] = [
-  { maxEdge: MAX_PHOTO_EDGE, quality: 0.92, minBytes: 0 },
-  { maxEdge: 1500, quality: 0.86, minBytes: 0 },
-  { maxEdge: 1100, quality: 0.8, minBytes: 0 },
-  { maxEdge: 800, quality: 0.74, minBytes: 0 },
-];
-
-/**
- * The size of a picture, and what shrinking did to it.
- *
- * Both numbers whenever they differ. A parent who chose a 6 MB photograph and
- * is told "90 KB" has been told something that reads as plainly wrong, and has
- * no way to know whether the page looked at the file they meant.
- */
-function sizeStory(original: File, prepared: File): string {
-  if (prepared.size === original.size) return describeSize(prepared.size);
-  return `${describeSize(prepared.size)}, made smaller on your phone from ${describeSize(original.size)}`;
-}
-
-/**
- * Shrinks a picture into the band, and says what it settled on.
- *
- * Walks down until something fits under the ceiling and stops there, so an
- * ordinary photograph costs one or two re-encodes rather than four. What comes
- * back may still be outside the band — a picture that cannot be squeezed under
- * the ceiling at all, or one already so small that nothing was worth doing to
- * it — and the picker says so rather than pretending otherwise.
- */
-async function shrinkToBand(file: File): Promise<{ file: File; changed: boolean }> {
-  /*
-   * A file already under the ceiling is left completely alone.
-   *
-   * Re-encoding it could only make it smaller, and smaller is the direction the
-   * floor lives in — there is nothing to gain and a rejection to lose. If it is
-   * also under the floor then it was a small picture when it arrived, which is
-   * exactly the case the floor is for, and the picker will say so.
-   */
-  if (file.size <= CHILD_PHOTO_MAX_BYTES) return { file, changed: false };
-
-  let best: { file: File; changed: boolean } = { file, changed: false };
-
-  for (const step of SHRINK_LADDER) {
-    const attempt = await downscaleImage(file, step);
-    if (attempt.file.size < best.file.size) best = attempt;
-
-    // The first one that fits is the largest one that fits. Going further down
-    // would only take out quality this picture does not need to lose.
-    if (attempt.file.size <= CHILD_PHOTO_MAX_BYTES) return attempt;
-  }
-
-  return best;
 }
 
 export function PhotoPicker({
@@ -205,7 +127,10 @@ export function PhotoPicker({
       problem: false,
     });
 
-    const { file: prepared } = await shrinkToBand(file);
+    const { file: prepared } = await shrinkToBand(file, {
+      topEdge: MAX_PHOTO_EDGE,
+      maxBytes: CHILD_PHOTO_MAX_BYTES,
+    });
 
     /*
      * Outside the band, the picture is let go of rather than left attached to

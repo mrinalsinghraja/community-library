@@ -1,5 +1,3 @@
-import { COVER_MIN_BYTES } from "@/lib/cover-image";
-
 /**
  * Shrinking a picture before it is uploaded.
  *
@@ -66,20 +64,11 @@ export interface DownscaleOptions {
   /** Longest edge to keep. Defaults to what a book cover needs. */
   maxEdge?: number;
   /**
-   * A floor the result must not fall below, if the original cleared it.
-   *
-   * Only a cover has one — the rule exists so this never hands back a file the
-   * server would refuse as "too small to read". A child's photograph has no
-   * floor at all, so pass 0 for one; a portrait shrunk to 40 KB is a perfectly
-   * good round avatar.
-   */
-  minBytes?: number;
-  /**
    * JPEG quality, 0 to 1. Defaults to what a book jacket needs.
    *
-   * An argument because the photograph path walks a short ladder of edges and
-   * qualities looking for one that lands inside the size band the library
-   * accepts — see `PhotoPicker`.
+   * An argument because both callers walk a short ladder of edges and qualities
+   * looking for one that lands under the size their form accepts — see
+   * `shrinkToBand`.
    */
   quality?: number;
 }
@@ -93,11 +82,7 @@ export interface DownscaleOptions {
  */
 export async function downscaleImage(
   file: File,
-  {
-    maxEdge = MAX_COVER_EDGE,
-    minBytes = COVER_MIN_BYTES,
-    quality = COVER_QUALITY,
-  }: DownscaleOptions = {},
+  { maxEdge = MAX_COVER_EDGE, quality = COVER_QUALITY }: DownscaleOptions = {},
 ): Promise<DownscaleResult> {
   const unchanged: DownscaleResult = { file, changed: false };
 
@@ -149,15 +134,16 @@ export async function downscaleImage(
     if (!blob || blob.size >= file.size) return unchanged;
 
     /*
-     * Never hand back a file the server would refuse.
+     * There is deliberately no floor here any more.
      *
-     * A flat, simple jacket at 1400px and quality 0.82 can land under the
-     * cover floor, and the librarian would then be told their picture was "too
-     * small to print" about a file this function had just produced from a
-     * perfectly good one. Downscaling exists to save bytes; when saving them
-     * would cost the upload, it does nothing instead.
+     * This used to hand back the ORIGINAL whenever its own result came out
+     * under the cover floor, so it never produced a file the server would
+     * refuse as too small. The cure was worse than the disease: a 4 MB
+     * photograph of a plain jacket then stayed 4 MB and was refused for being
+     * too big instead. A floor asked of a file this code re-encoded cannot be
+     * answered honestly, so it is asked of the file that was chosen, before any
+     * of this runs — see `shrinkToBand`.
      */
-    if (minBytes > 0 && blob.size < minBytes && file.size >= minBytes) return unchanged;
 
     const name = file.name.replace(/\.[^.]+$/, "") || "picture";
     return {
