@@ -377,6 +377,12 @@ function SaveButton({ mode }: { mode: "create" | "edit" }) {
     </Button>
   );
 }
+
+interface CoverNote {
+  text: string;
+  problem: boolean;
+}
+
 /**
  * The cover picture: optional, and secondary to everything above it.
  *
@@ -409,7 +415,7 @@ function CoverField({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [chosen, setChosen] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
+  const [note, setNote] = useState<CoverNote | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
@@ -427,7 +433,7 @@ function CoverField({
     }
 
     setChosen(file.name);
-    setNote("Getting the picture ready…");
+    setNote({ text: "Getting the picture ready…", problem: false });
 
     const { file: prepared, changed } = await downscaleImage(file);
 
@@ -453,26 +459,31 @@ function CoverField({
      * courtesy, not the gate.
      */
     if (prepared.size < COVER_MIN_BYTES) {
-      setNote(
-        `That picture is only ${describeSize(prepared.size)}, which is usually too small to ` +
+      setNote({
+        text:
+          `That picture is only ${describeSize(prepared.size)}, which is usually too small to ` +
           `read on a phone. Please choose one over ${describeSize(COVER_MIN_BYTES)}.`,
-      );
+        problem: true,
+      });
       return;
     }
 
     if (prepared.size > COVER_MAX_BYTES) {
-      setNote(
-        `That picture is ${describeSize(prepared.size)}. Please choose one under ` +
+      setNote({
+        text:
+          `That picture is ${describeSize(prepared.size)}. Please choose one under ` +
           `${describeSize(COVER_MAX_BYTES)}.`,
-      );
+        problem: true,
+      });
       return;
     }
 
-    setNote(
-      changed
+    setNote({
+      text: changed
         ? `Ready — resized to ${formatBytes(prepared.size)} so it loads quickly.`
         : "Ready.",
-    );
+      problem: false,
+    });
   }
 
   return (
@@ -510,7 +521,19 @@ function CoverField({
             {note ? (
               <>
                 <br />
-                {note}
+                {/*
+                 * A size the library cannot use is said in red and announced,
+                 * because it is the one note here that asks for another go at
+                 * the file picker. Colour is never the only carrier: the words
+                 * say what is wrong on their own, and `role="alert"` reads it
+                 * out to anybody who cannot see the colour at all.
+                 */}
+                <span
+                  role={note.problem ? "alert" : undefined}
+                  className={note.problem ? "font-bold text-danger" : undefined}
+                >
+                  {note.text}
+                </span>
               </>
             ) : null}
           </span>
