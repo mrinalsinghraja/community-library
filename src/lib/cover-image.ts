@@ -22,10 +22,3 @@
  */
 export const COVER_MIN_BYTES = 100 * 1024;
 export const COVER_MAX_BYTES = 1024 * 1024;
-
-/** "1 MB", "100 KB", "36 KB" — whichever unit reads as a size a person chose. */
-export function describeSize(bytes: number): string {
-  const mb = bytes / (1024 * 1024);
-  if (mb >= 1) return `${Number.isInteger(mb) ? mb : mb.toFixed(1)} MB`;
-  return `${Math.round(bytes / 1024)} KB`;
-}

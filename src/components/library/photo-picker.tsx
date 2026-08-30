@@ -1,11 +1,14 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { MemberAvatar } from "@/components/library/avatar";
 import { Button } from "@/components/ui/button";
 import { AVATARS } from "@/lib/avatars";
+import { CHILD_PHOTO_MAX_BYTES, MAX_PHOTO_EDGE } from "@/lib/child-photo";
 import { cn } from "@/lib/cn";
+import { describeSize } from "@/lib/file-size";
+import { downscaleImage } from "@/lib/image-downscale";
 import { Icon } from "@/components/ui/icon";
 
 /**
@@ -24,6 +27,18 @@ import { Icon } from "@/components/ui/icon";
  * submission — there is no upload endpoint a parent's browser talks to, and no
  * half-uploaded picture sitting anywhere if they change their mind and close the
  * tab.
+ *
+ * It is shrunk here, before it is submitted, and for this form that is not only
+ * a courtesy to the network. A photograph straight off a phone is several
+ * megabytes; a form submission that big is refused by the framework before any
+ * of our code runs, and the parent gets a whole-page "something went wrong"
+ * that no message of ours can improve. Shrinking first means a picture that
+ * large simply never leaves the device — and the EXIF that would have said
+ * where a child was photographed does not leave it either, because a canvas
+ * re-encode has nowhere to put it.
+ *
+ * Shrinking is still not a control. `validateUpload` checks the bytes that
+ * actually arrive, and refuses independently.
  */
 export function PhotoPicker({
   avatarKey,
@@ -37,29 +52,100 @@ export function PhotoPicker({
   error?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  /**
+   * The file the parent chose, kept so it can be put back.
+   *
+   * React empties every uncontrolled field — a file input included — once the
+   * form's action returns. This component's own state survives that, so without
+   * this the preview would still be sitting there showing a photograph that is
+   * no longer attached to anything, and the second submit would quietly send no
+   * picture at all. Holding the File and re-attaching it is the only way to
+   * make what the parent sees and what the form carries agree.
+   */
+  const chosenFile = useRef<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [tooBig, setTooBig] = useState<string | null>(null);
   const inputId = useId();
 
-  function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
     if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setTooBig(null);
 
     if (!file) {
+      chosenFile.current = null;
       setPreviewUrl(null);
       setFileName(null);
       onPhotoChange(false);
       return;
     }
 
-    setPreviewUrl(URL.createObjectURL(file));
-    setFileName(file.name);
+    // No floor: a card picture is a small round avatar, and a portrait that
+    // shrinks to 40 KB is a perfectly good one.
+    const { file: prepared } = await downscaleImage(file, {
+      maxEdge: MAX_PHOTO_EDGE,
+      minBytes: 0,
+    });
+
+    /*
+     * A picture still too big after shrinking — a browser without a canvas, a
+     * format the codec would not read — is refused here, in a sentence, rather
+     * than by the framework in a page that says nothing useful. The photo is
+     * optional, so the parent loses nothing by carrying on with an avatar.
+     */
+    if (prepared.size > CHILD_PHOTO_MAX_BYTES) {
+      chosenFile.current = null;
+      clearPhoto();
+      setTooBig(
+        `That picture is ${describeSize(prepared.size)}, which is too big to send. ` +
+          `Please choose one under ${describeSize(CHILD_PHOTO_MAX_BYTES)}, or carry on ` +
+          `with an avatar instead.`,
+      );
+      return;
+    }
+
+    /*
+     * Put the smaller file back into the input so the ordinary form submission
+     * carries it. A DataTransfer is the only way to assign to `input.files`,
+     * and assigning does not fire another change event — which is what keeps
+     * this from looping.
+     */
+    if (prepared !== file && inputRef.current && typeof DataTransfer === "function") {
+      const transfer = new DataTransfer();
+      transfer.items.add(prepared);
+      inputRef.current.files = transfer.files;
+    }
+
+    chosenFile.current = prepared;
+    setPreviewUrl(URL.createObjectURL(prepared));
+    setFileName(prepared.name);
     onPhotoChange(true);
   }
 
+  /*
+   * Runs after every render, and does nothing on almost all of them. It matters
+   * on exactly one: the render after a refused submission, where the input has
+   * been emptied underneath a preview that is still on screen.
+   */
+  useEffect(() => {
+    const input = inputRef.current;
+    const file = chosenFile.current;
+    // A browser with no DataTransfer has nowhere to put the file back, and
+    // behaves as it did before this existed: the parent chooses the photo
+    // again. Every browser released since 2016 has one.
+    if (!input || !file || input.files?.length) return;
+    if (typeof DataTransfer !== "function") return;
+
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+  });
+
   function clearPhoto() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
+    chosenFile.current = null;
     setPreviewUrl(null);
     setFileName(null);
     // Clearing the input matters: without it the browser would still submit the
@@ -72,9 +158,9 @@ export function PhotoPicker({
     <div>
       <input type="hidden" name="avatarKey" value={avatarKey} />
 
-      {error ? (
+      {error || tooBig ? (
         <p role="alert" className="mb-4 text-base font-bold text-danger">
-          {error}
+          {error ?? tooBig}
         </p>
       ) : null}
 
@@ -164,7 +250,13 @@ export function PhotoPicker({
             >
               Choose a photo
             </Button>
-            <p className="mt-2 text-sm text-ink-soft">JPG, PNG or WebP, up to 5 MB.</p>
+            {/* The size is read from the rule rather than typed, because the
+                two saying different things is how a parent ends up sending a
+                picture the library cannot accept. */}
+            <p className="mt-2 text-sm text-ink-soft">
+              JPG, PNG or WebP, up to {describeSize(CHILD_PHOTO_MAX_BYTES)}. Large
+              photos are made smaller on your phone before they are sent.
+            </p>
           </div>
         )}
       </div>

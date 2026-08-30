@@ -83,10 +83,49 @@ function photoFrom(formData: FormData): File | null {
   return entry;
 }
 
+/**
+ * What the family typed, handed back so a refused form can be refilled.
+ *
+ * React resets an uncontrolled form once its action returns, so without this a
+ * parent who mistyped one character of an email retypes all six fields — on a
+ * phone, with a child next to them, which is where most of these are filled in.
+ *
+ * The consent tick boxes are deliberately not here. Everything else is a fact
+ * being restated; a tick is a permission being given, and it is worth the two
+ * seconds of giving it again with the wording in front of you. The photograph
+ * is not here either, and cannot be: a browser will not let a page put a file
+ * back into a file input.
+ *
+ * Values go back to the browser that sent them and nowhere else, and React
+ * escapes them on the way into the attribute.
+ */
+export interface RegistrationSubmission {
+  childName: string;
+  childBirthYear: string;
+  apartment: string;
+  guardianName: string;
+  guardianEmail: string;
+  guardianPhone: string;
+}
+
 export interface RegistrationFormState {
   status: "idle" | "success" | "error";
   message?: string;
   fieldErrors?: Record<string, string>;
+  values?: RegistrationSubmission;
+}
+
+/** Reads the form back out for redisplay. See `RegistrationSubmission`. */
+function readSubmission(formData: FormData): RegistrationSubmission {
+  const text = (name: string) => String(formData.get(name) ?? "");
+  return {
+    childName: text("childName"),
+    childBirthYear: text("childBirthYear"),
+    apartment: text("apartment"),
+    guardianName: text("guardianName"),
+    guardianEmail: text("guardianEmail"),
+    guardianPhone: text("guardianPhone"),
+  };
 }
 
 export async function submitRegistrationAction(
@@ -110,7 +149,12 @@ export async function submitRegistrationAction(
       const key = issue.path[0];
       if (typeof key === "string" && !fieldErrors[key]) fieldErrors[key] = issue.message;
     }
-    return { status: "error", message: "Some answers need a small fix.", fieldErrors };
+    return {
+      status: "error",
+      message: "Some answers need a small fix.",
+      fieldErrors,
+      values: readSubmission(formData),
+    };
   }
 
   // Honeypot. Answer exactly as if it had worked, so a bot learns nothing.
@@ -128,6 +172,7 @@ export async function submitRegistrationAction(
         status: "error",
         message: "A parent or guardian needs to agree before we can create an account.",
         fieldErrors: { consent: "Please tick both boxes to continue." },
+        values: readSubmission(formData),
       };
     }
   }
@@ -147,6 +192,7 @@ export async function submitRegistrationAction(
         status: "error",
         message: "Please agree to us storing the photo, or remove it and pick an avatar instead.",
         fieldErrors: { photo: "We need your permission before we can keep a photo of your child." },
+        values: readSubmission(formData),
       };
     }
 
@@ -167,6 +213,7 @@ export async function submitRegistrationAction(
           status: "error",
           message: error.friendlyMessage,
           fieldErrors: { photo: error.fieldErrors?.file ?? "That picture could not be used." },
+          values: readSubmission(formData),
         };
       }
       console.error("Child photo upload failed:", error);
@@ -174,6 +221,7 @@ export async function submitRegistrationAction(
         status: "error",
         message: "We could not save that picture. You can carry on with an avatar instead.",
         fieldErrors: { photo: "That picture could not be saved." },
+        values: readSubmission(formData),
       };
     }
   }
@@ -195,18 +243,21 @@ export async function submitRegistrationAction(
 
     return { status: "success" };
   } catch (error) {
+    const values = readSubmission(formData);
+
     if (error instanceof ValidationError) {
       return {
         status: "error",
         message: error.friendlyMessage,
         fieldErrors: error.fieldErrors,
+        values,
       };
     }
     if (isAppError(error)) {
-      return { status: "error", message: error.friendlyMessage };
+      return { status: "error", message: error.friendlyMessage, values };
     }
     console.error("Registration submission failed:", error);
-    return { status: "error", message: toFriendlyMessage(error) };
+    return { status: "error", message: toFriendlyMessage(error), values };
   }
 }
 

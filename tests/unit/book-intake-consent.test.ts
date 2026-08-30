@@ -35,9 +35,13 @@ describe("the do-not-publish tick box", () => {
      * The default is to say thank you by name. Asking every family to opt in
      * would leave the thank-you page empty, so this is the opt out -- and
      * `defaultChecked` must fall back to false rather than to anything derived
-     * from a setting that could quietly flip it.
+     * from a setting that could quietly flip it. A refused form restores the
+     * tick as the librarian left it, which is the family's own answer being
+     * carried across a failure -- but the last fallback is still false.
      */
-    expect(FORM).toContain("defaultChecked={values?.donorAnonymous ?? false}");
+    expect(FORM).toContain(
+      "defaultChecked={kept?.donorAnonymous ?? values?.donorAnonymous ?? false}",
+    );
   });
 
   it("says out loud what happens when it is left alone", () => {

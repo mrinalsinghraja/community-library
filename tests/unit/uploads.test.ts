@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { describeSize } from "@/lib/file-size";
 import { ValidationError } from "@/server/lib/errors";
 import {
   MEDIA_MAY_REVALIDATE,
@@ -124,7 +125,13 @@ describe("upload validation", () => {
       friendlyFileError(() =>
         validateUpload({ bytes: oversized, purpose: UPLOAD_PURPOSES.CHILD_PHOTO }),
       ),
-    ).toMatch(/under 5 MB/i);
+      // Read from the rule, not restated: the number moved once already, when
+      // it turned out a 5 MB promise could not fit through a 1 MB pipe.
+    ).toBe(
+      `That picture is a bit big. Please choose one under ${describeSize(
+        UPLOAD_RULES[UPLOAD_PURPOSES.CHILD_PHOTO].maxBytes,
+      )}.`,
+    );
   });
 
   it("refuses SVG for anything a parent can upload", () => {
@@ -354,7 +361,10 @@ describe("how big a book cover has to be", () => {
       join(process.cwd(), "src", "lib", "image-downscale.ts"),
       "utf8",
     );
-    expect(downscale).toContain("COVER_MIN_BYTES");
-    expect(downscale).toMatch(/blob\.size < COVER_MIN_BYTES && file\.size >= COVER_MIN_BYTES/);
+    // The floor is now an argument, because the same function also shrinks a
+    // child's photograph, which has none. A cover still gets the cover floor by
+    // default -- that default is the guarantee.
+    expect(downscale).toContain("minBytes = COVER_MIN_BYTES");
+    expect(downscale).toMatch(/minBytes > 0 && blob\.size < minBytes && file\.size >= minBytes/);
   });
 });

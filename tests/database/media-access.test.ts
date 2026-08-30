@@ -1,5 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { CHILD_PHOTO_MAX_BYTES } from "@/lib/child-photo";
+import { describeSize } from "@/lib/file-size";
 import { __setSessionHandle } from "../stubs/auth-stub";
 import { createSession } from "@/server/auth/session-store";
 import { AUDIT_ACTIONS } from "@/server/lib/audit";
@@ -194,8 +196,9 @@ describe("uploads", () => {
       bytes: pngBytes(6 * 1024 * 1024),
     }).catch((thrown) => thrown);
 
-    // The parent is told the limit in plain words, not "validation failed".
-    expect(error.fieldErrors.file).toMatch(/under 5 MB/i);
+    // The parent is told the limit in plain words, not "validation failed" --
+    // and the number comes from the rule, so it cannot drift away from it.
+    expect(error.fieldErrors.file).toContain(`under ${describeSize(CHILD_PHOTO_MAX_BYTES)}`);
     expect(storageDriver.objects.size).toBe(0);
   });
 

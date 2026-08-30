@@ -46,10 +46,41 @@ import {
  * submit.
  */
 
+/**
+ * What the librarian typed, handed back so a refused form can be refilled.
+ *
+ * React resets an uncontrolled form once its action returns, so a form whose
+ * `defaultValue`s came only from the database comes back blank after any
+ * refusal — ten fields retyped because of one wrong picture. These are the
+ * defaults the form falls back to instead.
+ *
+ * Strings exactly as submitted, never re-validated on the way out: the point is
+ * to show somebody what they wrote, including the part that was wrong, so they
+ * can see it and fix it. They go back to the browser that sent them and nowhere
+ * else, and React escapes them on the way into the attribute.
+ *
+ * The cover picture is not here. It never left the browser in a form the server
+ * could hand back, so the form re-attaches the librarian's own File itself —
+ * see `CoverField`.
+ */
+export interface BookFormSubmission {
+  title: string;
+  author: string;
+  categoryId: string;
+  ageGroup: string;
+  condition: string;
+  status: string;
+  donorName: string;
+  donorFlat: string;
+  donatedOn: string;
+  donorAnonymous: boolean;
+}
+
 export interface BookFormState {
   status: "idle" | "success" | "error";
   message?: string;
   fieldErrors?: Record<string, string>;
+  values?: BookFormSubmission;
 }
 
 /** Pulls the book fields out of a FormData. Presentation in, domain out. */
@@ -107,15 +138,41 @@ async function storeCoverIfPresent(
   return stored.mediaId;
 }
 
-function toErrorState(error: unknown): BookFormState {
+/** Reads the form back out for redisplay. See `BookFormSubmission`. */
+function readSubmission(formData: FormData): BookFormSubmission {
+  const text = (name: string) => String(formData.get(name) ?? "");
+
+  return {
+    title: text("title"),
+    author: text("author"),
+    categoryId: text("categoryId"),
+    ageGroup: text("ageGroup"),
+    condition: text("condition"),
+    status: text("status"),
+    donorName: text("donorName"),
+    donorFlat: text("donorFlat"),
+    donatedOn: text("donatedOn"),
+    donorAnonymous: formData.get("donorAnonymous") !== null,
+  };
+}
+
+/**
+ * A refusal, and — for the two actions that render the book form — the answers
+ * that were refused. The buttons that archive or delete a book have nothing to
+ * refill, so they pass no form.
+ */
+function toErrorState(error: unknown, formData?: FormData): BookFormState {
+  const values = formData ? readSubmission(formData) : undefined;
+
   if (error instanceof ValidationError) {
     return {
       status: "error",
       message: "Some answers need a small fix.",
       fieldErrors: error.fieldErrors,
+      values,
     };
   }
-  return { status: "error", message: toFriendlyMessage(error) };
+  return { status: "error", message: toFriendlyMessage(error), values };
 }
 
 export async function createBookAction(
@@ -141,7 +198,7 @@ export async function createBookAction(
     // The cover was stored before the failure. Purge it now rather than leaving
     // a picture nobody asked for sitting in storage until the nightly sweep.
     if (coverMediaId) await purgeScheduledMedia(coverMediaId).catch(() => undefined);
-    return toErrorState(error);
+    return toErrorState(error, formData);
   }
 
   redirect(destination);
@@ -167,7 +224,7 @@ export async function updateBookAction(
     destination = bookListWithNotice(readReturnTo(formData), "saved", saved.copyCode);
   } catch (error) {
     if (coverMediaId) await purgeScheduledMedia(coverMediaId).catch(() => undefined);
-    return toErrorState(error);
+    return toErrorState(error, formData);
   }
 
   redirect(destination);

@@ -30,6 +30,12 @@ import { COVER_MIN_BYTES } from "@/lib/cover-image";
  *
  * Every failure path returns the original file. A librarian with a book in
  * their hand and a queue behind them must never be stopped by an image codec.
+ *
+ * Two callers, with different needs, which is why the edge and the floor are
+ * arguments: a book cover, where the floor exists so a thumbnail never becomes
+ * the picture on the shelf; and a child's photograph on the registration form,
+ * where there is no floor and the size that matters is the one the transport
+ * will carry — see `src/lib/child-photo.ts`.
  */
 
 /**
@@ -56,6 +62,20 @@ export interface DownscaleResult {
   changed: boolean;
 }
 
+export interface DownscaleOptions {
+  /** Longest edge to keep. Defaults to what a book cover needs. */
+  maxEdge?: number;
+  /**
+   * A floor the result must not fall below, if the original cleared it.
+   *
+   * Only a cover has one — the rule exists so this never hands back a file the
+   * server would refuse as "too small to read". A child's photograph has no
+   * floor at all, so pass 0 for one; a portrait shrunk to 40 KB is a perfectly
+   * good round avatar.
+   */
+  minBytes?: number;
+}
+
 /**
  * Returns a smaller version of `file`, or `file` itself.
  *
@@ -65,7 +85,7 @@ export interface DownscaleResult {
  */
 export async function downscaleImage(
   file: File,
-  maxEdge: number = MAX_COVER_EDGE,
+  { maxEdge = MAX_COVER_EDGE, minBytes = COVER_MIN_BYTES }: DownscaleOptions = {},
 ): Promise<DownscaleResult> {
   const unchanged: DownscaleResult = { file, changed: false };
 
@@ -125,9 +145,9 @@ export async function downscaleImage(
      * perfectly good one. Downscaling exists to save bytes; when saving them
      * would cost the upload, it does nothing instead.
      */
-    if (blob.size < COVER_MIN_BYTES && file.size >= COVER_MIN_BYTES) return unchanged;
+    if (minBytes > 0 && blob.size < minBytes && file.size >= minBytes) return unchanged;
 
-    const name = file.name.replace(/\.[^.]+$/, "") || "cover";
+    const name = file.name.replace(/\.[^.]+$/, "") || "picture";
     return {
       file: new File([blob], `${name}.jpg`, { type: "image/jpeg", lastModified: Date.now() }),
       changed: true,

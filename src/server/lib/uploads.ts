@@ -1,6 +1,8 @@
 import "server-only";
 
-import { COVER_MAX_BYTES, COVER_MIN_BYTES, describeSize } from "@/lib/cover-image";
+import { CHILD_PHOTO_MAX_BYTES } from "@/lib/child-photo";
+import { COVER_MAX_BYTES, COVER_MIN_BYTES } from "@/lib/cover-image";
+import { describeSize } from "@/lib/file-size";
 
 import { generateToken, sha256Bytes } from "@/server/lib/crypto";
 import { ValidationError } from "@/server/lib/errors";
@@ -47,7 +49,9 @@ export interface UploadRules {
 
 export const UPLOAD_RULES: Record<UploadPurpose, UploadRules> = {
   [UPLOAD_PURPOSES.CHILD_PHOTO]: {
-    maxBytes: 5 * 1024 * 1024,
+    // Set in @/lib/child-photo, which explains why it has to stay below the
+    // Server Action body limit rather than above it.
+    maxBytes: CHILD_PHOTO_MAX_BYTES,
     visibility: "PRIVATE",
     allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   },

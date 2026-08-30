@@ -74,6 +74,28 @@ export function JoinForm({
 
   const fieldError = (key: string) => state.fieldErrors?.[key];
 
+  /*
+   * What each field starts as after a refusal.
+   *
+   * React clears an uncontrolled form once its action returns, so without this
+   * a parent who mistyped one character of an email retypes all six fields —
+   * on a phone, with a child next to them.
+   *
+   * The consent boxes below are deliberately left unticked. Everything here is
+   * a fact being restated; a tick is a permission being given, and it is worth
+   * giving again with the wording in front of you.
+   */
+  const kept = state.values;
+
+  /*
+   * React re-applies a changed `defaultValue` to a text input, but not to a
+   * `<select>` — it only tracks a select's value when the select is controlled.
+   * Remounting is what makes a dropdown honour a new default, so the key
+   * changes with the answer being restored. Cheap, and local to the one
+   * element that needs it.
+   */
+  const keyFor = (value: string | undefined) => value ?? "";
+
   return (
     <form action={formAction} className="flex flex-col gap-8" noValidate>
       {state.status === "error" && state.message ? (
@@ -94,6 +116,7 @@ export function JoinForm({
             <TextInput
               id="childName"
               name="childName"
+              defaultValue={kept?.childName}
               autoComplete="off"
               required
               invalid={Boolean(fieldError("childName"))}
@@ -118,10 +141,11 @@ export function JoinForm({
             required
           >
             <Select
+              key={`childBirthYear-${keyFor(kept?.childBirthYear)}`}
               id="childBirthYear"
               name="childBirthYear"
               required
-              defaultValue=""
+              defaultValue={kept?.childBirthYear ?? ""}
               invalid={Boolean(fieldError("childBirthYear"))}
             >
               <option value="" disabled>
@@ -150,6 +174,7 @@ export function JoinForm({
             <TextInput
               id="apartment"
               name="apartment"
+              defaultValue={kept?.apartment}
               autoComplete="off"
               placeholder="P-15"
               maxLength={APARTMENT_MAX_LENGTH}
@@ -191,6 +216,7 @@ export function JoinForm({
             <TextInput
               id="guardianName"
               name="guardianName"
+              defaultValue={kept?.guardianName}
               autoComplete="name"
               required
               invalid={Boolean(fieldError("guardianName"))}
@@ -201,6 +227,7 @@ export function JoinForm({
             <TextInput
               id="guardianEmail"
               name="guardianEmail"
+              defaultValue={kept?.guardianEmail}
               type="email"
               autoComplete="email"
               autoCapitalize="none"
@@ -213,6 +240,7 @@ export function JoinForm({
             <TextInput
               id="guardianPhone"
               name="guardianPhone"
+              defaultValue={kept?.guardianPhone}
               type="tel"
               autoComplete="tel"
               required

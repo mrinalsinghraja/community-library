@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useId, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Field, Select, TextInput } from "@/components/ui/field";
 import { Callout } from "@/components/ui/states";
-import { COVER_MAX_BYTES, COVER_MIN_BYTES, describeSize } from "@/lib/cover-image";
+import { COVER_MAX_BYTES, COVER_MIN_BYTES } from "@/lib/cover-image";
+import { describeSize } from "@/lib/file-size";
 import { downscaleImage, formatBytes } from "@/lib/image-downscale";
 import { AGE_GROUPS, CATALOGUE_LIMITS, CONDITIONS, SELECTABLE_STATUSES, statusDefinition } from "@/lib/catalogue";
 import {
@@ -36,6 +37,24 @@ import { Icon } from "@/components/ui/icon";
  */
 
 const initialState: BookFormState = { status: "idle" };
+
+/**
+ * The fields that come back filled in after a refusal.
+ *
+ * Every text and dropdown answer on the form. Not the cover picture, which a
+ * browser will not let a page restore into a file input — that one is put back
+ * by hand, from a file the picker kept.
+ */
+type RefillableField =
+  | "title"
+  | "author"
+  | "categoryId"
+  | "ageGroup"
+  | "condition"
+  | "status"
+  | "donorName"
+  | "donorFlat"
+  | "donatedOn";
 
 export interface BookFormCategory {
   id: string;
@@ -89,6 +108,26 @@ export function BookForm({
   const field = (name: string) => `${ids}-${name}`;
   const errors = state.fieldErrors ?? {};
 
+  /*
+   * What each field starts as.
+   *
+   * React clears an uncontrolled form once its action returns, so after a
+   * refusal these are what it clears *to*. `state.values` is what the librarian
+   * just typed and `values` is what the database holds; the typed answers win,
+   * because a refused form should come back the way it was left rather than the
+   * way it started.
+   */
+  const kept = state.values;
+  const startsAs = (key: RefillableField): string | undefined => kept?.[key] ?? values?.[key];
+
+  /*
+   * React re-applies a changed `defaultValue` to a text input, but not to a
+   * `<select>` — it only tracks a select's value when the select is controlled.
+   * Remounting is what makes a dropdown honour a new default, so each one is
+   * keyed by the answer being restored.
+   */
+  const selectKey = (name: RefillableField) => `${name}-${startsAs(name) ?? ""}`;
+
   return (
     /*
      * No encType here. React sets multipart itself for a form whose action is a
@@ -123,7 +162,7 @@ export function BookForm({
         <TextInput
           id={field("title")}
           name="title"
-          defaultValue={values?.title}
+          defaultValue={startsAs("title")}
           maxLength={CATALOGUE_LIMITS.titleMax}
           autoComplete="off"
           required
@@ -136,7 +175,7 @@ export function BookForm({
         <TextInput
           id={field("author")}
           name="author"
-          defaultValue={values?.author}
+          defaultValue={startsAs("author")}
           maxLength={CATALOGUE_LIMITS.authorMax}
           autoComplete="off"
           required
@@ -152,9 +191,10 @@ export function BookForm({
         hint="Where it lives in the room."
       >
         <Select
+          key={selectKey("categoryId")}
           id={field("categoryId")}
           name="categoryId"
-          defaultValue={values?.categoryId ?? ""}
+          defaultValue={startsAs("categoryId") ?? ""}
           required
           invalid={Boolean(errors.categoryId)}
         >
@@ -180,9 +220,10 @@ export function BookForm({
         hint="A guide, not a rule — anyone may borrow anything."
       >
         <Select
+          key={selectKey("ageGroup")}
           id={field("ageGroup")}
           name="ageGroup"
-          defaultValue={values?.ageGroup ?? ""}
+          defaultValue={startsAs("ageGroup") ?? ""}
           required
           invalid={Boolean(errors.ageGroup)}
         >
@@ -216,7 +257,7 @@ export function BookForm({
           <TextInput
             id={field("donorName")}
             name="donorName"
-            defaultValue={values?.donorName}
+            defaultValue={startsAs("donorName")}
             maxLength={CATALOGUE_LIMITS.donorNameMax}
             autoComplete="off"
             invalid={Boolean(errors.donorName)}
@@ -227,7 +268,7 @@ export function BookForm({
           <TextInput
             id={field("donorFlat")}
             name="donorFlat"
-            defaultValue={values?.donorFlat}
+            defaultValue={startsAs("donorFlat")}
             maxLength={CATALOGUE_LIMITS.donorFlatMax}
             autoComplete="off"
             invalid={Boolean(errors.donorFlat)}
@@ -245,7 +286,7 @@ export function BookForm({
             name="donatedOn"
             type="date"
             max={today}
-            defaultValue={values?.donatedOn || today}
+            defaultValue={startsAs("donatedOn") || today}
             invalid={Boolean(errors.donatedOn)}
           />
         </Field>
@@ -267,7 +308,7 @@ export function BookForm({
               id={field("donorAnonymous")}
               name="donorAnonymous"
               value="yes"
-              defaultChecked={values?.donorAnonymous ?? false}
+              defaultChecked={kept?.donorAnonymous ?? values?.donorAnonymous ?? false}
               className="mt-1 h-6 w-6 shrink-0 accent-[var(--color-primary)]"
             />
             <span>Do not publish this name</span>
@@ -288,9 +329,10 @@ export function BookForm({
         hint={CONDITIONS.map((condition) => `${condition.label} — ${condition.hint}`).join("  ")}
       >
         <Select
+          key={selectKey("condition")}
           id={field("condition")}
           name="condition"
-          defaultValue={values?.condition ?? "GOOD"}
+          defaultValue={startsAs("condition") || "GOOD"}
           required
           invalid={Boolean(errors.condition)}
         >
@@ -336,9 +378,10 @@ export function BookForm({
           hint="Lending and returning happen at the desk. This records where the book is when it is not out."
         >
           <Select
+            key={selectKey("status")}
             id={field("status")}
             name="status"
-            defaultValue={values?.status ?? "AVAILABLE"}
+            defaultValue={startsAs("status") || "AVAILABLE"}
             required
             invalid={Boolean(errors.status)}
           >
@@ -414,9 +457,39 @@ function CoverField({
   hasCover: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  /**
+   * The picture the librarian chose, kept so it can be put back.
+   *
+   * React empties every uncontrolled field — a file input included — once the
+   * form's action returns. This component's own state survives that, so without
+   * this the thumbnail would still be sitting there showing a cover that is no
+   * longer attached to anything, and the second save would quietly store no
+   * picture. Re-attaching is what keeps what the librarian sees and what the
+   * form carries in agreement.
+   */
+  const chosenFile = useRef<File | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   const [note, setNote] = useState<CoverNote | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  /*
+   * Runs after every render, and does nothing on almost all of them. It matters
+   * on exactly one: the render after a refused save, where the input has been
+   * emptied underneath a thumbnail that is still on screen.
+   */
+  useEffect(() => {
+    const input = inputRef.current;
+    const file = chosenFile.current;
+    // A browser with no DataTransfer has nowhere to put the file back, and
+    // behaves as it did before this existed: the librarian chooses the picture
+    // again. Every browser released since 2016 has one.
+    if (!input || !file || input.files?.length) return;
+    if (typeof DataTransfer !== "function") return;
+
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+  });
 
   async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -427,6 +500,7 @@ function CoverField({
     });
 
     if (!file) {
+      chosenFile.current = null;
       setChosen(null);
       setNote(null);
       return;
@@ -449,6 +523,7 @@ function CoverField({
       inputRef.current.files = transfer.files;
     }
 
+    chosenFile.current = prepared;
     setPreviewUrl(URL.createObjectURL(prepared));
 
     /*
