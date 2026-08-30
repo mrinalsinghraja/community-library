@@ -3,7 +3,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { CHILD_PHOTO_MAX_BYTES, CHILD_PHOTO_MIN_BYTES } from "@/lib/child-photo";
+import { CHILD_PHOTO_MAX_BYTES } from "@/lib/child-photo";
+import { COVER_MIN_BYTES } from "@/lib/cover-image";
 import { describeSize } from "@/lib/file-size";
 import { ValidationError } from "@/server/lib/errors";
 import {
@@ -40,12 +41,12 @@ function technicalError(run: () => unknown): string {
 /**
  * Minimal byte sequences with the right magic numbers.
  *
- * The default size clears the largest floor any purpose sets, because these
- * fixtures exist to exercise type sniffing and metadata stripping — a test of
- * those failing on a size rule tells nobody anything. Tests that are about size
- * pass their own.
+ * The default size clears the only floor any purpose still sets — the book
+ * cover's — because these fixtures exist to exercise type sniffing and metadata
+ * stripping, and a test of those failing on a size rule tells nobody anything.
+ * Tests that are about size pass their own.
  */
-const BIG_ENOUGH = CHILD_PHOTO_MIN_BYTES + 1;
+const BIG_ENOUGH = COVER_MIN_BYTES + 1;
 
 function jpeg(sizeBytes = BIG_ENOUGH): Uint8Array {
   const bytes = new Uint8Array(sizeBytes);
@@ -359,23 +360,22 @@ describe("how big a book cover has to be", () => {
     expect(result.mimeType).toBe("image/jpeg");
   });
 
-  it("gives a child's photograph a band of its own", () => {
+  it("caps a child's photograph but sets no floor on what arrives", () => {
     /*
-     * This used to say a child's photograph had no floor at all: a parent
-     * photographs a child on whatever phone they have, and the rule that exists
-     * for jackets is not a rule about families. The library asked for a band —
-     * 100 KB to 500 KB — so a card picture is neither soft nor a download every
-     * reader pays for, and the picker now shrinks a phone photograph into the
-     * middle of it before it is ever sent.
+     * The library asked for 100 KB to 500 KB. The ceiling lives here, where the
+     * bytes that actually arrive are seen. The floor cannot: what arrives has
+     * been re-encoded by the picker, and a good photograph of a plain subject
+     * legitimately comes out at 74 KB -- refusing that here would mean refusing
+     * a file this application produced, and lifting it over the line costs 219
+     * KB for no visible difference. The floor is checked in the picker against
+     * the file the parent chose. See @/lib/child-photo.
      */
-    expect(UPLOAD_RULES.child_photo.minBytes).toBe(CHILD_PHOTO_MIN_BYTES);
     expect(UPLOAD_RULES.child_photo.maxBytes).toBe(CHILD_PHOTO_MAX_BYTES);
+    expect(UPLOAD_RULES.child_photo.minBytes).toBeUndefined();
 
-    const result = validateUpload({ bytes: jpeg(240 * 1024), purpose: "child_photo" });
-    expect(result.mimeType).toBe("image/jpeg");
+    const shrunk = validateUpload({ bytes: jpeg(74 * 1024), purpose: "child_photo" });
+    expect(shrunk.mimeType).toBe("image/jpeg");
 
-    expect(friendlyFileError(() => validateUpload({ bytes: jpeg(20 * 1024), purpose: "child_photo" })))
-      .toContain(`over ${describeSize(CHILD_PHOTO_MIN_BYTES)}`);
     expect(friendlyFileError(() => validateUpload({ bytes: jpeg(900 * 1024), purpose: "child_photo" })))
       .toContain(`under ${describeSize(CHILD_PHOTO_MAX_BYTES)}`);
   });

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { CHILD_PHOTO_MAX_BYTES, CHILD_PHOTO_MIN_BYTES } from "@/lib/child-photo";
+import { CHILD_PHOTO_MAX_BYTES } from "@/lib/child-photo";
 import { COVER_MAX_BYTES, COVER_MIN_BYTES } from "@/lib/cover-image";
 import { describeSize } from "@/lib/file-size";
 
@@ -49,11 +49,21 @@ export interface UploadRules {
 
 export const UPLOAD_RULES: Record<UploadPurpose, UploadRules> = {
   [UPLOAD_PURPOSES.CHILD_PHOTO]: {
-    // Both ends live in @/lib/child-photo, which explains the band and why it
-    // has to stay well below the Server Action body limit rather than above it.
-    // The picker reads the same two numbers, so it can never offer a size this
-    // would then refuse.
-    minBytes: CHILD_PHOTO_MIN_BYTES,
+    /*
+     * No floor, and that is a decision rather than an omission.
+     *
+     * The library asked for 100 KB to 500 KB. The ceiling belongs here: it is
+     * about what is stored and what every reader downloads, and this is the
+     * only place that sees the bytes which actually arrive.
+     *
+     * The floor cannot live here. What arrives has been re-encoded by the
+     * picker, and a good photograph of a plain subject legitimately comes out
+     * at 74 KB — refusing it here would mean refusing a file this application
+     * produced, and the only way to lift it over the line is to spend bytes the
+     * ceiling exists to save. So the floor is checked in the picker against the
+     * file the parent chose, which is the thing it was ever really about. See
+     * @/lib/child-photo for the measurements.
+     */
     maxBytes: CHILD_PHOTO_MAX_BYTES,
     visibility: "PRIVATE",
     allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],

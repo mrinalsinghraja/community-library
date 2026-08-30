@@ -60,48 +60,77 @@ interface PhotoNote {
 }
 
 /**
- * The sizes to try, largest first, looking for one inside the band.
+ * The sizes to try, biggest result first.
  *
- * A single pass is not enough. An ordinary phone portrait re-encoded at 1200px
- * lands comfortably under 500 KB, but a dense one — a busy background, a lot of
- * fine texture — does not, and sending that parent away to another website for
- * a picture this code could have fitted itself would be a poor way to treat
- * them. So it steps down and tries again, and only gives up when a picture is
- * genuinely beyond what a browser re-encode can do.
+ * Ordered so each step produces a smaller file than the one before it, which is
+ * what lets the search below be a simple walk: take the first result that fits
+ * under the ceiling, and it is by construction the *largest* one that fits —
+ * so it is also the one most likely to clear the floor, and the one that has
+ * had the least quality taken out of it.
+ *
+ * The direction is the whole point, and it is the fix for a real failure. A
+ * ladder that started at 1200px handed back 90 KB for a 6.6 MB photograph of a
+ * plain subject: under the floor, and the parent was then told their picture
+ * was too small about a file this code had just produced from a perfectly good
+ * one. There was no way back up. Starting high cannot go wrong that way.
  *
  * Each step re-encodes the ORIGINAL, never the previous result: re-compressing
  * a JPEG that has already been compressed adds its own damage on top, and the
  * child in the picture is the one who pays for that.
  *
- * The floor is never passed to the shrinker. Handing it 100 KB would make it
- * return the original whenever its own result came out under — so a 4 MB
- * photograph of a plain wall would stay 4 MB and then be refused for being too
- * big, which is the opposite of helping.
+ * The floor is never passed to the shrinker either. Handing it 100 KB would
+ * make it return the original whenever its own result came out under — so a
+ * 6 MB photograph would stay 6 MB and be refused for being too big, which is
+ * the opposite of helping.
  */
 const SHRINK_LADDER: readonly DownscaleOptions[] = [
-  { maxEdge: MAX_PHOTO_EDGE, quality: 0.82, minBytes: 0 },
-  { maxEdge: 900, quality: 0.78, minBytes: 0 },
-  { maxEdge: 700, quality: 0.72, minBytes: 0 },
+  { maxEdge: MAX_PHOTO_EDGE, quality: 0.92, minBytes: 0 },
+  { maxEdge: 1500, quality: 0.86, minBytes: 0 },
+  { maxEdge: 1100, quality: 0.8, minBytes: 0 },
+  { maxEdge: 800, quality: 0.74, minBytes: 0 },
 ];
 
 /**
- * Shrinks a picture towards the band, and says what it settled on.
+ * The size of a picture, and what shrinking did to it.
  *
- * Stops at the first attempt that lands inside, so an ordinary photograph costs
- * one re-encode. If nothing fits, it hands back the closest it managed and lets
- * the picker say so plainly.
+ * Both numbers whenever they differ. A parent who chose a 6 MB photograph and
+ * is told "90 KB" has been told something that reads as plainly wrong, and has
+ * no way to know whether the page looked at the file they meant.
+ */
+function sizeStory(original: File, prepared: File): string {
+  if (prepared.size === original.size) return describeSize(prepared.size);
+  return `${describeSize(prepared.size)}, made smaller on your phone from ${describeSize(original.size)}`;
+}
+
+/**
+ * Shrinks a picture into the band, and says what it settled on.
+ *
+ * Walks down until something fits under the ceiling and stops there, so an
+ * ordinary photograph costs one or two re-encodes rather than four. What comes
+ * back may still be outside the band — a picture that cannot be squeezed under
+ * the ceiling at all, or one already so small that nothing was worth doing to
+ * it — and the picker says so rather than pretending otherwise.
  */
 async function shrinkToBand(file: File): Promise<{ file: File; changed: boolean }> {
+  /*
+   * A file already under the ceiling is left completely alone.
+   *
+   * Re-encoding it could only make it smaller, and smaller is the direction the
+   * floor lives in — there is nothing to gain and a rejection to lose. If it is
+   * also under the floor then it was a small picture when it arrived, which is
+   * exactly the case the floor is for, and the picker will say so.
+   */
+  if (file.size <= CHILD_PHOTO_MAX_BYTES) return { file, changed: false };
+
   let best: { file: File; changed: boolean } = { file, changed: false };
 
   for (const step of SHRINK_LADDER) {
     const attempt = await downscaleImage(file, step);
     if (attempt.file.size < best.file.size) best = attempt;
 
-    if (attempt.file.size <= CHILD_PHOTO_MAX_BYTES) {
-      // Small enough. Anything further down the ladder would only be softer.
-      return attempt.file.size >= CHILD_PHOTO_MIN_BYTES ? attempt : best;
-    }
+    // The first one that fits is the largest one that fits. Going further down
+    // would only take out quality this picture does not need to lose.
+    if (attempt.file.size <= CHILD_PHOTO_MAX_BYTES) return attempt;
   }
 
   return best;
@@ -131,7 +160,6 @@ export function PhotoPicker({
    */
   const chosenFile = useRef<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
   const [note, setNote] = useState<PhotoNote | null>(null);
   const inputId = useId();
 
@@ -143,18 +171,41 @@ export function PhotoPicker({
     if (!file) {
       chosenFile.current = null;
       setPreviewUrl(null);
-      setFileName(null);
       setNote(null);
       onPhotoChange(false);
       return;
     }
 
-    // Said before the shrinking, not after. Preparing a phone photograph takes
-    // a second or two, and a picker that shows nothing in that gap is a picker
-    // a parent taps twice.
-    setNote({ text: "Checking the picture…", problem: false });
+    /*
+     * Named and measured before anything is done to it. Preparing a phone
+     * photograph takes a second or two, and a picker that shows nothing in that
+     * gap is a picker a parent taps twice — but more than that, a parent who
+     * picked the wrong file from a camera roll of near-identical thumbnails
+     * should find that out from the name, here, and not from the librarian.
+     */
+    /*
+     * The floor is judged here, on the file as chosen, before anything is done
+     * to it — see @/lib/child-photo for why it cannot be judged on the result.
+     * It is also the fastest answer this picker can give: a 17 KB thumbnail is
+     * refused without a single re-encode.
+     */
+    if (file.size < CHILD_PHOTO_MIN_BYTES) {
+      clearPhoto();
+      setNote({
+        text:
+          `${file.name} — ${describeSize(file.size)}. ` +
+          `Too small to stay sharp on a library card.`,
+        problem: true,
+      });
+      return;
+    }
 
-    const { file: prepared, changed } = await shrinkToBand(file);
+    setNote({
+      text: `${file.name} — ${describeSize(file.size)}. Checking the picture…`,
+      problem: false,
+    });
+
+    const { file: prepared } = await shrinkToBand(file);
 
     /*
      * Outside the band, the picture is let go of rather than left attached to
@@ -162,15 +213,19 @@ export function PhotoPicker({
      * by carrying on with an avatar — and the sentence says the size, both ends
      * of the rule, and where to fix it.
      */
-    if (prepared.size > CHILD_PHOTO_MAX_BYTES || prepared.size < CHILD_PHOTO_MIN_BYTES) {
-      const tooBig = prepared.size > CHILD_PHOTO_MAX_BYTES;
+    /*
+     * The ceiling, judged on what would actually be sent. Reached only when
+     * every rung of the ladder failed — a picture beyond what a browser
+     * re-encode can do, or a file the browser could not decode at all — which
+     * is the one case where sending a parent to another tool is genuinely the
+     * help available rather than an excuse.
+     */
+    if (prepared.size > CHILD_PHOTO_MAX_BYTES) {
       clearPhoto();
       setNote({
-        text: tooBig
-          ? `That picture is ${describeSize(prepared.size)} — too big for a library card.`
-          : `That picture is only ${describeSize(prepared.size)} — too small to stay sharp on a library card.`,
+        text: `${file.name} — ${sizeStory(file, prepared)}. Too big for a library card.`,
         problem: true,
-        offerTool: tooBig,
+        offerTool: true,
       });
       return;
     }
@@ -189,11 +244,8 @@ export function PhotoPicker({
 
     chosenFile.current = prepared;
     setPreviewUrl(URL.createObjectURL(prepared));
-    setFileName(prepared.name);
     setNote({
-      text: changed
-        ? `Ready — ${describeSize(prepared.size)}, made smaller on your phone.`
-        : `Ready — ${describeSize(prepared.size)}.`,
+      text: `${prepared.name} — ${sizeStory(file, prepared)}. Ready.`,
       problem: false,
     });
     onPhotoChange(true);
@@ -222,7 +274,6 @@ export function PhotoPicker({
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     chosenFile.current = null;
     setPreviewUrl(null);
-    setFileName(null);
     setNote(null);
     // Clearing the input matters: without it the browser would still submit the
     // file the parent just said they did not want.
@@ -348,7 +399,9 @@ export function PhotoPicker({
               className="h-[72px] w-[72px] rounded-full object-cover"
             />
             <div className="min-w-0">
-              <p className="truncate text-base font-bold text-ink">{fileName}</p>
+              {/* The name is in the note above, which is where the size is
+                  too — saying it again here is the same word twice in two
+                  lines. */}
               <button
                 type="button"
                 onClick={clearPhoto}

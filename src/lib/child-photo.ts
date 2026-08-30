@@ -23,20 +23,52 @@
  * two of them are on opposite sides of the network: the picker's own check, the
  * sentence a parent reads, and `validateUpload`, which is the rule that counts.
  */
+
+/**
+ * The floor is judged on the file the parent CHOSE. The ceiling is judged on
+ * the file that is SENT, after the picker has shrunk it.
+ *
+ * That split is not a hedge, it is the only pair of questions that can both be
+ * answered honestly, and it was learned the hard way.
+ *
+ * A byte count is a proxy for detail, and it stops being a proxy for anything
+ * the moment this application picks the encoding. A 6.6 MB photograph of a
+ * plain subject — a wall, a sky, a child against a blurred background —
+ * re-encoded at 2000px and quality 0.92 comes out at 74 KB. It is an excellent
+ * card picture. Measured against a 100 KB floor it is "too small", and the only
+ * way to lift it over the line is to re-encode at quality 0.98, which costs
+ * 219 KB for no difference any eye can see. A floor that can only be satisfied
+ * by wasting storage is a floor working against the reason it was asked for.
+ *
+ * What the floor is genuinely for is the picture that was small before we
+ * touched it: lifted from a chat app, screenshotted, 17 KB and soft at any
+ * size. That is a property of the chosen file, so that is what it is measured
+ * against — and it is measured before any shrinking runs, which also makes it
+ * the fastest answer the picker can give.
+ *
+ * The ceiling has no such problem. It is about what the library stores and what
+ * every reader downloads, so it belongs on the bytes that are actually sent,
+ * and `validateUpload` enforces it on the bytes that actually arrive.
+ */
 export const CHILD_PHOTO_MIN_BYTES = 100 * 1024;
 export const CHILD_PHOTO_MAX_BYTES = 500 * 1024;
 
 /**
- * The longest edge worth keeping for a card picture.
+ * The largest edge a card picture is ever kept at.
  *
- * Chosen against the band above, not in isolation. The photograph is shown as a
- * round avatar — 72px in the picker, largest on the reader's own card — so 800
- * would cover every screen. But a phone portrait re-encoded at 800px commonly
- * lands under 100 KB, and a floor that fires on files this application itself
- * produced is a floor that only ever annoys people. 1200 puts an ordinary phone
- * photograph in the middle of the band, and costs nothing anybody will notice.
+ * Not the size most photographs end up: the picker starts here and steps *down*
+ * until the file fits under the ceiling, so a dense photograph is stored small
+ * and a smooth one is stored large. That direction matters, and it is the fix
+ * for a real failure — a 6.6 MB photograph of a plain subject re-encoded at
+ * 1200px came out at 90 KB, under the floor, and the parent was told their
+ * picture was too small about a file this application had just made from a
+ * perfectly good one. Starting low and never climbing could not recover from
+ * that; starting high and stepping down cannot cause it.
+ *
+ * The picture is drawn as a round avatar, so nothing here is about how it
+ * looks at 2000px. It is about landing inside the band with the least damage.
  */
-export const MAX_PHOTO_EDGE = 1200;
+export const MAX_PHOTO_EDGE = 2000;
 
 /**
  * Where a parent with a picture that is too big can shrink it.
