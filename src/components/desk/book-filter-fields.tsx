@@ -51,7 +51,7 @@ export function BookFilterFields({
           type="search"
           name="q"
           defaultValue={filter.search}
-          placeholder="Title, author or book ID"
+          placeholder="Title, author/publisher or ID"
           className="min-h-10 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-3 text-base"
         />
       </label>

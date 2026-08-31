@@ -53,3 +53,22 @@ describe("the author field names the publisher too", () => {
     expect(REPORTS.match(/header: "Author\/publisher"/g)).toHaveLength(3);
   });
 });
+
+describe("the boxes people search it from", () => {
+  const HOME_SEARCH = read("src", "components", "library", "catalogue-search.tsx");
+  const DESK_FILTER = read("src", "components", "desk", "book-filter-fields.tsx");
+
+  /*
+   * The search matches the same stored line the form asks for, so a box that
+   * offers only "author" is telling somebody holding a publisher's name that
+   * their search will miss -- when it will in fact find it.
+   */
+  it("offers the publisher on the public search", () => {
+    expect(HOME_SEARCH).toContain("Search for a book by title, author or publisher");
+    expect(HOME_SEARCH).toContain('placeholder="A title, an author or a publisher"');
+  });
+
+  it("offers the publisher on the desk filter", () => {
+    expect(DESK_FILTER).toContain('placeholder="Title, author/publisher or ID"');
+  });
+});

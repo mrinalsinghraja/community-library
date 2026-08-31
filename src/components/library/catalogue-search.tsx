@@ -57,7 +57,7 @@ export function CatalogueSearchBand({
             <input
               type="search"
               name="q"
-              placeholder="A title, or who wrote it"
+              placeholder="A title, an author or a publisher"
               className="min-h-14 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-4 text-lg placeholder:text-ink-faint focus:border-accent"
             />
           </label>
