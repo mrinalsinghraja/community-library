@@ -104,7 +104,7 @@ export async function createLibraryFixture(): Promise<Fixture> {
     await db.codeSequence.create({ data: { libraryId: library.id, kind, nextValue: 1 } });
   }
 
-  // The same seven shelves the real seed creates. Every book_title needs one,
+  // The same five shelves the real seed creates. Every book_title needs one,
   // so a fixture without them describes a library that could not exist.
   for (const [index, category] of DEFAULT_CATEGORIES.entries()) {
     await db.bookCategory.create({

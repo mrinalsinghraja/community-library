@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -159,16 +160,27 @@ describe("status", () => {
 });
 
 describe("categories", () => {
-  it("starts a library with exactly the seven agreed shelves", () => {
+  it("starts a library with exactly the five agreed shelves", () => {
     expect(DEFAULT_CATEGORIES.map((category) => category.name)).toEqual([
       "Stories",
       "Comics",
       "Science & Knowledge",
-      "Adventure & Fantasy",
       "Activity & Learning",
-      "Young Readers",
       "Other",
     ]);
+  });
+
+  /*
+   * Retiring a shelf is two edits, and one without the other is the bug:
+   * dropped from the starting list but not retirable leaves the row on every
+   * library that already has it, so the shelf keeps showing up in the filter
+   * with nothing on it and no way to remove it short of SQL.
+   */
+  it("lets the seed remove the two shelves it no longer starts with", () => {
+    const seed = readFileSync(join(process.cwd(), "prisma", "seed", "library.ts"), "utf8");
+    const retirable = seed.slice(seed.indexOf("RETIRABLE_SEED_CATEGORY_SLUGS"));
+    expect(retirable).toContain('"adventure-and-fantasy"');
+    expect(retirable).toContain('"young-readers"');
   });
 
   it("gives every shelf a distinct slug", () => {

@@ -100,13 +100,17 @@ changing the title, author, shelf, age or cover changes every copy.
 
 ## 4. Categories — rows, not an enum
 
-Seven shelves, seeded from `DEFAULT_CATEGORIES` in `src/lib/catalogue.ts`:
+Five shelves, seeded from `DEFAULT_CATEGORIES` in `src/lib/catalogue.ts`:
 
-**Stories · Comics · Science & Knowledge · Adventure & Fantasy ·
-Activity & Learning · Young Readers · Other**
+**Stories · Comics · Science & Knowledge · Activity & Learning · Other**
+
+"Adventure & Fantasy" and "Young Readers" were among the original seven and
+were retired in August 2026, empty: adventure and fantasy is what Stories
+already holds, and "Young Readers" named an age rather than a subject, which
+the reading age beside it already says.
 
 A table (`book_category`) rather than an enum, so an administrator holding
-`category.manage` can add one later without a deploy. Seven, not thirty: a child
+`category.manage` can add one later without a deploy. Five, not thirty: a child
 choosing a shelf and a volunteer filing a book both do better with a list they
 can hold in their head.
 

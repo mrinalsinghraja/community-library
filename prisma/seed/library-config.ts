@@ -141,7 +141,7 @@ export const MANA_JARDIN: LibraryConfigInput = {
     consentVersion: CONSENT_VERSION_VALUE,
   },
   /*
-   * The seven starting shelves, from src/lib/catalogue.ts.
+   * The five starting shelves, from src/lib/catalogue.ts.
    *
    * Not listed here because they are not specific to this community — every new
    * library starts with the same seven, and an administrator adds more from the

@@ -283,16 +283,21 @@ export function isSelectableStatus(value: unknown): value is CopyStatus {
  * administrator can add more without a deploy. This list is the starting point
  * only, and the application always reads the table.
  *
- * Seven, not thirty. A child choosing a shelf, and a volunteer filing a book,
+ * Five, not thirty. A child choosing a shelf, and a volunteer filing a book,
  * both do better with a list they can hold in their head.
+ *
+ * "Adventure & Fantasy" and "Young Readers" were here and are not any more:
+ * a year in, neither had a single book on it. Adventure and fantasy is what
+ * Stories already holds, and "Young Readers" named an age rather than a
+ * subject, which the reading age beside it already says. A shelf nobody files
+ * to is a choice every child has to read past. The rare book that fits
+ * neither of the four goes on Other.
  */
 export const DEFAULT_CATEGORIES: readonly { name: string; slug: string; icon: string }[] = [
   { name: "Stories", slug: "stories", icon: "📖" },
   { name: "Comics", slug: "comics", icon: "💥" },
   { name: "Science & Knowledge", slug: "science-and-knowledge", icon: "🔬" },
-  { name: "Adventure & Fantasy", slug: "adventure-and-fantasy", icon: "🗺️" },
   { name: "Activity & Learning", slug: "activity-and-learning", icon: "🧩" },
-  { name: "Young Readers", slug: "young-readers", icon: "🌱" },
   { name: "Other", slug: "other", icon: "📚" },
 ] as const;
 

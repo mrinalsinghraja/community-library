@@ -232,6 +232,9 @@ const RETIRABLE_SEED_CATEGORY_SLUGS: readonly string[] = [
   "biography",
   "educational",
   "activity-books",
+  // Seeded by Version 1, empty a year later. See DEFAULT_CATEGORIES.
+  "adventure-and-fantasy",
+  "young-readers",
 ];
 
 /** One allocator row per kind of code. Without these, nothing can be catalogued. */
