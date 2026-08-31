@@ -3061,3 +3061,59 @@ two different cards. Both draw the coloured disc and the initial.
 of the file. It says "a coloured initial" now. A small inaccuracy in the one
 paragraph a parent reads about privacy costs them their trust in every other
 claim on the page.
+
+## ADR-068 — The running month put on the board, and the finished one kept beside it
+
+**Status:** accepted · **Date:** 2026-08-31 · **Amends:** ADR-055
+
+ADR-055 shipped one card: five readers of the month *just gone*, and it refused
+the running month explicitly — "a live board would rank children against each
+other in real time and reward refreshing it". The library's owner asked for the
+running month anyway, and for six places rather than five, and for the finished
+month to stay on the page underneath.
+
+### Why the original refusal does not survive its own design
+
+The refusal was written as though the card carried a position. It does not.
+There is no count on it, no numeral, no order but alphabetical — the tally that
+chooses the six is discarded inside the SQL statement that used it, which is
+ADR-055's own central decision and is untouched here. A child refreshing a live
+board learns one thing: whether their name is among six names sorted by letter.
+There is no position to watch move, so there is nothing that refreshing rewards.
+
+What the finished-month-only board cost was visible in a library this size: a
+child who borrowed a book on the 2nd of the month waited five weeks to see
+themselves, by which time the encouragement had nothing left to attach to.
+
+### The decision
+
+**Two boards, both whole calendar months.** The running month is a card a child
+can still join today; the finished month is a settled fact that stops changing.
+Never a rolling thirty days, which would belong to no month a child could name.
+`currentMonthWindow` and `previousMonthWindow` meet exactly — the finished
+window's last millisecond is the instant before the running one begins — and a
+test asserts that, because a gap between them would silently lose a loan.
+
+**The finished card exists because the running one resets.** On the 1st,
+everything a child did in the previous month leaves the top card. Without the
+second card that month is simply gone, which is the opposite of appreciating
+it. This is the part of the request that carries most of the kindness in it.
+
+**Six sockets, and only on the running month.** "It could be you" over a month
+that has ended is an invitation to a door that has closed, so the finished card
+shows the children who were on it and stops. A finished month nobody borrowed
+in says so in a sentence rather than drawing six empty seats, which would read
+as six children who failed to turn up.
+
+**A photograph is readable while it is on either board.** `memberIsOnReadersBoard`
+now asks both windows. This is not a widening of who may be seen: the same six
+places, the same opt-out polarity, the same signed-in-only route, the same
+"query, not a flag" rule from ADR-055 — a face is readable for exactly as long
+as it is on something being shown, and stops the moment it is not. Checking
+only one window would have drawn the second card with a hole in it where one
+child is, which a child reads as being singled out.
+
+**What did not change.** Nothing ranks anybody. The opt-out is still a WITHDRAWN
+`READERS_BOARD` record whose *presence* removes a child. A board still carries a
+first name and nothing else. A child's photograph is still private media, still
+never cacheable, still never public.

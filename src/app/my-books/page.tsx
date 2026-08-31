@@ -20,9 +20,9 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { BORROW_REQUEST_MESSAGES, readerDueSentence, readerLoanBadge } from "@/lib/circulation";
 import { formatInTimezone } from "@/lib/dates";
 import { loanCountdown } from "@/lib/due-countdown";
-import { previousMonthWindow } from "@/lib/readers-board";
+import { currentMonthWindow, previousMonthWindow } from "@/lib/readers-board";
 import { currentNotice } from "@/server/services/announcement-service";
-import { readersOfTheMonth } from "@/server/services/readers-board-service";
+import { readersOfLastMonth, readersOfTheMonth } from "@/server/services/readers-board-service";
 import {
   RECOMMENDATION_MESSAGES,
   canRecommend,
@@ -83,10 +83,18 @@ export default async function MyBooksPage({
   // shelf on purpose: a book they have asked for is not a book they have.
   const asked = await listOwnBorrowRequests();
 
-  // Five children who read a lot last month, in no order. Empty until a month
-  // has finished and guardians have opted in, which is the right starting state.
-  const boardReaders = await readersOfTheMonth();
-  const boardMonth = previousMonthWindow(new Date()).label;
+  // Two boards, in no order either of them: the month being written, and the
+  // one that finished. The running card can be filled on the second of the
+  // month by whoever borrowed on the first, and empties as the month turns
+  // over; the finished card is what stops that reset from erasing a whole
+  // month of somebody's reading.
+  const [boardReaders, lastMonthReaders] = await Promise.all([
+    readersOfTheMonth(),
+    readersOfLastMonth(),
+  ]);
+  const now = new Date();
+  const boardMonth = currentMonthWindow(now).label;
+  const lastBoardMonth = previousMonthWindow(now).label;
 
   // Books brought back inside the last two months that this child has not rated
   // yet. Empty is the normal state and renders nothing at all.
@@ -184,7 +192,24 @@ export default async function MyBooksPage({
             <div id="visit-times" className="scroll-mt-6">
               <VisitTimes week={week} venueName={settings.venueName} />
             </div>
-            <ReadersBoard readers={boardReaders} monthLabel={boardMonth} />
+            <ReadersBoard
+              readers={boardReaders}
+              title="Readers of the month"
+              monthLabel={boardMonth}
+              running
+            />
+            {/*
+              Directly under the running one, because the two are read as a
+              pair: this is who is reading now, and this is who was reading
+              before the board reset. Without the second card a child's month
+              vanishes at midnight on the last day of it.
+            */}
+            <ReadersBoard
+              readers={lastMonthReaders}
+              title="Readers of last month"
+              monthLabel={lastBoardMonth}
+              running={false}
+            />
           </aside>
 
           <div className="flex min-w-0 flex-col xl:col-start-1 xl:row-start-2">

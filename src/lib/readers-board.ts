@@ -1,18 +1,18 @@
 /**
- * The readers' board: five children, celebrated together.
+ * The readers' board: six children, celebrated together, twice.
  *
- * Isomorphic, so the card in the browser and the service on the server agree
+ * Isomorphic, so the cards in the browser and the service on the server agree
  * about how many sockets there are and what an empty one says.
  *
- * **Nothing here ranks anybody.** Five readers are chosen by how much they read
- * last month and then arranged by name, so the board says "these five had a
- * good month" and not "this one beat that one". A library is not a scoreboard,
- * and a spreadsheet of children in finishing order is a thing that gets
- * forwarded. See ADR-055.
+ * **Nothing here ranks anybody.** Six readers are chosen by how much they read
+ * and then arranged by name, so a board says "these six had a good month" and
+ * not "this one beat that one". A library is not a scoreboard, and a
+ * spreadsheet of children in finishing order is a thing that gets forwarded.
+ * See ADR-055.
  */
 
-/** How many sockets the figure has. Five, filled or waiting. */
-export const BOARD_SIZE = 5;
+/** How many sockets a board has. Six, filled or waiting. */
+export const BOARD_SIZE = 6;
 
 /** What one socket holds once somebody is in it. */
 export interface BoardReader {
@@ -42,20 +42,24 @@ export function monogram(firstName: string): string {
   return first ? first.toLocaleUpperCase() : "?";
 }
 
-/**
- * The month the board is about: the one that has just finished.
- *
- * Never the current month. A board that updated live would rank children
- * against each other in real time and invite a child to refresh it, which is
- * the behaviour this feature is most at risk of encouraging. A finished month
- * is a settled fact somebody can be pleased about and then forget.
- */
-export function previousMonthWindow(now: Date): { from: Date; to: Date; label: string } {
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth();
+export interface MonthWindow {
+  from: Date;
+  to: Date;
+  label: string;
+}
 
-  const from = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
-  const to = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0) - 1);
+/**
+ * One whole calendar month, in UTC, with the name a child would call it.
+ *
+ * UTC rather than the library's own timezone, which is the boundary the rest of
+ * this feature has always used: it means a board turns over at half past five
+ * on the morning of the first, and the alternative — a month that starts at a
+ * different instant for the query than for the label — is a worse bug than a
+ * few hours of lag on one morning a month.
+ */
+function monthWindow(year: number, month: number): MonthWindow {
+  const from = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+  const to = new Date(Date.UTC(year, month + 1, 1, 0, 0, 0, 0) - 1);
 
   const label = from.toLocaleDateString("en-GB", {
     month: "long",
@@ -64,4 +68,36 @@ export function previousMonthWindow(now: Date): { from: Date; to: Date; label: s
   });
 
   return { from, to, label };
+}
+
+/**
+ * The month happening now — the board that is still being written.
+ *
+ * This used to be refused outright, on the reasoning that a live board ranks
+ * children against each other in real time and rewards refreshing it. The
+ * library's owner asked for it anyway, and the reasoning does not survive
+ * contact with what this card actually shows: there is no count on it, no
+ * order, and no numeral, so a child refreshing it learns only whether they are
+ * among six names sorted alphabetically. There is no position to watch move.
+ *
+ * What a running month buys is the thing the finished-month board could not do
+ * in a library this small — a child who borrows a book on the second of the
+ * month sees themselves that afternoon rather than five weeks later. Early in
+ * the month the six are chosen from very little; by the end they are chosen
+ * from a month. That is understood, and the card says the month is not over.
+ */
+export function currentMonthWindow(now: Date): MonthWindow {
+  return monthWindow(now.getUTCFullYear(), now.getUTCMonth());
+}
+
+/**
+ * The month that has just finished — a settled fact, kept where it can be seen.
+ *
+ * The second board exists because the first one resets: without it, everything
+ * a child did in August disappears at midnight on the 31st, which is the
+ * opposite of appreciating it. This one never changes again once its month
+ * ends.
+ */
+export function previousMonthWindow(now: Date): MonthWindow {
+  return monthWindow(now.getUTCFullYear(), now.getUTCMonth() - 1);
 }

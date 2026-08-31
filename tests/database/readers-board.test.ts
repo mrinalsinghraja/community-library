@@ -10,6 +10,7 @@ import {
 } from "@/server/services/media-service";
 import {
   memberIsOnReadersBoard,
+  readersOfLastMonth,
   readersOfTheMonth,
 } from "@/server/services/readers-board-service";
 
@@ -38,9 +39,12 @@ let librarian: Awaited<ReturnType<typeof createStaff>>;
 let onBoard: Awaited<ReturnType<typeof createMember>>;
 let optedOut: Awaited<ReturnType<typeof createMember>>;
 let stranger: Awaited<ReturnType<typeof createMember>>;
+/** Read last month and has not been back since. On one board, not the other. */
+let pastOnly: Awaited<ReturnType<typeof createMember>>;
 
 let onBoardPhoto = "";
 let optedOutPhoto = "";
+let pastOnlyPhoto = "";
 
 const storageDriver = new FakeStorageDriver();
 const DAY = 24 * 60 * 60 * 1000;
@@ -49,6 +53,18 @@ const DAY = 24 * 60 * 60 * 1000;
 function lastMonth(): Date {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 12));
+}
+
+/**
+ * The first morning of the month now running.
+ *
+ * Day one rather than today, so the fixture reads the same on the 1st as on the
+ * 30th -- and so the running board is exercised at its emptiest, which is the
+ * state the owner asked for and the one most likely to be got wrong.
+ */
+function thisMonth(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 6));
 }
 
 async function actingAs(userId: string, kind: "STAFF" | "MEMBER" = "STAFF") {
@@ -71,11 +87,11 @@ async function optOutOfBoard(memberUserId: string) {
   });
 }
 
-/** A finished loan inside last month, so the child qualifies for the board. */
-async function borrowedLastMonth(memberUserId: string, times = 1) {
+/** A finished loan inside a given month, so the child qualifies for that board. */
+async function borrowedIn(when: () => Date, memberUserId: string, times = 1) {
   for (let i = 0; i < times; i += 1) {
     const copy = await createBookCopy(fixture.libraryId);
-    const issued = lastMonth();
+    const issued = when();
     await db.loan.create({
       data: {
         libraryId: fixture.libraryId,
@@ -89,6 +105,12 @@ async function borrowedLastMonth(memberUserId: string, times = 1) {
     });
   }
 }
+
+const borrowedLastMonth = (memberUserId: string, times = 1) =>
+  borrowedIn(lastMonth, memberUserId, times);
+
+const borrowedThisMonth = (memberUserId: string, times = 1) =>
+  borrowedIn(thisMonth, memberUserId, times);
 
 async function givePhoto(memberUserId: string): Promise<string> {
   const stored = await storeChildPhoto({ libraryId: fixture.libraryId, bytes: pngBytes() });
@@ -114,15 +136,23 @@ beforeAll(async () => {
   onBoard = await createMember(fixture.libraryId, { displayName: "Meera Raghunathan" });
   optedOut = await createMember(fixture.libraryId, { displayName: "Aarav Krishnamurthy" });
   stranger = await createMember(fixture.libraryId, { displayName: "Rohan Das" });
+  pastOnly = await createMember(fixture.libraryId, { displayName: "Ishaan Bhattacharya" });
 
+  // On both boards: read last month and has been back this month.
   await borrowedLastMonth(onBoard.id, 3);
+  await borrowedThisMonth(onBoard.id, 2);
+
+  // On the finished board only. Nothing this month.
+  await borrowedLastMonth(pastOnly.id, 2);
 
   // Reads the most in the library, and their family asked to be left off.
   await optOutOfBoard(optedOut.id);
   await borrowedLastMonth(optedOut.id, 9);
+  await borrowedThisMonth(optedOut.id, 9);
 
   onBoardPhoto = await givePhoto(onBoard.id);
   optedOutPhoto = await givePhoto(optedOut.id);
+  pastOnlyPhoto = await givePhoto(pastOnly.id);
 });
 
 afterAll(async () => {
@@ -153,6 +183,36 @@ describe("who is on the board", () => {
       expect(row.firstName).not.toContain(" ");
       expect(row.firstName).not.toContain("Raghunathan");
     }
+  });
+
+  it("keeps the two months apart", async () => {
+    /*
+     * The whole reason there are two cards. A child who read in August and has
+     * not been in since is on the finished board and not on the running one --
+     * and a reset on the 1st must not take August away from them.
+     */
+    await actingAs(stranger.id, "MEMBER");
+
+    const running = (await readersOfTheMonth()).map((row) => row.firstName);
+    const finished = (await readersOfLastMonth()).map((row) => row.firstName);
+
+    expect(running).toContain("Meera");
+    expect(running).not.toContain("Ishaan");
+
+    expect(finished).toContain("Meera");
+    expect(finished).toContain("Ishaan");
+  });
+
+  it("leaves an opted-out child off both boards", async () => {
+    await actingAs(stranger.id, "MEMBER");
+
+    expect((await readersOfTheMonth()).map((row) => row.firstName)).not.toContain("Aarav");
+    expect((await readersOfLastMonth()).map((row) => row.firstName)).not.toContain("Aarav");
+  });
+
+  it("refuses a signed-out caller on the finished board too", async () => {
+    __setSessionHandle(null);
+    await expect(readersOfLastMonth()).rejects.toThrow();
   });
 
   it("drops a child the moment their family opts out", async () => {
@@ -204,6 +264,18 @@ describe("whose photograph another child may read", () => {
     await expect(getAuthorizedMedia(onBoardPhoto)).rejects.toThrow();
   });
 
+  it("lets one child see the photo of a child on the finished board", async () => {
+    /*
+     * Ishaan is on the card for last month and not on this month's. His picture
+     * has to load, or the second card draws with a hole in it where one child
+     * is -- which reads as being singled out.
+     */
+    await actingAs(stranger.id, "MEMBER");
+
+    const media = await getAuthorizedMedia(pastOnlyPhoto);
+    expect(media.mimeType).toBe("image/png");
+  });
+
   it("still lets a child see their own photo when they are off the board", async () => {
     await actingAs(optedOut.id, "MEMBER");
 
@@ -222,6 +294,8 @@ describe("whose photograph another child may read", () => {
 describe("the answer the board itself gives", () => {
   it("agrees with what the card shows", async () => {
     expect(await memberIsOnReadersBoard(fixture.libraryId, onBoard.id)).toBe(true);
+    // On the finished card only, and that is enough to read the photograph.
+    expect(await memberIsOnReadersBoard(fixture.libraryId, pastOnly.id)).toBe(true);
     expect(await memberIsOnReadersBoard(fixture.libraryId, optedOut.id)).toBe(false);
     expect(await memberIsOnReadersBoard(fixture.libraryId, stranger.id)).toBe(false);
   });

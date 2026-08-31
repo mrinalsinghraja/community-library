@@ -7,7 +7,13 @@ import {
   CURRENT_CONSENT_TYPES,
   REQUIRED_CONSENT_TYPES,
 } from "@/lib/consent";
-import { BOARD_SIZE, EMPTY_SOCKET_LABEL, monogram, previousMonthWindow } from "@/lib/readers-board";
+import {
+  BOARD_SIZE,
+  EMPTY_SOCKET_LABEL,
+  currentMonthWindow,
+  monogram,
+  previousMonthWindow,
+} from "@/lib/readers-board";
 
 /**
  * The readers' board.
@@ -25,8 +31,8 @@ import { BOARD_SIZE, EMPTY_SOCKET_LABEL, monogram, previousMonthWindow } from "@
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
 describe("the shape of the board", () => {
-  it("always has five sockets", () => {
-    expect(BOARD_SIZE).toBe(5);
+  it("always has six sockets", () => {
+    expect(BOARD_SIZE).toBe(6);
   });
 
   it("says what an empty socket is for", () => {
@@ -44,7 +50,38 @@ describe("the shape of the board", () => {
   });
 });
 
-describe("the month it is about", () => {
+describe("the months it is about", () => {
+  /*
+   * Two boards, two windows. The running one is what makes a small library's
+   * card worth opening -- a child who borrows on the 2nd is on it that
+   * afternoon -- and the finished one is what stops the reset on the 1st from
+   * erasing the month they just had.
+   */
+  it("covers the whole month now running, from its first instant", () => {
+    const { from, to, label } = currentMonthWindow(new Date("2026-09-14T09:30:00.000Z"));
+
+    expect(from.toISOString()).toBe("2026-09-01T00:00:00.000Z");
+    expect(to.toISOString()).toBe("2026-09-30T23:59:59.999Z");
+    expect(label).toBe("September 2026");
+  });
+
+  it("starts the running month over on the first, not partway through", () => {
+    // The reset the owner asked for: at the first instant of a new month the
+    // window has already moved, so nothing from the old month is still counted.
+    const { from, label } = currentMonthWindow(new Date("2026-10-01T00:00:00.000Z"));
+
+    expect(from.toISOString()).toBe("2026-10-01T00:00:00.000Z");
+    expect(label).toBe("October 2026");
+  });
+
+  it("has the two windows meet exactly, with no gap and no overlap", () => {
+    const now = new Date("2026-09-14T09:30:00.000Z");
+    const current = currentMonthWindow(now);
+    const previous = previousMonthWindow(now);
+
+    expect(previous.to.getTime() + 1).toBe(current.from.getTime());
+  });
+
   it("is the month that has finished, never the running one", () => {
     const { from, to, label } = previousMonthWindow(new Date("2026-08-23T12:00:00.000Z"));
 
@@ -222,6 +259,16 @@ describe("nothing ranks a child", () => {
     expect(component).not.toMatch(/1st|2nd|3rd/);
   });
 
+  it("invites into the month still running, and not into the one that ended", () => {
+    /*
+     * "It could be you" over a finished month is an invitation to a door that
+     * has closed. The running card keeps its empty sockets; the finished one
+     * shows the children who were on it and stops.
+     */
+    expect(component).toContain("running");
+    expect(component).toMatch(/running[\s\S]{0,200}Array\.from\(\{ length: BOARD_SIZE \}/);
+  });
+
   it("draws every socket at the same size, filled or not", () => {
     // A smaller empty socket would read as a lesser thing; identical geometry
     // is what makes a gap read as an invitation.
@@ -239,6 +286,16 @@ describe("nothing ranks a child", () => {
     expect(service).toContain("NOT EXISTS");
     expect(service).toContain("status = 'WITHDRAWN'");
     expect(service).not.toContain("status = 'GRANTED'");
+  });
+
+  it("names no month as better than another", () => {
+    // Two cards, and neither may be introduced as the good one. "Readers of
+    // the month" and "Readers of last month" are both statements of fact.
+    const page = read("src/app/my-books/page.tsx");
+
+    expect(page).toContain('title="Readers of the month"');
+    expect(page).toContain('title="Readers of last month"');
+    expect(page).not.toMatch(/\b(winner|champion|best reader|top reader)\b/i);
   });
 
   it("shows a first name only, never the whole one", () => {
@@ -261,12 +318,37 @@ describe("how a board photograph is authorised", () => {
     expect(media).toContain("memberIsOnReadersBoard");
   });
 
-  it("requires both consent and current membership of the board", () => {
+  it("requires both consent and current membership of a board", () => {
+    /*
+     * The membership test runs the board query itself rather than a copy of it,
+     * so consent, the six places and the month window cannot drift apart
+     * between what is drawn and what may be read.
+     */
+    const service = read("src/server/services/readers-board-service.ts");
+    const query = service.slice(
+      service.indexOf("async function boardFor"),
+      service.indexOf("function toReaders"),
+    );
+
+    expect(query).toContain("READERS_BOARD");
+    expect(query).toContain(`LIMIT ${"${BOARD_SIZE}"}`);
+
+    const fn = service.slice(service.indexOf("export async function memberIsOnReadersBoard"));
+    expect(fn).toContain("boardFor");
+  });
+
+  it("covers both boards, because both are on the page", () => {
+    /*
+     * A photograph authorised for only one window would draw the other card
+     * with a broken picture in it -- which a child reads as being singled out.
+     * Checking both is not a widening: the same six places, the same opt-out,
+     * the same signed-in-only route.
+     */
     const service = read("src/server/services/readers-board-service.ts");
     const fn = service.slice(service.indexOf("export async function memberIsOnReadersBoard"));
 
-    expect(fn).toContain("READERS_BOARD");
-    expect(fn).toContain(`LIMIT ${"${BOARD_SIZE}"}`);
+    expect(fn).toContain("currentMonthWindow(now)");
+    expect(fn).toContain("previousMonthWindow(now)");
   });
 
   it("leaves the private-media caching rule untouched", () => {
