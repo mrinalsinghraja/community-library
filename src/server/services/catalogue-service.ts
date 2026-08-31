@@ -85,8 +85,8 @@ const bookInputSchema = z.object({
   author: z
     .string()
     .trim()
-    .min(1, "Who wrote it?")
-    .max(CATALOGUE_LIMITS.authorMax, `Please keep the author under ${CATALOGUE_LIMITS.authorMax} characters.`),
+    .min(1, "Who wrote or published it?")
+    .max(CATALOGUE_LIMITS.authorMax, `Please keep the author or publisher under ${CATALOGUE_LIMITS.authorMax} characters.`),
   categoryId: z.string().trim().min(1, "Please choose a shelf."),
   ageGroup: z.enum(AGE_GROUP_VALUES as [AgeGroup, ...AgeGroup[]], {
     message: "Please choose a reading age.",

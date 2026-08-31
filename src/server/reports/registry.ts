@@ -179,7 +179,7 @@ async function loadBooks(actor: Actor, filter: ReportFilter) {
   const columns: ReportColumn<Row>[] = [
     { header: "Book ID", value: (row) => row.copyCode },
     { header: "Title", value: (row) => row.title, weight: 2.2 },
-    { header: "Author", value: (row) => row.authors.join(", "), weight: 1.4 },
+    { header: "Author/publisher", value: (row) => row.authors.join(", "), weight: 1.4 },
     { header: "Shelf", value: (row) => row.categoryName },
     { header: "Age", value: (row) => ageGroupLabel(row.ageGroup) },
     { header: "Condition", value: (row) => conditionLabel(row.condition) },
@@ -304,7 +304,7 @@ async function loadLoans(filter: ReportFilter) {
     { header: "Card", value: (row) => row.memberCode },
     { header: "Book ID", value: (row) => row.copyCode },
     { header: "Title", value: (row) => row.title, weight: 2.2 },
-    { header: "Author", value: (row) => row.authors.join(", "), weight: 1.4 },
+    { header: "Author/publisher", value: (row) => row.authors.join(", "), weight: 1.4 },
     { header: "Issued", value: (row) => row.issuedAt, dateOnly: true },
     { header: "Due", value: (row) => row.dueAt, dateOnly: true },
     { header: "Returned", value: (row) => row.returnedAt, dateOnly: true },
@@ -594,7 +594,7 @@ async function loadBookActivity(filter: ReportFilter) {
 
   const columns: ReportColumn<Row>[] = [
     { header: "Title", value: (row) => row.title, weight: 2.4 },
-    { header: "Author", value: (row) => row.authors.join(", "), weight: 1.6 },
+    { header: "Author/publisher", value: (row) => row.authors.join(", "), weight: 1.6 },
     { header: "Shelf", value: (row) => row.categoryName },
     { header: "Copies", value: (row) => row.copies },
     { header: "Times borrowed", value: (row) => row.timesBorrowed },

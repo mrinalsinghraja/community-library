@@ -181,7 +181,7 @@ export default async function AdminBooksPage({
         <FilterSelect label="Sort by" name="sort" value={sort} includeAny={false}>
           <option value="newest">Newest first</option>
           <option value="title">Title</option>
-          <option value="author">Author</option>
+          <option value="author">Author/publisher</option>
           <option value="code">Book ID</option>
         </FilterSelect>
 

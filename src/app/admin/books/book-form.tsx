@@ -172,7 +172,13 @@ export function BookForm({
         />
       </Field>
 
-      <Field id={field("author")} label="Author" required error={errors.author}>
+      <Field
+        id={field("author")}
+        label="Author/publisher"
+        required
+        error={errors.author}
+        hint="Most children's books show no author — the publisher's name is the right answer then."
+      >
         <TextInput
           id={field("author")}
           name="author"

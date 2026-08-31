@@ -53,7 +53,7 @@ export function CatalogueSearchBand({
 
         <form method="get" action="/books" className="mt-6 flex flex-col gap-3 sm:flex-row">
           <label className="flex-1">
-            <span className="sr-only">Search for a book by title or author</span>
+            <span className="sr-only">Search for a book by title, author or publisher</span>
             <input
               type="search"
               name="q"
