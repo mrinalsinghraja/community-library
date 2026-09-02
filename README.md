@@ -4,6 +4,8 @@ A small, free library management system for a residential community's children's
 library. Built for readers aged roughly 5–14, run by volunteers, and designed so
 the children themselves can eventually operate it.
 
+![Mana Jardin Children's Library — a free library, right here in Mana Jardin](docs/screenshot.png)
+
 **First deployment:** Mana Jardin Children's Library
 **Status:** Phase 5 complete — identity, guardian verification, catalogue,
 circulation, reminders and renewal requests, and now a settings, branding and
