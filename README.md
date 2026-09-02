@@ -4,6 +4,10 @@ A small, free library management system for a residential community's children's
 library. Built for readers aged 5 to 16, run by volunteers, and designed so
 the children themselves can eventually operate it.
 
+![Filtering the public catalogue to the Science & Knowledge shelf](docs/demo.gif)
+
+*The catalogue is readable without signing in; borrowing still needs a card.*
+
 ![Mana Jardin Children's Library — a free library, right here in Mana Jardin](docs/screenshot.png)
 
 **First deployment:** [Mana Jardin Children's Library](https://library.msrx.co.in) — live, with real readers.
