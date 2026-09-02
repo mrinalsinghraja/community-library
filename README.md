@@ -1,16 +1,27 @@
 # Community Children's Library Platform
 
 A small, free library management system for a residential community's children's
-library. Built for readers aged roughly 5–14, run by volunteers, and designed so
+library. Built for readers aged 5 to 16, run by volunteers, and designed so
 the children themselves can eventually operate it.
 
 ![Mana Jardin Children's Library — a free library, right here in Mana Jardin](docs/screenshot.png)
 
-**First deployment:** Mana Jardin Children's Library
-**Status:** Phase 5 complete — identity, guardian verification, catalogue,
-circulation, reminders and renewal requests, and now a settings, branding and
-audit screen so the library can be configured without touching the database.
-See [`docs/PHASE-5.md`](docs/PHASE-5.md).
+**First deployment:** [Mana Jardin Children's Library](https://library.msrx.co.in) — live, with real readers.
+
+**Status:** in service. Phases 0–5 built the foundation — identity, guardian
+verification, catalogue, circulation, reminders and renewal requests, and a
+settings, branding and audit screen so the library can be configured without
+touching the database ([`docs/PHASE-5.md`](docs/PHASE-5.md)).
+
+Everything since is tracked as decisions rather than phases, because the work
+stopped arriving in tidy blocks: a public catalogue with moderated star ratings
+from readers, a public donor register, visiting times and a notice board,
+account lifecycle for readers who grow up or leave, reader-proposed profile
+changes, reports and exports for the desk, an AI book helper that answers only
+about books the library owns, and retention machinery that erases fields rather
+than rows. See [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md).
+
+68 architecture decisions · 18 migrations · 35 models · 46 pages · 1,652 tests.
 
 ---
 
