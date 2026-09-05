@@ -3,8 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BookCover } from "@/components/library/book-cover";
-import { Butterfly } from "@/components/library/library-logo";
-import { PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PageHeading, PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { formatInTimezone } from "@/lib/dates";
@@ -98,7 +97,7 @@ export default async function DonorGiftsPage({
 
   return (
     <PublicShell branding={branding}>
-      <div className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
+      <PageBody>
         <Link
           href="/donors"
           className="inline-flex items-center gap-1.5 text-base font-bold text-primary-deep"
@@ -106,12 +105,8 @@ export default async function DonorGiftsPage({
           <span aria-hidden="true">&larr;</span> All our book friends
         </Link>
 
-        <header className="relative mt-7">
-          <p className="text-base font-semibold uppercase tracking-[0.14em] text-accent-ink">
-            Thank you
-          </p>
-          <h1 className="garden-rule mt-3 inline-block text-3xl sm:text-4xl">{entry.label}</h1>
-          <Butterfly className="drift absolute -top-2 right-0 w-9 opacity-80 sm:w-12" />
+        <header className="mt-7">
+          <PageHeading eyebrow="Book friends" title={entry.label} />
 
           {line ? <p className="mt-9 text-lg text-ink-soft">{line}</p> : null}
 
@@ -190,7 +185,7 @@ export default async function DonorGiftsPage({
             Give a book yourself
           </ButtonLink>
         </p>
-      </div>
+      </PageBody>
     </PublicShell>
   );
 }

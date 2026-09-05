@@ -8,7 +8,7 @@ import { ReviewForm } from "@/app/books/[code]/review-form";
 import { BookReviews } from "@/components/library/book-reviews";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { Butterfly, LeafSprig } from "@/components/library/library-logo";
-import { PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { RatingSummaryLine } from "@/components/ui/star-rating";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -99,7 +99,7 @@ export default async function BookDetailPage({
 
   return (
     <PublicShell branding={branding}>
-      <div className="relative mx-auto w-full max-w-4xl px-5 py-10 sm:px-8 sm:py-14">
+      <PageBody width="detail">
         <Butterfly className="drift pointer-events-none absolute right-4 top-6 w-9 opacity-60 sm:w-12" />
 
         <Link
@@ -137,7 +137,16 @@ export default async function BookDetailPage({
           </div>
 
           <div className="min-w-0 flex-1">
-            <h1 className="text-4xl leading-tight">{book.title}</h1>
+            {/*
+              The shelf, in the small capitals every other page uses for its
+              section. Here it is not decoration: it is the one fact that tells
+              a child where in the room to walk, and it is said again on a badge
+              below because the badge is a filter and this is a location.
+            */}
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent-ink">
+              {book.categoryName}
+            </p>
+            <h1 className="mt-2 text-4xl leading-tight">{book.title}</h1>
             <p className="mt-2 text-xl text-ink-soft">{book.authors.join(", ")}</p>
 
             {/*
@@ -308,7 +317,7 @@ export default async function BookDetailPage({
             Find another book
           </ButtonLink>
         </div>
-      </div>
+      </PageBody>
     </PublicShell>
   );
 }

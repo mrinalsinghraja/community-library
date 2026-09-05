@@ -11,8 +11,7 @@ import { ReadersBoard } from "@/components/library/readers-board";
 import { Recommendations } from "@/components/library/recommendations";
 import { VisitTimes } from "@/components/library/visit-times";
 import { ReviewReminder } from "@/components/library/review-reminder";
-import { PageBody, PublicShell } from "@/components/layout/site-shell";
-import { Butterfly } from "@/components/library/library-logo";
+import { PageBody, PageHeading, PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
@@ -128,8 +127,7 @@ export default async function MyBooksPage({
   return (
     <PublicShell branding={branding}>
       <PageBody width="wide">
-        <Butterfly className="drift pointer-events-none absolute right-4 top-8 w-10 opacity-70 sm:w-12" />
-        <h1 className="garden-rule inline-block text-4xl">My books</h1>
+        <PageHeading eyebrow="My library" title="My books" />
 
         {/*
           The board first, because a notice is only worth posting if it is read

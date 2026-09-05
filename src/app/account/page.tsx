@@ -75,7 +75,11 @@ export default async function AccountPage() {
   const Shell = actor.kind === "STAFF" ? StaffShell : PublicShell;
 
   return (
-    <Shell branding={branding} actor={actor} title="My library">
+    /*
+      No `title`: this page draws its own heading in both shells, and while it
+      passed one the desk drew a second above it.
+    */
+    <Shell branding={branding} actor={actor}>
       <PageBody width="page">
         <div className="flex items-center gap-4">
           {/*
@@ -100,10 +104,10 @@ export default async function AccountPage() {
               "Signed in" is a status the masthead already carries; on the page
               itself it was the loudest thing above a child's own name.
             */}
-            <p className="text-lg font-bold text-accent-ink">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent-ink">
               {actor.kind === "STAFF" ? "Library staff" : "My library"}
             </p>
-            <h1 className="mt-1 text-4xl">Hello, {actor.displayName}! 👋</h1>
+            <h1 className="mt-2 text-4xl">Hello, {actor.displayName}! 👋</h1>
           </div>
         </div>
 

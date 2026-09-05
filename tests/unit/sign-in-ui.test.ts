@@ -260,3 +260,87 @@ describe("the desk's title says where you are", () => {
     expect(read("components", "layout", "desk-eyebrow.tsx")).toContain("usePathname");
   });
 });
+
+describe("every reader page opens the same way", () => {
+  /*
+   * The reader's own pages were the last set drawing their headings by hand:
+   * four sizes of `h1` between them, three hand-placed butterflies, four
+   * hand-rolled page frames, and no page saying which part of the library it
+   * belonged to. They open like the content pages and the desk now — the
+   * section in small capitals, then the heading on its rule.
+   */
+  const READER_PAGES = [
+    ["app", "books", "page.tsx"],
+    ["app", "donors", "page.tsx"],
+    ["app", "donors", "[donor]", "page.tsx"],
+    ["app", "my-books", "page.tsx"],
+    ["app", "my-card", "page.tsx"],
+    ["app", "my-reviews", "page.tsx"],
+    ["app", "account", "details", "page.tsx"],
+    ["app", "account", "password", "page.tsx"],
+  ] as const;
+
+  it.each(READER_PAGES.map((parts) => [parts.join("/"), parts] as const))(
+    "%s carries an eyebrow",
+    (_, parts) => {
+      expect(read(...parts)).toMatch(/<PageHeading[\s\S]{0,80}eyebrow=/);
+    },
+  );
+
+  it.each(READER_PAGES.map((parts) => [parts.join("/"), parts] as const))(
+    "%s draws no heading of its own beside it",
+    (_, parts) => {
+      // A hand-rolled <h1> beside a PageHeading is two headings on one page.
+      expect(read(...parts)).not.toMatch(/<h1\s/);
+    },
+  );
+
+  it("lets the page width come from the shell, not from each page", () => {
+    for (const parts of [
+      ["app", "books", "[code]", "page.tsx"],
+      ["app", "donors", "[donor]", "page.tsx"],
+      ["app", "my-card", "page.tsx"],
+      ["app", "account", "password", "page.tsx"],
+    ] as const) {
+      const source = read(...parts);
+      expect(source, parts.join("/")).toContain("<PageBody");
+      expect(source, parts.join("/")).not.toMatch(/mx-auto w-full max-w-\w+ px-5 py-\d+/);
+    }
+  });
+
+  it("names the shelf over a book, because that is where to walk", () => {
+    // The one eyebrow on a reader page that is information rather than a label.
+    expect(read("app", "books", "[code]", "page.tsx")).toMatch(
+      /tracking-\[0\.18em\][\s\S]{0,120}book\.categoryName/,
+    );
+  });
+});
+
+describe("a page shared by staff and readers has one heading", () => {
+  /*
+   * `/account`, `/account/details`, `/account/password` and `/my-card` render
+   * in whichever shell the person belongs to. They drew their own heading and
+   * ALSO handed one to the desk shell, so a librarian on their own account page
+   * met two `h1`s — "My library" above "Hello, Local Admin!".
+   */
+  const SHARED = [
+    ["app", "account", "page.tsx"],
+    ["app", "account", "details", "page.tsx"],
+    ["app", "account", "password", "page.tsx"],
+    ["app", "my-card", "page.tsx"],
+  ] as const;
+
+  it.each(SHARED.map((parts) => [parts.join("/"), parts] as const))(
+    "%s hands the shell no title",
+    (_, parts) => {
+      expect(read(...parts)).not.toMatch(/<Shell[^>]*\stitle=/);
+    },
+  );
+
+  it("lets the desk shell go without one", () => {
+    const shell = read("components", "layout", "staff-shell.tsx");
+    expect(shell).toContain("title?: string;");
+    // And draws nothing at all rather than an empty header block.
+    expect(shell).toMatch(/\{title \? \(\s*<header>/);
+  });
+});

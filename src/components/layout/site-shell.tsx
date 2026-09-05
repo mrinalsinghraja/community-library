@@ -455,6 +455,13 @@ export async function PublicShell({
 export const PAGE_WIDTHS = {
   form: "max-w-xl",
   prose: "max-w-3xl",
+  /*
+   * One object and its facts: a book beside its cover, a family beside their
+   * gifts. Narrower than `page` because the column of prose next to a picture
+   * is the thing being read, and wider than `prose` because the picture needs
+   * somewhere to stand.
+   */
+  detail: "max-w-4xl",
   page: "max-w-5xl",
   wide: "max-w-[88rem]",
 } as const;
@@ -497,8 +504,13 @@ export function PageHeading({
    * The section this page belongs to, in small capitals above the title —
    * "Joining", "Policies". The same device the masthead and the desk use for
    * the library's name, so a page opens the way the site opens.
+   *
+   * A node rather than a string, because on a page one level down the section
+   * is also the way back to it: `/account/details` had a "← My library" link
+   * and then an eyebrow reading "MY LIBRARY" two lines below it, saying the
+   * same words twice. One line that says where you are and takes you there.
    */
-  eyebrow?: string;
+  eyebrow?: ReactNode;
   title: string;
   children?: ReactNode;
   butterfly?: boolean;

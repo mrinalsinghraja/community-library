@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ChangePasswordForm } from "@/app/account/password/change-password-form";
-import { PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PageHeading, PublicShell } from "@/components/layout/site-shell";
 import { StaffShell } from "@/components/layout/staff-shell";
 import { Card } from "@/components/ui/card";
 import { getActor } from "@/server/authz";
@@ -25,13 +25,12 @@ export default async function ChangePasswordPage() {
 
   return (
     // Same rule as /account: a role's menu must not change with the page.
-    <Shell branding={branding} actor={actor} title="Change password">
-      <div className="mx-auto w-full max-w-xl px-5 py-14 sm:px-8">
-        <h1 className="text-4xl">Change your password</h1>
-        <p className="mt-3 text-lg text-ink-soft">
+    <Shell branding={branding} actor={actor}>
+      <PageBody width="form">
+        <PageHeading eyebrow="My library" title="Change your password">
           You will need the current one first. Everything gets signed out afterwards — including
           here — so you will sign in again with the new one.
-        </p>
+        </PageHeading>
 
         <Card className="mt-8">
           <ChangePasswordForm minLength={policy.minLength} isStaff={isStaff} />
@@ -59,7 +58,7 @@ export default async function ChangePasswordPage() {
             Back to account details
           </Link>
         </p>
-      </div>
+      </PageBody>
     </Shell>
   );
 }

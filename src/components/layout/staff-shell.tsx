@@ -52,7 +52,18 @@ export async function StaffShell({
   pendingBorrowRequests?: number;
   /** Reviews written and not yet answered. Nothing publishes until they are. */
   pendingReviews?: number;
-  title: string;
+  /**
+   * The desk screen's heading, drawn by the shell.
+   *
+   * Optional, and the four pages that omit it are the reason: `/account`,
+   * `/account/details`, `/account/password` and `/my-card` are shared with
+   * readers, so they draw their own heading in whichever shell they land in.
+   * While this was required they passed one anyway and drew a second — a staff
+   * member on their own account page met "My library" followed by "Hello,
+   * Local Admin!", two `h1`s on one screen, which is a real thing a screen
+   * reader reads out and a real thing an eye trips over.
+   */
+  title?: string;
   children: ReactNode;
 }) {
   /*
@@ -275,11 +286,13 @@ export async function StaffShell({
           thing on the desk that knows the address; it says where you are so
           the heading does not have to.
         */}
-        <header>
-          <DeskEyebrow />
-          <h1 className="garden-rule inline-block text-3xl">{title}</h1>
-        </header>
-        <div className="mt-8">{children}</div>
+        {title ? (
+          <header>
+            <DeskEyebrow />
+            <h1 className="garden-rule inline-block text-3xl">{title}</h1>
+          </header>
+        ) : null}
+        <div className={title ? "mt-8" : undefined}>{children}</div>
       </main>
 
       {/*

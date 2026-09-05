@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { CardDownloads } from "@/app/my-card/card-downloads";
 import { LibraryCard } from "@/components/library/library-card";
-import { PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PageHeading, PublicShell } from "@/components/layout/site-shell";
 import { StaffShell } from "@/components/layout/staff-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { Callout } from "@/components/ui/states";
@@ -40,23 +40,23 @@ export default async function MyCardPage() {
 
   if (!facts) {
     return (
-      <Shell branding={branding} actor={actor} title={CARD_MESSAGES.title}>
-        <div className="mx-auto w-full max-w-3xl px-5 py-14 sm:px-8">
-          <h1 className="garden-rule inline-block text-4xl">{CARD_MESSAGES.title}</h1>
+      <Shell branding={branding} actor={actor}>
+        <PageBody width="prose">
+          <PageHeading eyebrow="My library" title={CARD_MESSAGES.title} />
           <div className="mt-14">
             <Callout tone="info" title="No card on this account">
               {CARD_MESSAGES.notAMember}
             </Callout>
           </div>
-        </div>
+        </PageBody>
       </Shell>
     );
   }
 
   return (
-    <Shell branding={branding} actor={actor} title={CARD_MESSAGES.title}>
-      <div className="mx-auto w-full max-w-3xl px-5 py-14 sm:px-8">
-        <h1 className="garden-rule inline-block text-4xl">{CARD_MESSAGES.title}</h1>
+    <Shell branding={branding} actor={actor}>
+      <PageBody width="prose">
+        <PageHeading eyebrow="My library" title={CARD_MESSAGES.title} />
 
         <p className="mt-14 max-w-xl text-lg text-ink-soft">{CARD_MESSAGES.intro}</p>
 
@@ -108,7 +108,7 @@ export default async function MyCardPage() {
             </ButtonLink>
           </div>
         </div>
-      </div>
+      </PageBody>
     </Shell>
   );
 }

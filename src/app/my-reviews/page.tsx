@@ -3,8 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { CoverThumbnail } from "@/components/library/cover-viewer";
-import { Butterfly } from "@/components/library/library-logo";
-import { PageBody, PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PageHeading, PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { StarVerdict } from "@/components/ui/star-rating";
@@ -52,8 +51,6 @@ export default async function MyReviewsPage() {
   return (
     <PublicShell branding={branding}>
       <PageBody width="wide">
-        <Butterfly className="drift pointer-events-none absolute right-4 top-8 w-10 opacity-70 sm:w-12" />
-
         {/*
           The back link needs a block of its own. The heading is `inline-block`
           — it has to be, or the garden rule under it would stretch the full
@@ -70,15 +67,15 @@ export default async function MyReviewsPage() {
           </Link>
         </p>
 
-        <h1 className="garden-rule mt-6 inline-block text-4xl">What I thought</h1>
-
-        <p className="mt-9 text-lg text-ink-soft">
-          {reviews.length === 0
-            ? "Every book you rate will be kept here."
-            : reviews.length === 1
-              ? "One book, in your own words."
-              : `${reviews.length} books, in your own words.`}
-        </p>
+        <div className="mt-6">
+          <PageHeading eyebrow="My library" title="What I thought">
+            {reviews.length === 0
+              ? "Every book you rate will be kept here."
+              : reviews.length === 1
+                ? "One book, in your own words."
+                : `${reviews.length} books, in your own words.`}
+          </PageHeading>
+        </div>
 
         {reviews.length === 0 ? (
           <div className="mt-8">

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ProfileForm } from "@/app/account/profile-form";
-import { PageBody, PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PageHeading, PublicShell } from "@/components/layout/site-shell";
 import { StaffShell } from "@/components/layout/staff-shell";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
@@ -56,17 +56,18 @@ export default async function AccountDetailsPage() {
   const Shell = actor.kind === "STAFF" ? StaffShell : PublicShell;
 
   return (
-    <Shell branding={branding} actor={actor} title="Account details">
+    <Shell branding={branding} actor={actor}>
       <PageBody width="page">
-        <p className="text-base text-ink-soft">
-          <Link href="/account" className="font-bold text-primary-deep no-underline">
-            ← My library
-          </Link>
-        </p>
-        <h1 className="garden-rule mt-3 inline-block text-4xl">Account details</h1>
-        <p className="mt-4 max-w-2xl text-lg text-ink-soft">
+        <PageHeading
+          eyebrow={
+            <Link href="/account" className="text-accent-ink no-underline hover:underline">
+              ← My library
+            </Link>
+          }
+          title="Account details"
+        >
           What the library has on file for you, your password, and the way to sign out.
-        </p>
+        </PageHeading>
 
         <Card tone="shelf" className="mt-8">
           <CardTitle icon={<Icon name="card" />}>Who you are here</CardTitle>

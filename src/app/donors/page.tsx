@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { Butterfly } from "@/components/library/library-logo";
-import { PageBody, PublicShell } from "@/components/layout/site-shell";
+import { PageBody, PageHeading, PublicShell } from "@/components/layout/site-shell";
 import { WhatsAppButton } from "@/components/library/whatsapp-help";
 import { ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -79,11 +78,8 @@ export default async function DonorsPage() {
   return (
     <PublicShell branding={branding}>
       <PageBody width="wide">
-        <header className="relative">
-          <h1 className="garden-rule inline-block text-3xl sm:text-4xl">
-            Thank you, book friends
-          </h1>
-          <Butterfly className="drift absolute -top-1 right-0 w-9 opacity-80 sm:w-12" />
+        <header>
+          <PageHeading eyebrow="Book friends" title="Thank you, book friends" />
 
           <p className="mt-11 max-w-2xl font-display text-3xl italic leading-tight text-ink sm:text-4xl">
             A book leaves one home and does not stop.
