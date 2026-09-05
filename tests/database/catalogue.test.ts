@@ -852,6 +852,14 @@ describe("how often a book has gone home", () => {
           copyId,
           memberUserId: reader.id,
           status,
+          /*
+           * Pinned, like the other two dates. It used to default to "now",
+           * which was earlier than the fixed return date for exactly as long
+           * as the calendar said August 2026 -- and from the 2nd of September
+           * `loan_returned_after_issue` refused the row. A fixture that reads
+           * the clock is a test that expires.
+           */
+          issuedAt: new Date("2026-08-20T00:00:00Z"),
           dueAt: new Date("2026-09-10T00:00:00Z"),
           returnedAt: status === "RETURNED" ? new Date("2026-09-01T00:00:00Z") : null,
           cancelledAt: status === "CANCELLED" ? new Date("2026-09-01T00:00:00Z") : null,

@@ -3117,3 +3117,68 @@ child is, which a child reads as being singled out.
 `READERS_BOARD` record whose *presence* removes a child. A board still carries a
 first name and nothing else. A child's photograph is still private media, still
 never cacheable, still never public.
+
+## ADR-069 — The second pass: edges, elevation, and a way in that asks who you are
+
+**Status:** accepted · **Date:** 2026-09-05 · **Amends:** ADR-044 (design retype)
+
+The retype of 2026-08-20 fixed the colour, the type and the shape. What it did
+not give the interface was a *ladder*: every card floated at the same height, an
+input looked the same resting and focused, the masthead scrolled away, and no
+page said which door you had come through. None of that is wrong for a picture
+book. All of it is what separates a site a parent trusts on first sight from one
+they merely find charming — and the owner asked for the former.
+
+### The decision
+
+**Three rungs of elevation, each with an edge.** `--shadow-hairline`,
+`--shadow-card`, `--shadow-float`. The hairline — one pixel of the ink at 7% —
+is the rung that was missing: a shadow with no edge reads as a blur on the warm
+ground, and the line under it is what makes a card an object. Every lifted
+surface carries it now. Nothing changed colour.
+
+**The masthead stays, from tablet width up.** Sticky, 88% white with the page
+blurred through it, a hairline beneath. Static on a phone, where two rows is a
+fifth of the screen.
+
+**Every door knows whether you are standing in it.** One client component,
+`NavLink`, reads the pathname and sets `aria-current="page"`; the stylesheet
+draws the berry-to-green underline from that attribute and a screen reader
+announces "current page" from the same one. The lists in `desk-nav.ts` still
+take no argument about where a person is — a test holds them to it — so a
+role's menu is still the same list on every screen. Only the mark moves.
+
+**The desk's doors stand in clusters.** Fifteen links in a row was a wall.
+Each door now carries a `group` — Lending, People, Shelves, The room, Admin —
+and the shell slices the permission-filtered list by cluster, drawing the name
+above each from a wide screen up. A cluster with nothing in it for this person
+is not drawn, so a Librarian sees no "Admin" heading over empty space. The
+array was reordered so each cluster is one contiguous run, and a test refuses
+an interleaving. The role sits in the corner as a pill, from `roleLabel`, so a
+colleague looking over a volunteer's shoulder can see what they are.
+
+**The desk stands on the paper, and its tables are plates.** It was white on
+white, so nothing on it had an edge. Header white with a hairline; the page on
+the same ground as the rest of the site; `DataTable` a white plate with the
+card shadow. Twenty-five screens changed and none of them were edited.
+
+**The way in is a room, and it asks who you are.** Two halves in one floating
+frame: the library on the left, in the deep green of its own rule, saying what
+this is, who it is for and that nobody here can see a password; the form on
+the right. The form opens with a segmented control — "I am a reader" / "I work
+at the library" — that rewrites the first field's label, hint and keyboard,
+and nothing else. `identifier` and `password` reach `signInAction` under the
+same names; the server still decides which kind of name it was given; nothing
+about who may sign in, or how, moved. The switch is two native radios, so the
+keyboard and the screen reader get the platform's own behaviour. Where a person
+was headed pre-selects the half (`audienceFor`): `/desk` and `/admin` mean
+staff, everything else — `/account` included — means reader. Librarians and
+administrators are one audience, "library staff", because they sign in the
+same way and the form has no business telling a stranger that two kinds exist.
+
+### What did not change
+
+The colour tokens and their measured contrasts. The type. The radii. The
+copy a parent reads. The vague refusal on a failed sign-in. The promise that
+nobody at the library can see a password, now made twice on the page it
+matters most.

@@ -90,7 +90,7 @@ export function Select({ invalid, describedBy, className, children, ...rest }: S
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
         className={cn(
-          "min-h-12 w-full appearance-none rounded-[var(--radius-field)] border bg-surface",
+          "field-input min-h-12 w-full appearance-none rounded-[var(--radius-field)] border bg-surface",
           "ps-3.5 pe-11 text-base text-ink",
           invalid ? "border-danger" : "border-control-border",
           className,
@@ -120,7 +120,7 @@ export function TextInput({ invalid, describedBy, className, ...rest }: TextInpu
       aria-invalid={invalid || undefined}
       aria-describedby={describedBy}
       className={cn(
-        "min-h-12 w-full rounded-[var(--radius-field)] border bg-surface px-3.5 text-base",
+        "field-input min-h-12 w-full rounded-[var(--radius-field)] border bg-surface px-3.5 text-base",
         "placeholder:text-ink-faint",
         invalid ? "border-danger" : "border-control-border",
         className,

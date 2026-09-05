@@ -12,9 +12,14 @@ import { cn } from "@/lib/cn";
 
 type Tone = "plain" | "shelf" | "sunk" | "primary";
 
+/*
+ * Every lifted card carries the hairline now. A shadow with no edge reads as a
+ * blur on the warm ground; the one-pixel line under it is what makes the card
+ * an object. See the elevation ladder in globals.css.
+ */
 const TONE_CLASSES: Record<Tone, string> = {
-  plain: "bg-surface shadow-lift",
-  shelf: "bg-surface shadow-lift border-l-4 border-l-accent",
+  plain: "bg-surface shadow-card",
+  shelf: "bg-surface shadow-card border-l-4 border-l-accent",
   sunk: "bg-surface-sunk",
   primary: "bg-primary-wash",
 };

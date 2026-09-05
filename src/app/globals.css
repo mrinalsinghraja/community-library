@@ -396,3 +396,227 @@
     background: rgb(43 33 24 / 0.72);
   }
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * The second pass: edges, elevation and the way in.
+ *
+ * Story Garden's first pass got the colour, the type and the shape right. What
+ * it did not have was a *ladder* — every card floated at the same height, an
+ * input looked the same whether it was resting or focused, and the masthead
+ * scrolled away with the page. None of that is wrong for a picture book; all of
+ * it is what separates a site a parent trusts on first sight from one they
+ * merely find charming. So: hairline edges under every lifted surface, a
+ * three-rung elevation ladder, one sticky masthead that stays out of the way,
+ * and a sign-in that is a room rather than a form.
+ * ---------------------------------------------------------------------------
+ */
+@theme {
+  /*
+   * Elevation, in three rungs.
+   *
+   * `hairline` is the rung that was missing. A shadow with no edge reads as a
+   * blur; a one-pixel line of the ink at 7% under it gives every card a crisp
+   * boundary against the warm ground without drawing a border that would
+   * compete with the content. Every rung above it keeps the hairline.
+   */
+  --shadow-hairline: 0 0 0 1px rgb(43 33 24 / 0.07);
+  --shadow-card:
+    0 0 0 1px rgb(43 33 24 / 0.07), 0 1px 2px rgb(43 33 24 / 0.04),
+    0 6px 16px -4px rgb(43 33 24 / 0.08);
+  --shadow-float:
+    0 0 0 1px rgb(43 33 24 / 0.06), 0 2px 4px rgb(43 33 24 / 0.04),
+    0 28px 56px -16px rgb(43 33 24 / 0.24);
+  /* The deep panel behind the sign-in. Primary, a shade down, no grain. */
+  --color-primary-night: #0f3f36;
+}
+
+@layer components {
+  /*
+   * The masthead stays.
+   *
+   * Sticky, with the page showing through at 88% so scrolling past a heading
+   * reads as the heading sliding under glass rather than being cut off. The
+   * hairline beneath it is the only thing separating it from the page until
+   * the page moves.
+   */
+  .masthead {
+    position: relative;
+    z-index: 40;
+    background-color: rgb(255 255 255 / 0.88);
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    box-shadow: 0 1px 0 rgb(43 33 24 / 0.08);
+  }
+
+  @media (min-width: 768px) {
+    .masthead {
+      position: sticky;
+      top: 0;
+    }
+  }
+
+  /*
+   * Where you are.
+   *
+   * A navigation with no current-page mark makes a reader work out where they
+   * are from the heading. The berry underline sits inside the link's own box so
+   * the row's height never changes when it moves.
+   */
+  .door {
+    position: relative;
+  }
+
+  .door[aria-current="page"] {
+    color: var(--color-accent-ink);
+  }
+
+  .door[aria-current="page"]::after {
+    content: "";
+    position: absolute;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.2rem;
+    height: 3px;
+    border-radius: 999px;
+    background: linear-gradient(to right, var(--color-accent), var(--color-primary));
+  }
+
+  /*
+   * An input that answers the hand.
+   *
+   * Resting: the control border. Pointed at: a shade darker. Focused: the deep
+   * primary, with the page's focus ring around it — the ring stays because it
+   * is the accessibility contract, and the border change is what makes the
+   * field feel like it noticed you.
+   */
+  .field-input {
+    transition:
+      border-color 120ms ease,
+      box-shadow 120ms ease,
+      background-color 120ms ease;
+  }
+
+  .field-input:hover:not(:focus):not([aria-invalid="true"]) {
+    border-color: var(--color-ink-soft);
+  }
+
+  .field-input:focus {
+    border-color: var(--color-primary-deep);
+    box-shadow: 0 0 0 4px rgb(31 111 92 / 0.14);
+  }
+
+  .field-input[aria-invalid="true"]:focus {
+    box-shadow: 0 0 0 4px rgb(179 38 30 / 0.14);
+  }
+
+  /*
+   * The sign-in panel's sky.
+   *
+   * Two soft lights on a deep primary: one high and berry, one low and leaf,
+   * both blurred far enough that they read as light on a wall rather than as
+   * blobs. It is the same three colours as the masthead's rule, turned into a
+   * room.
+   */
+  .auth-panel {
+    background-color: var(--color-primary-night);
+    background-image:
+      radial-gradient(60% 50% at 85% 10%, rgb(168 40 120 / 0.45), transparent 70%),
+      radial-gradient(55% 45% at 10% 95%, rgb(120 176 48 / 0.35), transparent 70%),
+      linear-gradient(160deg, var(--color-primary-deep), var(--color-primary-night) 65%);
+  }
+
+  /* Ruled paper, faintly, so the panel is a surface and not a fill. */
+  .auth-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 100% 2.25rem;
+    pointer-events: none;
+  }
+
+  /*
+   * A segmented control that is really two radio buttons.
+   *
+   * Native inputs, so the keyboard and the screen reader get the platform's own
+   * behaviour; only the look is drawn here. The selected segment lifts on a
+   * white plate, the way a tab on a folder sits proud of the others.
+   */
+  .segment {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: calc(var(--radius-field) + 0.25rem);
+    background-color: var(--color-surface-sunk);
+    box-shadow: inset 0 0 0 1px rgb(43 33 24 / 0.06);
+  }
+
+  .segment label {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    border-radius: var(--radius-field);
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+    color: var(--color-ink-soft);
+    cursor: pointer;
+    transition:
+      background-color 140ms ease,
+      color 140ms ease,
+      box-shadow 140ms ease;
+  }
+
+  .segment input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .segment input:checked + span {
+    color: var(--color-ink);
+  }
+
+  .segment label:has(input:checked) {
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+    box-shadow: var(--shadow-card);
+  }
+
+  .segment label:has(input:focus-visible) {
+    outline: 3px solid var(--color-primary-deep);
+    outline-offset: 2px;
+  }
+
+  /*
+   * The hero's light.
+   *
+   * One warm pool behind the headline and one cool one behind the card, so the
+   * two halves of the hero sit in different light and the eye moves between
+   * them. Kept under 12% so the paper grain still shows through.
+   */
+  .hero-light {
+    background-image:
+      radial-gradient(50% 60% at 18% 30%, rgb(242 197 124 / 0.28), transparent 70%),
+      radial-gradient(45% 55% at 85% 55%, rgb(31 111 92 / 0.12), transparent 70%);
+  }
+
+  /*
+   * The desk's working surfaces.
+   *
+   * The desk used to be white on white, so a table had no edge and a card had
+   * no lift. Now the desk stands on the same paper ground as the rest of the
+   * site and its tables are white plates on it — which is the thing a person
+   * scanning a list actually needs: the row block reads as one object.
+   */
+  .desk-plate {
+    background-color: var(--color-surface);
+    box-shadow: var(--shadow-card);
+  }
+}

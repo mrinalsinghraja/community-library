@@ -3,10 +3,16 @@ import type { ReactNode } from "react";
 
 import { LEGAL_LINKS } from "@/lib/legal-links";
 import { LibraryLogo } from "@/components/library/library-logo";
+import { NavLink } from "@/components/layout/nav-link";
 import { cn } from "@/lib/cn";
-import type { PermissionKey } from "@/lib/permissions";
+import { roleLabel } from "@/lib/permissions";
 import type { Actor } from "@/server/authz";
-import { deskDestinationsFor, readerDestinationsFor } from "@/lib/desk-nav";
+import {
+  DESK_GROUPS,
+  deskDestinationsFor,
+  readerDestinationsFor,
+  type DeskDestination,
+} from "@/lib/desk-nav";
 import { catalogueIsPubliclyVisible, type Branding } from "@/server/lib/settings";
 import { signOutAction } from "@/server/actions/auth-actions";
 
@@ -23,12 +29,7 @@ import { signOutAction } from "@/server/actions/auth-actions";
  * requirePermission().
  */
 
-interface NavItem {
-  href: string;
-  label: string;
-  permission: PermissionKey;
-  badge?: number;
-}
+type NavItem = DeskDestination & { badge?: number };
 
 export async function StaffShell({
   branding,
@@ -74,6 +75,28 @@ export async function StaffShell({
   }));
 
   /*
+   * The same doors, standing in their clusters.
+   *
+   * Sliced from the filtered list above rather than filtered again, so a
+   * cluster cannot hold a door the flat list refused. A cluster with nothing in
+   * it for this person is left out — a Librarian sees no "Admin" heading over
+   * an empty space.
+   */
+  const clusters = DESK_GROUPS.map((group) => ({
+    group,
+    doors: visible.filter((item) => item.group === group),
+  })).filter((cluster) => cluster.doors.length > 0);
+
+  /*
+   * What this person is, said once, in the corner.
+   *
+   * A volunteer holds one role and it is the first thing a colleague looking
+   * over their shoulder wants to know. Somebody holding several sees the first;
+   * the full list is on their account page.
+   */
+  const role = actor.roleKeys[0] ? roleLabel(actor.roleKeys[0]) : null;
+
+  /*
    * The public side of the library, in the same band the reader masthead uses.
    *
    * Added in ADR-059. Before it, eighteen desk screens offered no route to the
@@ -94,8 +117,12 @@ export async function StaffShell({
 
 
   return (
-    <div className="desk-density flex min-h-screen flex-col bg-surface">
-      <header className="bg-surface">
+    <div className="desk-density flex min-h-screen flex-col">
+      {/*
+        White on the paper ground, with a hairline under it. The desk used to be
+        white on white, which is why nothing on it had an edge.
+      */}
+      <header className="bg-surface shadow-[0_1px_0_rgb(43_33_24/0.08)]">
         <div className="mx-auto flex w-full max-w-[104rem] flex-wrap items-center gap-x-5 gap-y-2 px-5 py-2.5 sm:px-7">
           <Link href="/desk" className="flex items-center gap-3 no-underline">
             <LibraryLogo
@@ -104,27 +131,21 @@ export async function StaffShell({
               size={40}
               className="w-8"
             />
-            <span className="font-display text-lg font-semibold text-ink">Library desk</span>
+            <span className="flex flex-col leading-tight">
+              <span className="font-display text-lg font-semibold text-ink">Library desk</span>
+              {/* Which library's desk — from tablet width up; on a phone the row is the desk's. */}
+              <span className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-ink-soft sm:block">
+                {branding.libraryName}
+              </span>
+            </span>
           </Link>
 
-          <nav aria-label="Desk" className="flex flex-wrap items-center gap-1">
-            {visible.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold whitespace-nowrap text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
-              >
-                {item.label}
-                {item.badge ? (
-                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-accent-ink px-1.5 py-0.5 text-xs font-bold text-white">
-                    {item.badge}
-                  </span>
-                ) : null}
-              </Link>
-            ))}
-          </nav>
-
-          <div className="ms-auto flex items-center gap-3">
+          <div className="ms-auto flex items-center gap-2.5">
+            {role ? (
+              <span className="hidden rounded-full bg-primary-wash px-2.5 py-1 text-xs font-bold tracking-[0.04em] text-primary-deep sm:inline-flex">
+                {role}
+              </span>
+            ) : null}
             {/*
               A librarian's own account was reachable only by typing /account:
               every desk screen renders this shell, and this shell had no door to
@@ -133,7 +154,7 @@ export async function StaffShell({
             */}
             <Link
               href="/account"
-              className="rounded-md px-2 py-1.5 text-sm font-semibold text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
+              className="rounded-md px-2 py-1.5 text-sm font-semibold text-ink no-underline hover:bg-surface-sunk"
             >
               {actor.displayName}
             </Link>
@@ -149,6 +170,57 @@ export async function StaffShell({
         </div>
 
         {/*
+          The doors, in their clusters.
+
+          One row that scrolls sideways on a narrow screen rather than wrapping
+          into a wall. Each cluster carries its name above it from a wide
+          screen up — "Lending", "People" — so a volunteer on their first
+          afternoon reads five jobs rather than fifteen links. The current page
+          is underlined in the same berry-to-green as every other current page
+          on the site.
+        */}
+        <nav
+          aria-label="Desk"
+          className="mx-auto w-full max-w-[104rem] overflow-x-auto px-5 [scrollbar-width:none] sm:px-7 [&::-webkit-scrollbar]:hidden"
+        >
+          <ul className="flex items-stretch gap-1 pb-1.5 pt-1 lg:gap-0">
+            {clusters.map((cluster, index) => (
+              <li
+                key={cluster.group}
+                className={cn(
+                  "flex list-none flex-col",
+                  index > 0 && "lg:ms-3 lg:border-s lg:border-hairline lg:ps-3",
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className="hidden ps-2.5 pb-0.5 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-ink-faint lg:block"
+                >
+                  {cluster.group}
+                </span>
+                <ul className="flex items-center gap-0.5">
+                  {cluster.doors.map((item) => (
+                    <li key={item.href} className="list-none">
+                      <NavLink
+                        href={item.href}
+                        className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-semibold whitespace-nowrap text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
+                      >
+                        {item.label}
+                        {item.badge ? (
+                          <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-accent-ink px-1.5 py-0.5 text-xs font-bold text-white">
+                            {item.badge}
+                          </span>
+                        ) : null}
+                      </NavLink>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        {/*
           The reader's doors, in a band of their own beneath the desk's.
 
           Two bands rather than seventeen links on one row, and the split is the
@@ -157,19 +229,20 @@ export async function StaffShell({
           serving a queue is not looking for the rules page — but it is there,
           and it is the same list they see on every other screen.
         */}
-        <div className="border-t border-hairline bg-ground/50">
+        <div className="border-t border-hairline bg-ground/60">
           <nav
             aria-label="The library"
             className="mx-auto flex w-full max-w-[104rem] flex-wrap items-center gap-1 px-5 py-1 sm:px-7"
           >
             {readerDoors.map((item) => (
-              <Link
+              <NavLink
                 key={item.href}
                 href={item.href}
+                exact={item.href === "/"}
                 className="rounded-md px-2.5 py-1 text-sm font-medium whitespace-nowrap text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
               >
                 {item.label}
-              </Link>
+              </NavLink>
             ))}
           </nav>
         </div>
@@ -239,7 +312,7 @@ export function DataTable({
   return (
     <div
       className={cn(
-        "overflow-x-auto rounded-[var(--radius-card)] border border-hairline",
+        "desk-plate overflow-x-auto rounded-[var(--radius-card)]",
         className,
       )}
     >

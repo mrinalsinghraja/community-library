@@ -491,3 +491,30 @@ Breakpoints follow Tailwind: `sm` 640, `md` 768, `lg` 1024, `xl` 1280.
   the browser rather than from code that could forget one of them. Its trigger
   carries an accessible name naming the book; the picture inside is a real
   `alt`, not a decorative one, because it is the content at that moment.
+
+
+---
+
+## Elevation, edges and the way in (second pass, 2026-09-05)
+
+See ADR-069. Three rungs, each carrying a one-pixel hairline of the ink at 7%:
+
+| token | use |
+|---|---|
+| `--shadow-hairline` | an edge with no lift — wells, the masthead's underline |
+| `--shadow-card` | every `Card`, every desk table (`.desk-plate`) |
+| `--shadow-float` | the sign-in frame, the specimen card in the hero |
+
+Behaviours that live in `globals.css` rather than in a component:
+
+* `.masthead` — sticky from 768px up, 88% white, blurred through.
+* `.door[aria-current="page"]` — the berry-to-green underline under the
+  current door. Set by `NavLink`; never by a class alone.
+* `.field-input` — hover darkens the border; focus turns it deep primary and
+  adds a 4px wash ring *inside* the page's focus outline, which stays.
+* `.segment` — two native radios drawn as a segmented control; the checked
+  one lifts on a white plate (`:has(input:checked)`).
+* `.auth-panel` — the deep primary room behind the sign-in, lit berry high
+  and leaf low, faintly ruled.
+* `.hero-light` — one warm pool behind the headline, one cool one behind the
+  card. Under 12%, so the paper grain still shows.

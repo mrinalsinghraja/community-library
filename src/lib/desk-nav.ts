@@ -21,59 +21,79 @@ import type { PermissionKey } from "@/lib/permissions";
  * test.ts` asserts that directly.
  */
 
+/**
+ * The clusters the desk's doors stand in, in the order they are drawn.
+ *
+ * Fifteen doors in one row is a wall. Five clusters of two to four, each named
+ * for the job rather than the table, is a desk a new volunteer can read: what
+ * you do with books, what you do with people, the shelves, the room, and the
+ * administration that is nobody's afternoon job.
+ */
+export type DeskGroup = "Lending" | "People" | "Shelves" | "The room" | "Admin";
+
+export const DESK_GROUPS: readonly DeskGroup[] = [
+  "Lending",
+  "People",
+  "Shelves",
+  "The room",
+  "Admin",
+];
+
 export interface DeskDestination {
   href: string;
   label: string;
   /** The single permission that decides whether this door exists. */
   permission: PermissionKey;
+  /** Which cluster it is drawn in. Every door has one. */
+  group: DeskGroup;
 }
 
 export const DESK_DESTINATIONS: readonly DeskDestination[] = [
   // Circulation first: on an ordinary afternoon it is what the desk is for.
-  { href: "/desk/circulation", label: "Issue", permission: "loan.issue" },
+  { href: "/desk/circulation", label: "Issue", permission: "loan.issue", group: "Lending" },
   // loan.return, not loan.view — every reader holds loan.view, and this link
   // must only appear for somebody who works the desk.
-  { href: "/desk/loans", label: "Books out", permission: "loan.return" },
+  { href: "/desk/loans", label: "Books out", permission: "loan.return", group: "Lending" },
   // A child has asked for a book and is waiting for it. `loan.issue` is the
   // authority to hand one over, and the same key guards the page — saying yes
   // here runs the desk's own issue, so it is the same power either way.
-  { href: "/desk/requests", label: "Books asked for", permission: "loan.issue" },
+  { href: "/desk/requests", label: "Books asked for", permission: "loan.issue", group: "Lending" },
   // A child asked a question and is waiting. `loan.renew` is the authority to
   // answer it, and the same key guards the page.
-  { href: "/desk/renewals", label: "Asks to keep", permission: "loan.renew" },
-  { href: "/desk/registrations", label: "New members", permission: "registration.view" },
-  { href: "/desk/members", label: "Readers", permission: "member.view" },
+  { href: "/desk/renewals", label: "Asks to keep", permission: "loan.renew", group: "Lending" },
+  { href: "/desk/registrations", label: "New members", permission: "registration.view", group: "People" },
+  { href: "/desk/members", label: "Readers", permission: "member.view", group: "People" },
+  // When the room is open. `visit.manage` is Librarian and Super Admin both —
+  // the person who will be standing behind the desk is the person who says when.
+  // Corrections readers have asked for. `profile_change.review` is Super Admin
+  // only — approving what a child proposed for their guardian's email moves the
+  // account's recovery path, which is not the desk's call.
+  { href: "/desk/changes", label: "Detail changes", permission: "profile_change.review", group: "People" },
   // book.edit, not book.view: every reader holds book.view, and this link must
   // only appear for somebody who can actually manage the collection.
   // "Book list", not "Books". The reader side has a "Catalogue"; two menus
   // using the same word for two different pages is the one inconsistency a
   // navigation must never have.
-  { href: "/admin/books", label: "Book list", permission: "book.edit" },
+  { href: "/admin/books", label: "Book list", permission: "book.edit", group: "Shelves" },
   // Reviews waiting to go on a book's page. `review.moderate` is the authority
   // to decide, and so is exactly the authority to read what is waiting — not
   // `book.edit`, which is a fact about the collection rather than a judgement
   // about a child's writing. Deleting a published review is a different key
   // again (`review.delete`, Super Admin only) and guards a control on this page
   // rather than the page itself.
-  { href: "/desk/reviews", label: "Reviews", permission: "review.moderate" },
-  // When the room is open. `visit.manage` is Librarian and Super Admin both —
-  // the person who will be standing behind the desk is the person who says when.
-  // Corrections readers have asked for. `profile_change.review` is Super Admin
-  // only — approving what a child proposed for their guardian's email moves the
-  // account's recovery path, which is not the desk's call.
-  { href: "/desk/changes", label: "Detail changes", permission: "profile_change.review" },
-  { href: "/desk/visits", label: "Visiting times", permission: "visit.manage" },
+  { href: "/desk/reviews", label: "Reviews", permission: "review.moderate", group: "Shelves" },
+  { href: "/desk/visits", label: "Visiting times", permission: "visit.manage", group: "The room" },
   // What the library says to every family at once. Super Admin alone.
-  { href: "/desk/board", label: "Notice board", permission: "announcement.manage" },
-  { href: "/admin/staff", label: "Staff", permission: "user.manage_staff" },
+  { href: "/desk/board", label: "Notice board", permission: "announcement.manage", group: "The room" },
   // What the library did over a period, as opposed to what it is doing now.
   // `report.view` is held by Librarian and Super Admin both.
-  { href: "/desk/reports", label: "Reports", permission: "report.view" },
+  { href: "/desk/reports", label: "Reports", permission: "report.view", group: "The room" },
+  { href: "/admin/staff", label: "Staff", permission: "user.manage_staff", group: "Admin" },
   // Administration. Three links, not fifteen: how the library works, what it
   // looks like, and what has been done to it.
-  { href: "/admin/settings", label: "Settings", permission: "settings.view" },
-  { href: "/admin/branding", label: "Branding", permission: "branding.edit" },
-  { href: "/admin/audit", label: "Audit", permission: "audit.view" },
+  { href: "/admin/settings", label: "Settings", permission: "settings.view", group: "Admin" },
+  { href: "/admin/branding", label: "Branding", permission: "branding.edit", group: "Admin" },
+  { href: "/admin/audit", label: "Audit", permission: "audit.view", group: "Admin" },
 ] as const;
 
 // ---------------------------------------------------------------------------

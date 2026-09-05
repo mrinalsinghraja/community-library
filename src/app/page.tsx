@@ -136,7 +136,7 @@ export default async function HomePage() {
       {/* ---------------------------------------------------------------- */}
       {/* Hero — what this is, what it costs, and the card                  */}
       {/* ---------------------------------------------------------------- */}
-      <section className="relative overflow-hidden">
+      <section className="hero-light relative overflow-hidden">
         <div aria-hidden="true" className="pointer-events-none absolute inset-0">
           <Butterfly className="drift absolute right-[12%] top-10 w-10 opacity-80 sm:w-14" />
           <LeafSprig className="absolute bottom-6 left-[4%] hidden w-12 opacity-50 md:block" />
@@ -207,6 +207,22 @@ export default async function HomePage() {
               </ButtonLink>
             </div>
 
+            {/*
+              Three facts, not three claims. Each one is said elsewhere on the
+              page in a sentence; here they are the eyebrow a parent scans
+              before deciding whether to read the sentence.
+            */}
+            <ul className="mt-7 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold text-ink-soft">
+              {["Free to join", "Run by neighbours", "Books shared, never sold"].map((fact) => (
+                <li key={fact} className="flex list-none items-center gap-2">
+                  <span className="inline-flex size-5 items-center justify-center rounded-full bg-primary-wash text-primary-deep">
+                    <Icon name="check" className="text-[0.75em]" />
+                  </span>
+                  {fact}
+                </li>
+              ))}
+            </ul>
+
             <p className="mt-5 text-base text-ink-soft">
               One short form, filled in by a parent or guardian.{" "}
               <Link href="/how-to-join" className="font-bold text-primary-deep">
@@ -231,7 +247,7 @@ export default async function HomePage() {
             is shown before joining has to be the thing their child is given,
             and two components would have drifted apart within a month.
           */}
-          <div className="sm:rotate-[-1.5deg]">
+          <div className="drop-shadow-[0_28px_40px_rgb(43_33_24/0.22)] transition-transform duration-300 sm:rotate-[-1.5deg] sm:hover:rotate-0">
             <LibraryCard
               timezone={timezone}
               facts={{

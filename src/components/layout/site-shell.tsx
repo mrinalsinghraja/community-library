@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Butterfly, LibraryLogo } from "@/components/library/library-logo";
+import { NavLink } from "@/components/layout/nav-link";
 import { cn } from "@/lib/cn";
 import { StoryCharacters } from "@/components/library/story-characters";
 import { canReachDesk, readerDestinationsFor } from "@/lib/desk-nav";
@@ -88,7 +89,12 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
   });
 
   return (
-    <header className="relative bg-surface">
+    /*
+      Sticky from tablet width up, static on a phone. A two-row masthead is a
+      fifth of a phone screen and pinning it there would be paying for
+      convenience with the one thing a small screen has none of.
+    */
+    <header className="masthead relative">
       {/*
         Wraps to two rows on a narrow screen: brand above, navigation below.
         A library name can be long, and squeezing it onto one row with the
@@ -111,7 +117,7 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
             <span className="font-display text-lg font-semibold text-ink sm:text-2xl">
               {branding.libraryName}
             </span>
-            <span className="text-sm text-ink-soft sm:text-base">
+            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-soft sm:text-sm">
               {branding.communityName}
             </span>
           </span>
@@ -145,13 +151,13 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
             from the same list the desk itself renders.
           */}
           {deskIsOpen ? (
-            <Link href="/desk" className={NAV_LINK}>
+            <NavLink href="/desk" className={NAV_LINK}>
               Library desk
-            </Link>
+            </NavLink>
           ) : null}
           <Link
             href={signedIn ? "/account" : "/login"}
-            className="rounded-[var(--radius-button)] bg-primary px-4 py-2 text-base font-semibold text-white no-underline transition-colors hover:bg-primary-deep"
+            className="rounded-[var(--radius-button)] bg-primary px-4 py-2 text-base font-semibold text-white no-underline shadow-lift transition-colors hover:bg-primary-deep"
           >
             {signedIn ? "My library" : "Sign in"}
           </Link>
@@ -196,15 +202,17 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
           aria-label="Main"
           className="mx-auto max-w-6xl overflow-x-auto px-5 [scrollbar-width:none] sm:px-8 [&::-webkit-scrollbar]:hidden"
         >
-          <ul className="flex items-center gap-1 py-1.5 sm:gap-2">
+          <ul className="flex items-center gap-1 py-2 sm:gap-2">
             {destinations.map((item) => (
               <li key={item.href} className="list-none">
-                <Link
+                {/* Home is "/" and would otherwise be current on every page. */}
+                <NavLink
                   href={item.href}
+                  exact={item.href === "/"}
                   className={`${NAV_LINK} whitespace-nowrap`}
                 >
                   {item.label}
-                </Link>
+                </NavLink>
               </li>
             ))}
           </ul>
