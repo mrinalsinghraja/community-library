@@ -518,3 +518,29 @@ Behaviours that live in `globals.css` rather than in a component:
   and leaf low, faintly ruled.
 * `.hero-light` — one warm pool behind the headline, one cool one behind the
   card. Under 12%, so the paper grain still shows.
+
+
+---
+
+## The lit band (2026-09-06)
+
+See ADR-070. Every page opens on the same gradient the sign-in room is drawn in.
+
+| class | where | leaf light |
+|---|---|---|
+| `.auth-panel` | sign-in, forgotten password, activation, confirmation, joining | 0.22 berry / **0.35** leaf |
+| `.theme-band` | every page heading, the desk's, `/account`, a book's page | 0.45 berry / **0.22** leaf |
+
+The leaf is damped on a band because a band is a few lines deep and the light
+lands under the words. Measured on the lightest patch:
+
+| | patch | white | white 85% | white 80% |
+|---|---|---|---|---|
+| `.auth-panel` | `#377641` | 5.48:1 | 4.46:1 | 4.17:1 |
+| `.theme-band` | `#2A6B44` | 6.39:1 | 5.15:1 | 4.74:1 |
+
+**Nothing on a band may be quieter than 80% white.** Headings are pure white,
+the sentence under a heading is 85%, an eyebrow is 80%. A test enforces it.
+
+`.garden-rule-light` is the mark's rule for a dark ground: same left edge, same
+weight, leaf to berry rather than leaf to primary.

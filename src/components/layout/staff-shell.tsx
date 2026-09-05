@@ -297,12 +297,23 @@ export async function StaffShell({
           the heading does not have to.
         */}
         {title ? (
-          <header>
+          /*
+            The same band the reader's pages open with, cut down.
+            
+            Two lines deep rather than five, no butterfly, no sentence under the
+            heading: a librarian with a queue in front of them is not reading an
+            introduction, and vertical space on the desk is the thing this whole
+            shell is built to save. It is unmistakably the same product, and it
+            costs about thirty pixels.
+          */
+          <header className="theme-band relative isolate overflow-hidden rounded-[var(--radius-card)] px-5 py-4 text-white shadow-card sm:px-7 sm:py-5">
             <DeskEyebrow />
-            <h1 className="garden-rule inline-block text-3xl">{title}</h1>
+            <h1 className="garden-rule garden-rule-light relative inline-block text-2xl text-white sm:text-3xl">
+              {title}
+            </h1>
           </header>
         ) : null}
-        <div className={title ? "mt-8" : undefined}>{children}</div>
+        <div className={title ? "mt-9" : undefined}>{children}</div>
       </main>
 
       {/*

@@ -341,7 +341,7 @@ describe("a page shared by staff and readers has one heading", () => {
     const shell = read("components", "layout", "staff-shell.tsx");
     expect(shell).toContain("title?: string;");
     // And draws nothing at all rather than an empty header block.
-    expect(shell).toMatch(/\{title \? \(\s*<header>/);
+    expect(shell).toMatch(/\{title \? \([\s\S]{0,600}?<header/);
   });
 });
 
@@ -398,5 +398,72 @@ describe("a thumb can find every door", () => {
     // They were drawn from `lg` up, which is the screen that needed them least.
     const label = STAFF.slice(STAFF.indexOf("{cluster.group}") - 400, STAFF.indexOf("{cluster.group}"));
     expect(label).not.toMatch(/hidden[^"]*lg:block/);
+  });
+});
+
+describe("one lit band opens every page", () => {
+  /*
+   * The library had two visual languages and no rule about which page got
+   * which. The front door, the sign-in and the joining form were lit; every
+   * page a family opened afterwards was ink on paper, so the site looked like
+   * two sites — the one that persuaded them and the one they then had to use.
+   *
+   * `PageHeading` is the band now, so no page had to be edited to get it, and
+   * `.theme-band` is the one place its colours are written down.
+   */
+  const CSS = readFileSync(join(process.cwd(), "src", "app", "globals.css"), "utf8");
+  const HEADING = read("components", "layout", "site-shell.tsx");
+  const STAFF = read("components", "layout", "staff-shell.tsx");
+
+  it("draws the band from the same three colours as the sign-in room", () => {
+    const band = CSS.slice(CSS.indexOf(".theme-band {"), CSS.indexOf(".theme-band::before"));
+    expect(band).toContain("var(--color-primary-night)");
+    expect(band).toContain("var(--color-primary-deep)");
+    // The berry and the leaf, both sampled from the library's own mark.
+    expect(band).toContain("rgb(168 40 120");
+    expect(band).toContain("rgb(120 176 48");
+  });
+
+  it("damps the leaf light, because on a band it lands under the words", () => {
+    /*
+     * The measurement this rests on: at 0.35 the lightest patch is #377641 and
+     * white-at-80% reads 4.17:1 — under AA. At 0.22 it is #2A6B44 and the same
+     * text reads 4.74:1. The sign-in room keeps 0.35 because it is tall and the
+     * light sits in a corner with nothing over it.
+     */
+    const band = CSS.slice(CSS.indexOf(".theme-band {"), CSS.indexOf(".theme-band::before"));
+    const room = CSS.slice(CSS.indexOf(".auth-panel {"), CSS.indexOf(".theme-band {"));
+
+    expect(band).toContain("rgb(120 176 48 / 0.22)");
+    expect(room).toContain("rgb(120 176 48 / 0.35)");
+  });
+
+  it("never writes anything on a band quieter than 80% white", () => {
+    // 80% is where AA stops on the lightest patch of the gradient.
+    for (const [name, source] of [
+      ["page heading", HEADING],
+      ["desk heading", STAFF],
+      ["desk eyebrow", read("components", "layout", "desk-eyebrow.tsx")],
+      ["account greeting", read("app", "account", "page.tsx")],
+    ] as const) {
+      const band = source.slice(source.indexOf("theme-band"));
+      for (const match of band.matchAll(/text-white\/(\d+)/g)) {
+        expect(Number(match[1]), `${name}: text-white/${match[1]}`).toBeGreaterThanOrEqual(80);
+      }
+    }
+  });
+
+  it("carries the mark's own rule, redrawn so it survives a dark ground", () => {
+    // leaf → primary is invisible on primary. Same device, berry at the far end.
+    expect(CSS).toContain(".garden-rule-light::after");
+    expect(HEADING).toContain("garden-rule garden-rule-light");
+    expect(STAFF).toContain("garden-rule garden-rule-light");
+  });
+
+  it("gives the desk a shorter one, because the desk is where space is bought", () => {
+    const header = STAFF.slice(STAFF.indexOf('<header className="theme-band'));
+    // No butterfly and no sentence: two lines, not five.
+    expect(header.slice(0, 400)).not.toContain("Butterfly");
+    expect(STAFF).toMatch(/theme-band[^"]*px-5 py-4/);
   });
 });

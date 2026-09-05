@@ -110,6 +110,27 @@ export default async function BookDetailPage({
           All the books
         </Link>
 
+        {/*
+          The band, like every other page — with the shelf as its section,
+          because on this page the section is a fact rather than a label: it is
+          what tells a child where in the room to walk. The title lives here
+          rather than beside the cover so that this page opens the way the rest
+          of the library does; everything the title used to sit above (the
+          author, the rating, the badges) is still in one column beside the
+          jacket, which is where a person compares them.
+        */}
+        <div className="mt-6">
+          <div className="theme-band relative isolate overflow-hidden rounded-[var(--radius-card)] px-6 py-7 text-white shadow-card sm:px-9 sm:py-8">
+            <p className="relative mb-3 text-xs font-bold uppercase tracking-[0.18em] text-white/80">
+              {book.categoryName}
+            </p>
+            <h1 className="garden-rule garden-rule-light relative inline-block pe-14 text-3xl leading-tight text-white sm:pe-0 sm:text-4xl">
+              {book.title}
+            </h1>
+            <p className="relative mt-9 text-lg text-white/85">{book.authors.join(", ")}</p>
+          </div>
+        </div>
+
         <div className="mt-8 flex flex-col gap-8 sm:flex-row sm:items-start sm:gap-10">
           {/*
             Wider than it was. This screen is where a child decides whether they
@@ -138,23 +159,11 @@ export default async function BookDetailPage({
 
           <div className="min-w-0 flex-1">
             {/*
-              The shelf, in the small capitals every other page uses for its
-              section. Here it is not decoration: it is the one fact that tells
-              a child where in the room to walk, and it is said again on a badge
-              below because the badge is a filter and this is a location.
+              First in the column now that the title is in the band above. It is
+              the first thing anyone looks for on a page like this, and it links
+              to the reviews below rather than repeating them here.
             */}
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent-ink">
-              {book.categoryName}
-            </p>
-            <h1 className="mt-2 text-4xl leading-tight">{book.title}</h1>
-            <p className="mt-2 text-xl text-ink-soft">{book.authors.join(", ")}</p>
-
-            {/*
-              Directly under the author, above every badge. It is the first
-              thing anyone looks for on a page like this, and it links to the
-              reviews below rather than repeating them here.
-            */}
-            <p className="mt-4">
+            <p>
               <a
                 href="#reviews-heading"
                 className="inline-flex no-underline hover:opacity-80"

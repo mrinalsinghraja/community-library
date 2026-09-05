@@ -3182,3 +3182,58 @@ The colour tokens and their measured contrasts. The type. The radii. The
 copy a parent reads. The vague refusal on a failed sign-in. The promise that
 nobody at the library can see a password, now made twice on the page it
 matters most.
+
+## ADR-070 — One lit band, on every page
+
+**Status:** accepted · **Date:** 2026-09-06 · **Extends:** ADR-069
+
+ADR-069 drew the sign-in as a room: the deep primary lit berry at one corner
+and leaf at the other, faintly ruled, white type on it. The joining form got the
+same thing as a band across the top. The front door already had its own warm
+light. Everything else — the catalogue, the shelf a child browses, the policy
+pages, the desk — opened with a heading set in ink on paper.
+
+So the library had two visual languages and no rule about which page got which:
+the three pages that *persuade* a family were lit, and every page they then had
+to *use* was not. The library's owner looked at the three and asked for the rest
+to match.
+
+### The decision
+
+**`PageHeading` is the band.** Same API, so no page was edited to get it — the
+section in small capitals, the heading, the mark's own rule and the sentence
+under it, drawn on the gradient instead of on paper. Thirteen reader-facing
+pages and every policy page changed by changing one component.
+
+**The colours are measured, not eyeballed**, like every other pair in this
+system. On a band the leaf light lands directly under the words rather than in a
+far corner with nothing over it, so it is damped from 0.35 to 0.22:
+
+| | lightest patch | white | white 85% | white 80% |
+|---|---|---|---|---|
+| sign-in room (leaf 0.35) | `#377641` | 5.48:1 | 4.46:1 | 4.17:1 |
+| page band (leaf 0.22) | `#2A6B44` | 6.39:1 | 5.15:1 | 4.74:1 |
+
+**Nothing on a band is quieter than 80% white**, which is where AA stops on that
+patch. A test walks every band in the codebase and fails on `text-white/75`.
+
+**The rule is redrawn rather than dropped.** `garden-rule` runs leaf to primary,
+which is invisible on a primary ground; `garden-rule-light` keeps the same left
+edge and weight and ends at the berry.
+
+**The desk gets a short one.** Two lines rather than five, no butterfly, no
+sentence: a librarian with a queue is not reading an introduction, and vertical
+space on the desk is what this whole shell exists to save. It is unmistakably
+the same product and costs about thirty pixels.
+
+**Two pages draw their own.** `/account` puts the reader's avatar inside the
+band, because that is the one page whose heading is a person. A book's page
+puts the shelf, the title and the author in it, and keeps the jacket, the
+rating, the badges and the age note in the column below — the title moved out
+from beside the cover so the page opens the way the rest of the library does.
+
+### What did not change
+
+The palette. The type. The paper ground the bands sit on. The desk's density
+from `sm` up. The 44px floor under every door. The `auth-panel` itself, which
+keeps its brighter leaf because the room it lights is tall.

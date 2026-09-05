@@ -81,7 +81,12 @@ export default async function AccountPage() {
     */
     <Shell branding={branding} actor={actor}>
       <PageBody width="page">
-        <div className="flex items-center gap-4">
+        {/*
+          The greeting, in the band every other page opens with. The avatar sits
+          inside it rather than beside it — this is the one page whose heading is
+          a person, so the picture belongs in the heading.
+        */}
+        <div className="theme-band relative isolate flex items-center gap-4 overflow-hidden rounded-[var(--radius-card)] px-6 py-7 text-white shadow-card sm:px-9 sm:py-8">
           {/*
             The child's own card picture.
 
@@ -92,22 +97,27 @@ export default async function AccountPage() {
             nobody — the protection that matters is that no OTHER child can load
             these bytes, which /api/media/[id] enforces per request.
           */}
-          <MemberAvatar
-            avatarKey={profile?.avatarKey}
-            photoUrl={profile?.photoMediaId ? `/api/media/${profile.photoMediaId}` : null}
-            name={actor.displayName}
-            size={72}
-          />
-          <div>
+          <div className="relative shrink-0">
+            <MemberAvatar
+              avatarKey={profile?.avatarKey}
+              photoUrl={profile?.photoMediaId ? `/api/media/${profile.photoMediaId}` : null}
+              name={actor.displayName}
+              size={72}
+              className="ring-2 ring-white/25"
+            />
+          </div>
+          <div className="relative min-w-0">
             {/*
               The eyebrow says where you are, not that you are authenticated.
               "Signed in" is a status the masthead already carries; on the page
               itself it was the loudest thing above a child's own name.
             */}
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent-ink">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/80">
               {actor.kind === "STAFF" ? "Library staff" : "My library"}
             </p>
-            <h1 className="mt-2 text-4xl">Hello, {actor.displayName}! 👋</h1>
+            <h1 className="garden-rule garden-rule-light mt-2 inline-block text-3xl text-white sm:text-4xl">
+              Hello, {actor.displayName}! 👋
+            </h1>
           </div>
         </div>
 

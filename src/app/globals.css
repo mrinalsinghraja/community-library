@@ -318,6 +318,17 @@
     background: linear-gradient(to right, var(--color-leaf), var(--color-primary));
   }
 
+  /*
+   * The rule, on the band.
+   *
+   * `garden-rule` runs leaf to primary, which is invisible on a deep primary
+   * ground. Same device, same left edge, same weight — the far end is the berry
+   * instead, so the mark still reads as the one from the mark.
+   */
+  .garden-rule-light::after {
+    background: linear-gradient(to right, var(--color-leaf), var(--color-accent));
+  }
+
   /* Full-width variant, for the foot of a hero or between major sections. */
   .garden-rule-wide::after {
     width: 100%;
@@ -526,7 +537,35 @@
       linear-gradient(160deg, var(--color-primary-deep), var(--color-primary-night) 65%);
   }
 
-  /* Ruled paper, faintly, so the panel is a surface and not a fill. */
+  /*
+   * The same room, as a band across the top of a page.
+   *
+   * One device, two sizes. The sign-in panel is tall and its leaf light sits in
+   * a far corner with nothing over it; a banner is a few lines deep, so that
+   * same light lands directly under the words. Damped from 0.35 to 0.22 for
+   * exactly that reason — it is the difference between white-at-80% reading
+   * 4.17:1 on the lightest patch and reading 4.74:1, which is the difference
+   * between failing AA and passing it.
+   *
+   * Measured, like every other pair in this system:
+   *
+   *   lightest patch (leaf 0.22 over primary-deep)  #2A6B44
+   *     white          6.39:1   — the heading
+   *     white at 85%   5.15:1   — the sentence under it
+   *     white at 80%   4.74:1   — the eyebrow
+   *
+   * Nothing on a band may be quieter than 80% white.
+   */
+  .theme-band {
+    background-color: var(--color-primary-night);
+    background-image:
+      radial-gradient(60% 60% at 88% 8%, rgb(168 40 120 / 0.45), transparent 70%),
+      radial-gradient(55% 60% at 6% 96%, rgb(120 176 48 / 0.22), transparent 70%),
+      linear-gradient(160deg, var(--color-primary-deep), var(--color-primary-night) 65%);
+  }
+
+  /* Ruled paper, faintly, so a panel is a surface and not a fill. */
+  .theme-band::before,
   .auth-panel::before {
     content: "";
     position: absolute;

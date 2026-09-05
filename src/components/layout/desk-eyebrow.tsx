@@ -17,6 +17,9 @@ export function DeskEyebrow() {
   if (!group) return null;
 
   return (
-    <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-accent-ink">{group}</p>
+    /* 80% white, which is where AA stops on the lightest patch of the band. */
+    <p className="relative mb-2 text-xs font-bold uppercase tracking-[0.18em] text-white/80">
+      {group}
+    </p>
   );
 }

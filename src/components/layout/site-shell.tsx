@@ -501,8 +501,24 @@ export function PageBody({
 }
 
 /**
- * A page heading with the garden rule under it, and one butterfly to the side.
- * Used at the top of every child-facing page so they are visibly one family.
+ * The band every page opens with.
+ *
+ * The same room the sign-in page is drawn in, laid across the top of a page a
+ * few lines deep: the deep primary lit berry at one corner and leaf at the
+ * other, faintly ruled, with the section in small capitals, the heading, the
+ * mark's own rule and the sentence that says what the page is for.
+ *
+ * It replaced a heading set in ink on paper, and the reason is that the library
+ * had two visual languages and no rule about which page got which. The front
+ * door, the sign-in and the joining form were lit; everything a family opened
+ * afterwards was not, so the site looked like two sites — the one that
+ * persuaded them and the one they then had to use.
+ *
+ * **Every colour on it is measured, not eyeballed.** See `.theme-band` in
+ * globals.css for the table: the lightest patch of the gradient is #2A6B44, and
+ * nothing here is quieter than 80% white because 80% is where AA stops on it.
+ *
+ * The API did not change, so no page was edited to get this.
  */
 export function PageHeading({
   eyebrow,
@@ -526,18 +542,26 @@ export function PageHeading({
   butterfly?: boolean;
 }) {
   return (
-    <div className="relative">
+    <div className="theme-band relative isolate overflow-hidden rounded-[var(--radius-card)] px-6 py-7 text-white shadow-card sm:px-9 sm:py-9">
+      {butterfly ? (
+        <Butterfly
+          tone="soft"
+          className="drift pointer-events-none absolute right-5 top-4 w-11 opacity-45 sm:right-8 sm:w-16"
+        />
+      ) : null}
+
       {eyebrow ? (
-        <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-accent-ink">
+        <p className="relative mb-3 text-xs font-bold uppercase tracking-[0.18em] text-white/80">
           {eyebrow}
         </p>
       ) : null}
-      <h1 className="garden-rule inline-block text-3xl sm:text-4xl">{title}</h1>
-      {butterfly ? (
-        <Butterfly className="drift absolute -top-2 right-0 w-9 opacity-80 sm:w-12" />
-      ) : null}
+
+      <h1 className="garden-rule garden-rule-light relative inline-block pe-14 text-3xl text-white sm:pe-0 sm:text-4xl">
+        {title}
+      </h1>
+
       {children ? (
-        <p className="mt-7 max-w-2xl text-lg text-ink-soft">{children}</p>
+        <p className="relative mt-9 max-w-2xl text-lg text-white/85">{children}</p>
       ) : null}
     </div>
   );
