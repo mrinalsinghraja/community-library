@@ -227,3 +227,36 @@ describe("where you are", () => {
     expect(DESK_NAV).not.toMatch(/usePathname|pathname/);
   });
 });
+
+describe("the desk's title says where you are", () => {
+  it("names the cluster from the address, longest door first", async () => {
+    const { deskGroupForPath } = await import("@/lib/desk-group");
+
+    expect(deskGroupForPath("/desk/loans")).toBe("Lending");
+    expect(deskGroupForPath("/desk/members/01a0-some-id")).toBe("People");
+    expect(deskGroupForPath("/admin/books/new")).toBe("Shelves");
+    expect(deskGroupForPath("/admin/books/labels")).toBe("Shelves");
+    expect(deskGroupForPath("/desk/reports")).toBe("The room");
+    expect(deskGroupForPath("/admin/audit")).toBe("Admin");
+  });
+
+  it("says nothing on a screen that belongs to no cluster", async () => {
+    const { deskGroupForPath } = await import("@/lib/desk-group");
+
+    // Shared by staff and readers; the desk landing is a door to all of them.
+    expect(deskGroupForPath("/account")).toBeNull();
+    expect(deskGroupForPath("/desk")).toBeNull();
+    expect(deskGroupForPath("/")).toBeNull();
+  });
+
+  it("is drawn by the shell over every desk title", () => {
+    const shell = read("components", "layout", "staff-shell.tsx");
+    expect(shell).toMatch(/<DeskEyebrow \/>\s*<h1/);
+  });
+
+  it("keeps the lists themselves ignorant of the address", () => {
+    // The eyebrow reads the address in its own file. desk-nav.ts still does not.
+    expect(read("lib", "desk-nav.ts")).not.toMatch(/usePathname|pathname/);
+    expect(read("components", "layout", "desk-eyebrow.tsx")).toContain("usePathname");
+  });
+});

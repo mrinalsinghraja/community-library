@@ -292,7 +292,7 @@ export function DeskSelection({
 
   return (
     <SelectionContext.Provider value={context}>
-      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-[var(--radius-card)] border border-hairline bg-surface-sunk px-4 py-3">
+      <div className="desk-well mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-[var(--radius-card)] px-4 py-3">
         <label className="flex cursor-pointer items-center gap-2.5 text-sm font-semibold text-ink">
           <SelectAllCheckbox
             ids={ids}

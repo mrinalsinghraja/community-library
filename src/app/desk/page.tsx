@@ -75,7 +75,7 @@ export default async function DeskPage() {
       <div className="mt-6 grid max-w-[84rem] gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {actor.permissions.has("loan.return") ? (
           <Link href="/desk/loans" className="no-underline">
-            <Card tone={loans.overdue > 0 ? "shelf" : "plain"} className="h-full">
+            <Card tone={loans.overdue > 0 ? "shelf" : "plain"} className="lift h-full">
               <CardTitle icon={<Icon name="book" />}>Books out</CardTitle>
               <CardBody>
                 <p className="font-display text-4xl font-semibold tabular-nums text-ink">{loans.active}</p>
@@ -95,7 +95,7 @@ export default async function DeskPage() {
 
         {actor.permissions.has("loan.issue") ? (
           <Link href="/desk/requests" className="no-underline">
-            <Card tone={borrowAsks > 0 ? "shelf" : "plain"} className="h-full">
+            <Card tone={borrowAsks > 0 ? "shelf" : "plain"} className="lift h-full">
               <CardTitle icon={<Icon name="shelf" />}>Books asked for</CardTitle>
               <CardBody>
                 <p className="font-display text-4xl font-semibold tabular-nums text-ink">{borrowAsks}</p>
@@ -113,7 +113,7 @@ export default async function DeskPage() {
 
         {actor.permissions.has("loan.renew") ? (
           <Link href="/desk/renewals" className="no-underline">
-            <Card tone={renewalAsks > 0 ? "shelf" : "plain"} className="h-full">
+            <Card tone={renewalAsks > 0 ? "shelf" : "plain"} className="lift h-full">
               <CardTitle icon={<Icon name="renew" />}>Asks to keep</CardTitle>
               <CardBody>
                 <p className="font-display text-4xl font-semibold tabular-nums text-ink">{renewalAsks}</p>
@@ -131,7 +131,7 @@ export default async function DeskPage() {
 
         {actor.permissions.has("registration.view") ? (
           <Link href="/desk/registrations" className="no-underline">
-            <Card tone={pending > 0 ? "shelf" : "plain"} className="h-full">
+            <Card tone={pending > 0 ? "shelf" : "plain"} className="lift h-full">
               <CardTitle icon={<Icon name="reader" />}>New members</CardTitle>
               <CardBody>
                 <p className="font-display text-4xl font-semibold tabular-nums text-ink">{pending}</p>
@@ -149,7 +149,7 @@ export default async function DeskPage() {
 
         {actor.permissions.has("member.view") ? (
           <Link href="/desk/members" className="no-underline">
-            <Card className="h-full">
+            <Card className="lift h-full">
               <CardTitle icon={<Icon name="card" />}>Readers</CardTitle>
               <CardBody>Find a reader, pause an account, or send a fresh sign-in link.</CardBody>
             </Card>
@@ -158,7 +158,7 @@ export default async function DeskPage() {
 
         {actor.permissions.has("user.manage_staff") ? (
           <Link href="/admin/staff" className="no-underline">
-            <Card className="h-full">
+            <Card className="lift h-full">
               <CardTitle icon={<Icon name="staff" />}>Staff</CardTitle>
               <CardBody>Add a librarian, or pause an account.</CardBody>
             </Card>

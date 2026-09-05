@@ -174,7 +174,7 @@ export default async function AdminBooksPage({
           hold the word "Any"; now they line up across the top and the results
           start where the eye already is.
         */
-        className="mt-5 grid gap-x-4 gap-y-3 rounded-[var(--radius-card)] bg-surface-sunk px-4 py-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6"
+        className="desk-well mt-5 grid gap-x-4 gap-y-3 rounded-[var(--radius-card)] px-4 py-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6"
       >
         <BookFilterFields filter={filter} categories={categories} />
 

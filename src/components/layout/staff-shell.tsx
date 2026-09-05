@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { LEGAL_LINKS } from "@/lib/legal-links";
 import { LibraryLogo } from "@/components/library/library-logo";
+import { DeskEyebrow } from "@/components/layout/desk-eyebrow";
 import { NavLink } from "@/components/layout/nav-link";
 import { cn } from "@/lib/cn";
 import { roleLabel } from "@/lib/permissions";
@@ -268,7 +269,16 @@ export async function StaffShell({
         not read that way, it is scanned across, and it wants the room.
       */}
       <main id="main" className="mx-auto w-full max-w-[104rem] flex-1 px-5 py-6 sm:px-7">
-        <h1 className="garden-rule inline-block text-3xl">{title}</h1>
+        {/*
+          The title, opened the way every other screen opens: the cluster in
+          small capitals, then the heading on its rule. The eyebrow is the one
+          thing on the desk that knows the address; it says where you are so
+          the heading does not have to.
+        */}
+        <header>
+          <DeskEyebrow />
+          <h1 className="garden-rule inline-block text-3xl">{title}</h1>
+        </header>
         <div className="mt-8">{children}</div>
       </main>
 
@@ -316,7 +326,7 @@ export function DataTable({
         className,
       )}
     >
-      <table className="w-full min-w-[46rem] border-collapse text-base">
+      <table className="desk-table w-full min-w-[46rem] border-collapse text-base">
         <thead>
           {/*
             Headers are small caps in the body face, not the display serif.

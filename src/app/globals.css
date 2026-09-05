@@ -619,4 +619,30 @@
     background-color: var(--color-surface);
     box-shadow: var(--shadow-card);
   }
+
+  /*
+   * Rows on the plate.
+   *
+   * A hairline between every row, drawn by the table rather than by twenty
+   * pages each remembering to, and a warm tint under the pointer so a person
+   * scanning across a long row never loses which one they are on. The tint is
+   * the ground colour: the row lifts by going back to the paper.
+   */
+  .desk-table tbody tr {
+    border-top: 1px solid var(--color-hairline);
+    transition: background-color 100ms ease;
+  }
+
+  .desk-table tbody tr:hover {
+    background-color: rgb(253 248 240 / 0.75);
+  }
+
+  /*
+   * A well: the recessed panel filters and toolbars sit in. The inset hairline
+   * is what separates "a panel" from "a slightly different beige".
+   */
+  .desk-well {
+    background-color: var(--color-surface-sunk);
+    box-shadow: inset 0 0 0 1px rgb(43 33 24 / 0.06);
+  }
 }
