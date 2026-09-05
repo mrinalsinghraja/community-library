@@ -142,7 +142,7 @@ export default async function RulesPage() {
   return (
     <PublicShell branding={branding}>
       <PageBody width="wide">
-        <PageHeading title="Our simple rules">
+        <PageHeading eyebrow="How we share" title="Our simple rules">
           Short, and none of them are complicated.
         </PageHeading>
 

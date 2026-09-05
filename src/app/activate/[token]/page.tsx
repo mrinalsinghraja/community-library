@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 
 import { ActivateForm } from "@/app/activate/[token]/activate-form";
+import { AuthRoom } from "@/components/layout/auth-room";
 import { PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
 import { PASSWORD_POLICY } from "@/server/lib/password";
 import { inspectActivationToken } from "@/server/services/password-service";
@@ -38,35 +38,39 @@ export default async function ActivatePage({
 
   return (
     <PublicShell branding={branding}>
-      <div className="mx-auto w-full max-w-xl px-5 py-14 sm:px-8">
-        {view.valid ? (
-          <>
-            <p className="text-lg font-bold text-accent-ink">Almost there</p>
-            <h1 className="mt-2 text-4xl">
-              {view.childName ? `Hello, ${view.childName}!` : "Set up your account"}
-            </h1>
-            <p className="mt-3 text-lg text-ink-soft">
-              {view.memberCode && view.memberCode !== "—" ? (
-                <>
-                  Your library card is <strong className="text-ink">{view.memberCode}</strong>. Now
-                  choose a password so only you can sign in.
-                </>
-              ) : (
-                "Choose a password to finish setting up your account."
-              )}
-            </p>
-
-            <Card className="mt-8">
-              <ActivateForm token={token} minLength={PASSWORD_POLICY.member.minLength} />
-            </Card>
-
-            <p className="mt-6 text-base text-ink-soft">
+      {view.valid ? (
+        <AuthRoom
+          branding={branding}
+          eyebrow="Almost there"
+          title={view.childName ? `Hello, ${view.childName}!` : "Set up your account"}
+          lede={
+            view.memberCode && view.memberCode !== "—" ? (
+              <>
+                Your library card is <strong className="text-ink">{view.memberCode}</strong>. Now
+                choose a password so only you can sign in.
+              </>
+            ) : (
+              "Choose a password to finish setting up your account."
+            )
+          }
+          panelHeading="Welcome to the library."
+          panelLede="One password, chosen together, and the shelves are yours. Every book on them was carried down by a neighbour."
+          footer={
+            <p>
               Guardians: please choose this together and keep it somewhere safe. Nobody at the
               library can see it — if it is forgotten we send a new link rather than telling you the
               old one.
             </p>
-          </>
-        ) : (
+          }
+        >
+          <ActivateForm token={token} minLength={PASSWORD_POLICY.member.minLength} />
+        </AuthRoom>
+      ) : (
+        <AuthRoom
+          branding={branding}
+          panelHeading="Welcome to the library."
+          panelLede="Activation links work once. Your librarian can send a fresh one to your family's email."
+        >
           <EmptyState
             illustration={<Icon name="key" />}
             title="This link has expired"
@@ -82,8 +86,8 @@ export default async function ActivatePage({
             Activation links work once and do not last forever. Ask your librarian and they will
             send a fresh one to your family&rsquo;s email.
           </EmptyState>
-        )}
-      </div>
+        </AuthRoom>
+      )}
     </PublicShell>
   );
 }

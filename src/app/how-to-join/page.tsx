@@ -92,7 +92,7 @@ export default async function HowToJoinPage() {
   return (
     <PublicShell branding={branding}>
       <PageBody width="page">
-        <PageHeading title="How to join">
+        <PageHeading eyebrow="Joining" title="How to join">
           Every child in the building can have a card, and it costs nothing. Here is exactly what
           happens, from the form to the first book.
         </PageHeading>

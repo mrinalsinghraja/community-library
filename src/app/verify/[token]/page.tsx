@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 
+import { AuthRoom } from "@/components/layout/auth-room";
 import { PublicShell } from "@/components/layout/site-shell";
 import { ButtonLink } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
 import { getBrandingSafe } from "@/server/lib/settings";
 import { completeEmailChallenge } from "@/server/services/guardian-verification-service";
@@ -49,9 +49,13 @@ export default async function VerifyPage({
 
   return (
     <PublicShell branding={branding}>
-      <div className="mx-auto w-full max-w-xl px-5 py-14 sm:px-8">
-        {outcome.ok ? (
-          <Card tone="primary" className="text-center">
+      {outcome.ok ? (
+        <AuthRoom
+          branding={branding}
+          panelHeading="Thank you."
+          panelLede="A grown-up has confirmed this registration. The librarian takes it from here."
+        >
+          <div className="text-center">
             <IconMedallion name="check" />
             <h1 className="mt-4 text-3xl">Thank you — that is confirmed</h1>
             <p className="mt-3 text-lg text-ink-soft">
@@ -61,8 +65,14 @@ export default async function VerifyPage({
             <p className="mt-3 text-base text-ink-soft">
               There is nothing else to do. Joining is free, and always will be.
             </p>
-          </Card>
-        ) : (
+          </div>
+        </AuthRoom>
+      ) : (
+        <AuthRoom
+          branding={branding}
+          panelHeading="Thank you."
+          panelLede="Confirmation links work once. The librarian can send a fresh one."
+        >
           <EmptyState
             illustration={<Icon name="key" />}
             title="This link is no longer active"
@@ -77,8 +87,8 @@ export default async function VerifyPage({
             Confirmation links work once and do not last forever. Please have a word with the
             librarian and they will send a fresh one.
           </EmptyState>
-        )}
-      </div>
+        </AuthRoom>
+      )}
     </PublicShell>
   );
 }

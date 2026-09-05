@@ -17,7 +17,7 @@ import { LEGAL_LAST_UPDATED, type LegalDocument } from "@/lib/legal";
 export function LegalPage({ document }: { document: LegalDocument }) {
   return (
     <div className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-8 sm:py-16">
-      <PageHeading title={document.title}>{document.standfirst}</PageHeading>
+      <PageHeading eyebrow="Policies" title={document.title}>{document.standfirst}</PageHeading>
 
       <p className="mt-6 text-base text-ink-faint">Last updated {LEGAL_LAST_UPDATED}</p>
 

@@ -32,7 +32,7 @@ export default async function ContactPage() {
   return (
     <PublicShell branding={branding}>
       <div className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-8 sm:py-16">
-        <PageHeading title="Contact us">
+        <PageHeading eyebrow="Ask a person" title="Contact us">
           Everyone here is a neighbour and a volunteer, so please allow a little time for a reply.
         </PageHeading>
 

@@ -488,16 +488,28 @@ export function PageBody({
  * Used at the top of every child-facing page so they are visibly one family.
  */
 export function PageHeading({
+  eyebrow,
   title,
   children,
   butterfly = true,
 }: {
+  /**
+   * The section this page belongs to, in small capitals above the title —
+   * "Joining", "Policies". The same device the masthead and the desk use for
+   * the library's name, so a page opens the way the site opens.
+   */
+  eyebrow?: string;
   title: string;
   children?: ReactNode;
   butterfly?: boolean;
 }) {
   return (
     <div className="relative">
+      {eyebrow ? (
+        <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-accent-ink">
+          {eyebrow}
+        </p>
+      ) : null}
       <h1 className="garden-rule inline-block text-3xl sm:text-4xl">{title}</h1>
       {butterfly ? (
         <Butterfly className="drift absolute -top-2 right-0 w-9 opacity-80 sm:w-12" />

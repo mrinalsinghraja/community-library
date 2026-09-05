@@ -78,8 +78,64 @@ describe("the sign-in form asks who you are, and changes nothing else", () => {
     // Once in the room, once under the form. A promise about a child's
     // password is worth making where a parent is looking, which is not
     // necessarily where the form is.
-    const flat = PAGE.replace(/\s+/g, " ");
+    const ROOM = read("components", "layout", "auth-room.tsx");
+    const flat = (PAGE + ROOM).replace(/\s+/g, " ");
     expect(flat.match(/Nobody at the library can see your password/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("every door into the library opens onto the same room", () => {
+  /*
+   * Six pages a family meets in their first week. Each one arranged
+   * differently reads as carelessness; the frame is shared so they cannot
+   * drift apart again.
+   */
+  const DOORS = [
+    ["app", "login", "page.tsx"],
+    ["app", "forgot", "page.tsx"],
+    ["app", "reset", "[token]", "page.tsx"],
+    ["app", "activate", "[token]", "page.tsx"],
+    ["app", "verify", "[token]", "page.tsx"],
+    ["app", "join", "page.tsx"],
+  ] as const;
+
+  it.each(DOORS.map((parts) => [parts.join("/"), parts] as const))(
+    "%s is drawn in the room",
+    (_, parts) => {
+      const source = read(...parts);
+      expect(source).toContain("<AuthRoom");
+      // No page keeps a private frame beside the shared one.
+      expect(source).not.toMatch(/max-w-xl px-5 py-14/);
+    },
+  );
+
+  it("keeps the joining form the wide, stacked way", () => {
+    expect(read("app", "join", "page.tsx")).toMatch(/<AuthRoom[\s\S]*?\bstacked\b/);
+  });
+
+  it("keeps the expired-link pages vague about why", () => {
+    for (const parts of DOORS.slice(2, 5)) {
+      const source = read(...parts).replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+      expect(source).not.toMatch(/already used|cancelled|never existed|wrong link/i);
+    }
+  });
+
+  it("puts the panel second on a phone and first on a desk", () => {
+    const ROOM = read("components", "layout", "auth-room.tsx");
+    expect(ROOM).toContain("order-2");
+    expect(ROOM).toContain("lg:order-none");
+  });
+});
+
+describe("every content page opens the same way", () => {
+  it.each([
+    ["app", "contact", "page.tsx"],
+    ["app", "rules", "page.tsx"],
+    ["app", "how-to-join", "page.tsx"],
+    ["app", "faq", "page.tsx"],
+    ["components", "library", "legal-page.tsx"],
+  ] as const)("%s/%s/%s carries an eyebrow", (...parts) => {
+    expect(read(...parts)).toMatch(/<PageHeading\s+eyebrow="[^"]+"/);
   });
 });
 

@@ -246,7 +246,7 @@ export default async function FaqPage() {
   return (
     <PublicShell branding={branding}>
       <PageBody width="wide">
-        <PageHeading title="Questions and answers">
+        <PageHeading eyebrow="Questions" title="Questions and answers">
           Everything a family usually asks before joining — and the things worth knowing
           afterwards. If your question is not here, ask a person.
         </PageHeading>

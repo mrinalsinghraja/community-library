@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { JoinForm } from "@/app/join/join-form";
+import { AuthRoom } from "@/components/layout/auth-room";
 import { PublicShell } from "@/components/layout/site-shell";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Callout } from "@/components/ui/states";
@@ -8,7 +9,6 @@ import { eligibleBirthYears } from "@/lib/birth-year";
 import { formatInTimezone } from "@/lib/dates";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { Icon } from "@/components/ui/icon";
-import { Butterfly } from "@/components/library/library-logo";
 
 export const metadata: Metadata = { title: "Join the library" };
 
@@ -42,26 +42,27 @@ export default async function JoinPage() {
 
   return (
     <PublicShell branding={branding}>
-      <div className="relative mx-auto w-full max-w-3xl px-5 py-14 sm:px-8">
-        <Butterfly className="drift pointer-events-none absolute right-4 top-8 w-10 opacity-60 sm:w-12" />
-
-        <h1 className="garden-rule inline-block text-4xl">Join {branding.libraryName}</h1>
-        <p className="mt-8 text-lg text-ink-soft">
-          Let&rsquo;s create your library account! It takes a minute, and a parent or guardian needs to fill
-          it in.
-        </p>
-
+      {/*
+        The room, stacked: this form is too long to sit beside the panel, so
+        the panel is a band across the top and the form has the width.
+      */}
+      <AuthRoom
+        branding={branding}
+        stacked
+        title={`Join ${branding.libraryName}`}
+        lede="Let’s create your library account! It takes a minute, and a parent or guardian needs to fill it in."
+        panelHeading="Every child in the building can have a card."
+        panelLede="It costs nothing, and nothing on this form is ever shown to another family."
+      >
         {ages ? (
-          <div className="mt-10">
-            <JoinForm
-              ageMin={ages.ageMin}
-              ageMax={ages.ageMax}
-              birthYears={ages.birthYears}
-              libraryName={branding.libraryName}
-            />
-          </div>
+          <JoinForm
+            ageMin={ages.ageMin}
+            ageMax={ages.ageMax}
+            birthYears={ages.birthYears}
+            libraryName={branding.libraryName}
+          />
         ) : (
-          <Callout tone="warn" title="Not ready yet" className="mt-8">
+          <Callout tone="warn" title="Not ready yet">
             The library has not been set up, so registrations cannot be accepted.
           </Callout>
         )}
@@ -85,7 +86,7 @@ export default async function JoinPage() {
             </ul>
           </CardBody>
         </Card>
-      </div>
+      </AuthRoom>
     </PublicShell>
   );
 }
