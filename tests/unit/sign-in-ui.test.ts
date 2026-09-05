@@ -379,19 +379,26 @@ describe("a thumb can find every door", () => {
     expect(SITE).not.toMatch(/<ul className="mt-4 flex flex-col gap-2\.5">/);
   });
 
-  it("gives the desk's doors the same floor on a phone, and its density back after", () => {
+  it("gives the desk a floor a finger can hit, and asks the pointer rather than the width", () => {
     /*
-     * Scoped to the header, which is where the desk's density is actually
-     * bought. The policy row at the very foot of the page keeps its 44px at
-     * every width: it is the last thing on the screen and competing with
-     * nothing for the room.
+     * This started as `min-h-11 sm:min-h-0` — 44px on a phone, the desk's own
+     * density from 640px up. That asked the wrong question. A tablet is 768px
+     * wide and is operated entirely by thumb, so the desk was handing a
+     * librarian 37px doors on exactly the device they are most likely to be
+     * holding at the desk.
      */
-    const header = STAFF.slice(STAFF.indexOf("<header"), STAFF.indexOf("</header>"));
-    const boxes = [...header.matchAll(/className="inline-flex min-h-11[^"]*"/g)];
+    const CSS_ = readFileSync(join(process.cwd(), "src", "app", "globals.css"), "utf8");
+    const floor = CSS_.slice(CSS_.indexOf(".tap-floor {"), CSS_.indexOf(".desk-plate {"));
+
+    // The floor is the default and a FINE pointer is what removes it, so a
+    // device that reports nothing useful still gets the accessible size.
+    expect(floor).toMatch(/\.tap-floor \{\s*min-height: 2\.75rem/);
+    expect(floor).toMatch(/@media \(pointer: fine\)[\s\S]*?min-height: 0/);
 
     // Every door, the reader band under it, the person's name, and the way out.
-    expect(boxes.length).toBeGreaterThanOrEqual(4);
-    for (const box of boxes) expect(box[0]).toContain("sm:min-h-0");
+    expect(STAFF.match(/tap-floor/g)?.length).toBeGreaterThanOrEqual(4);
+    // And nothing left guessing from the width.
+    expect(STAFF).not.toContain("sm:min-h-0");
   });
 
   it("names the desk's clusters at every width, phone included", () => {
@@ -475,5 +482,31 @@ describe("one lit band opens every page", () => {
     // No butterfly and no sentence: two lines, not five.
     expect(header.slice(0, 400)).not.toContain("Butterfly");
     expect(STAFF).toMatch(/theme-band[^"]*px-5 py-4/);
+  });
+});
+
+describe("the masthead actually sticks", () => {
+  /*
+   * It did not, for four commits, and the class was on the element the whole
+   * time. `.masthead` sets `position: sticky` inside a `min-width: 768px` query
+   * in the components layer; the element also carried Tailwind's `relative`,
+   * and the utilities layer is cascaded after components — so the utility won,
+   * the header scrolled away, and nothing about it looked wrong in the source.
+   *
+   * This is the general trap, not a one-off: any component class that sets a
+   * property a utility can also set will lose to that utility, quietly.
+   */
+  const SITE = read("components", "layout", "site-shell.tsx");
+  const CSS = readFileSync(join(process.cwd(), "src", "app", "globals.css"), "utf8");
+
+  it("still asks for sticky from tablet width up", () => {
+    const rule = CSS.slice(CSS.indexOf(".masthead {"), CSS.indexOf(".door {"));
+    expect(rule).toMatch(/@media \(min-width: 768px\)[\s\S]*?position: sticky/);
+  });
+
+  it("hands the header no position utility to override it with", () => {
+    const tag = SITE.slice(SITE.indexOf("<header className="), SITE.indexOf("<header className=") + 90);
+    expect(tag).toContain('className="masthead"');
+    expect(tag).not.toMatch(/\b(relative|absolute|fixed|static|sticky)\b/);
   });
 });

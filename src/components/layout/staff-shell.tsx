@@ -166,14 +166,14 @@ export async function StaffShell({
             */}
             <Link
               href="/account"
-              className="inline-flex min-h-11 items-center rounded-md px-2 py-1.5 text-sm font-semibold text-ink no-underline hover:bg-surface-sunk sm:min-h-0"
+              className="tap-floor inline-flex items-center rounded-md px-2 py-1.5 text-sm font-semibold text-ink no-underline hover:bg-surface-sunk"
             >
               {actor.displayName}
             </Link>
             <form action={signOutAction}>
               <button
                 type="submit"
-                className="inline-flex min-h-11 items-center rounded-md border border-control-border px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-surface-sunk hover:text-ink sm:min-h-0"
+                className="tap-floor inline-flex items-center rounded-md border border-control-border px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-surface-sunk hover:text-ink"
               >
                 Sign out
               </button>
@@ -225,7 +225,7 @@ export async function StaffShell({
                     <li key={item.href} className="list-none">
                       <NavLink
                         href={item.href}
-                        className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-semibold whitespace-nowrap text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink sm:min-h-0"
+                        className="tap-floor inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-semibold whitespace-nowrap text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
                       >
                         {item.label}
                         {item.badge ? (
@@ -261,7 +261,7 @@ export async function StaffShell({
                 key={item.href}
                 href={item.href}
                 exact={item.href === "/"}
-                className="inline-flex min-h-11 items-center rounded-md px-2.5 py-1 text-sm font-medium whitespace-nowrap text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink sm:min-h-0"
+                className="tap-floor inline-flex items-center rounded-md px-2.5 py-1 text-sm font-medium whitespace-nowrap text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
               >
                 {item.label}
               </NavLink>
@@ -330,7 +330,7 @@ export async function StaffShell({
             <Link
               key={item.href}
               href={item.href}
-              className="inline-flex min-h-11 items-center text-ink-soft no-underline hover:text-accent-ink"
+              className="tap-floor inline-flex items-center text-ink-soft no-underline hover:text-accent-ink"
             >
               {item.label}
             </Link>

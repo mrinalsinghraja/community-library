@@ -106,7 +106,17 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
       fifth of a phone screen and pinning it there would be paying for
       convenience with the one thing a small screen has none of.
     */
-    <header className="masthead relative">
+    /*
+      No `relative` here, and that is load-bearing rather than tidying.
+
+      Tailwind's utilities layer is cascaded AFTER the components layer, so a
+      `relative` sitting beside `masthead` silently beat the `position: sticky`
+      that `.masthead` sets from 768px up — the class was on the element, the
+      media query matched, and the header still scrolled away. `.masthead`
+      already sets `position: relative` as its own base for narrow screens, so
+      the utility was never adding anything except the bug.
+    */
+    <header className="masthead">
       {/*
         Wraps to two rows on a narrow screen: brand above, navigation below.
         A library name can be long, and squeezing it onto one row with the

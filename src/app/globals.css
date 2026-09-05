@@ -651,6 +651,30 @@
   }
 
   /*
+   * A 44px floor for a finger — on any screen, at any width.
+   *
+   * This replaces `min-h-11 sm:min-h-0`, which asked the wrong question. Width
+   * is not what decides whether a target is big enough: a tablet is 768px wide
+   * and is operated entirely by thumb, so the desk was handing a librarian
+   * 37px doors on exactly the device they are most likely to stand at the desk
+   * holding. The question is what is pointing at the screen, and CSS can ask it
+   * directly.
+   *
+   * It fails safe. The floor is the default and a FINE pointer is what removes
+   * it, so a device that reports nothing useful gets the accessible size, and
+   * only a mouse or a trackpad buys the desk its density back.
+   */
+  .tap-floor {
+    min-height: 2.75rem;
+  }
+
+  @media (pointer: fine) {
+    .tap-floor {
+      min-height: 0;
+    }
+  }
+
+  /*
    * The desk's working surfaces.
    *
    * The desk used to be white on white, so a table had no edge and a card had
