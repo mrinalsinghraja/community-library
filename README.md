@@ -25,7 +25,7 @@ changes, reports and exports for the desk, an AI book helper that answers only
 about books the library owns, and retention machinery that erases fields rather
 than rows. See [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md).
 
-68 architecture decisions · 18 migrations · 35 models · 46 pages · 1,652 tests.
+71 architecture decisions · 19 migrations · 35 models · 46 pages · 1,893 tests.
 
 ---
 
