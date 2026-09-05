@@ -405,59 +405,69 @@ describe("one lit band opens every page", () => {
   /*
    * The library had two visual languages and no rule about which page got
    * which. The front door, the sign-in and the joining form were lit; every
-   * page a family opened afterwards was ink on paper, so the site looked like
-   * two sites — the one that persuaded them and the one they then had to use.
+   * page a family opened afterwards was ink on flat paper, so the site looked
+   * like two sites — the one that persuaded them and the one they then had to
+   * use.
    *
-   * `PageHeading` is the band now, so no page had to be edited to get it, and
+   * The band is the FRONT DOOR's light, not the sign-in room's. A room is a
+   * moment at a door; a page is somewhere a person stands, and it should not be
+   * a slab of night at the top of every screen a child opens. The dark room is
+   * still the sign-in's alone.
+   *
+   * `PageHeading` is the band, so no page was edited to get it, and
    * `.theme-band` is the one place its colours are written down.
    */
   const CSS = readFileSync(join(process.cwd(), "src", "app", "globals.css"), "utf8");
   const HEADING = read("components", "layout", "site-shell.tsx");
   const STAFF = read("components", "layout", "staff-shell.tsx");
+  const band = () => CSS.slice(CSS.indexOf(".theme-band {"), CSS.indexOf(".theme-band::before"));
 
-  it("draws the band from the same three colours as the sign-in room", () => {
-    const band = CSS.slice(CSS.indexOf(".theme-band {"), CSS.indexOf(".theme-band::before"));
-    expect(band).toContain("var(--color-primary-night)");
-    expect(band).toContain("var(--color-primary-deep)");
-    // The berry and the leaf, both sampled from the library's own mark.
-    expect(band).toContain("rgb(168 40 120");
-    expect(band).toContain("rgb(120 176 48");
+  it("is lit by the two lights the home page is lit by", () => {
+    // Gold high on the left, the deep primary low on the right.
+    expect(band()).toContain("rgb(242 197 124");
+    expect(band()).toContain("rgb(31 111 92");
   });
 
-  it("damps the leaf light, because on a band it lands under the words", () => {
+  it("stands on the page's own surface, not on a dark ground", () => {
+    expect(band()).toContain("background-color: var(--color-surface)");
+    expect(band()).not.toContain("--color-primary-night");
+  });
+
+  it("keeps the dark room for the sign-in alone", () => {
     /*
-     * The measurement this rests on: at 0.35 the lightest patch is #377641 and
-     * white-at-80% reads 4.17:1 — under AA. At 0.22 it is #2A6B44 and the same
-     * text reads 4.74:1. The sign-in room keeps 0.35 because it is tall and the
-     * light sits in a corner with nothing over it.
+     * Six doors are drawn in it and nothing else is. A page that merely
+     * *belongs* to a person is not a door.
      */
-    const band = CSS.slice(CSS.indexOf(".theme-band {"), CSS.indexOf(".theme-band::before"));
-    const room = CSS.slice(CSS.indexOf(".auth-panel {"), CSS.indexOf(".theme-band {"));
+    const room = CSS.slice(CSS.indexOf(".auth-panel {"), CSS.indexOf(".auth-panel::before"));
+    expect(room).toContain("--color-primary-night");
 
-    expect(band).toContain("rgb(120 176 48 / 0.22)");
-    expect(room).toContain("rgb(120 176 48 / 0.35)");
+    for (const source of [HEADING, STAFF, read("app", "account", "page.tsx")]) {
+      expect(source).not.toContain("auth-panel");
+    }
   });
 
-  it("never writes anything on a band quieter than 80% white", () => {
-    // 80% is where AA stops on the lightest patch of the gradient.
+  it("writes on it in the page's ordinary ink, which the gradient was measured for", () => {
+    /*
+     * Darkest patch is where the two lights overlap: #E0DABF. Ink reads
+     * 11.21:1 on it, ink-soft 5.64:1, accent-ink 6.03:1 — so a band needs no
+     * palette of its own, and nothing on one is ever white.
+     */
     for (const [name, source] of [
       ["page heading", HEADING],
       ["desk heading", STAFF],
       ["desk eyebrow", read("components", "layout", "desk-eyebrow.tsx")],
       ["account greeting", read("app", "account", "page.tsx")],
+      ["a book's page", read("app", "books", "[code]", "page.tsx")],
     ] as const) {
-      const band = source.slice(source.indexOf("theme-band"));
-      for (const match of band.matchAll(/text-white\/(\d+)/g)) {
-        expect(Number(match[1]), `${name}: text-white/${match[1]}`).toBeGreaterThanOrEqual(80);
-      }
+      const after = source.slice(source.indexOf("theme-band"));
+      expect(after.slice(0, 900), name).not.toMatch(/text-white/);
     }
   });
 
-  it("carries the mark's own rule, redrawn so it survives a dark ground", () => {
-    // leaf → primary is invisible on primary. Same device, berry at the far end.
-    expect(CSS).toContain(".garden-rule-light::after");
-    expect(HEADING).toContain("garden-rule garden-rule-light");
-    expect(STAFF).toContain("garden-rule garden-rule-light");
+  it("carries the mark's own rule, unchanged, because the ground is paper again", () => {
+    expect(CSS).not.toContain("garden-rule-light");
+    expect(HEADING).toMatch(/className="garden-rule relative inline-block/);
+    expect(STAFF).toMatch(/className="garden-rule relative inline-block/);
   });
 
   it("gives the desk a shorter one, because the desk is where space is bought", () => {

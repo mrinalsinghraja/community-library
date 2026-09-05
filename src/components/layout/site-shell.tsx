@@ -514,9 +514,14 @@ export function PageBody({
  * afterwards was not, so the site looked like two sites — the one that
  * persuaded them and the one they then had to use.
  *
+ * The light is the front door's own — gold high on the left, the deep primary
+ * low on the right — so a family who was persuaded by the home page opens a
+ * page that looks like the place they were persuaded by. The sign-in keeps the
+ * dark room: a room is a moment at a door, a page is somewhere you stand.
+ *
  * **Every colour on it is measured, not eyeballed.** See `.theme-band` in
- * globals.css for the table: the lightest patch of the gradient is #2A6B44, and
- * nothing here is quieter than 80% white because 80% is where AA stops on it.
+ * globals.css: the darkest patch of the gradient is #E0DABF, where the page's
+ * ordinary ink still reads 11.21:1 and its softest grey 5.64:1.
  *
  * The API did not change, so no page was edited to get this.
  */
@@ -542,26 +547,23 @@ export function PageHeading({
   butterfly?: boolean;
 }) {
   return (
-    <div className="theme-band relative isolate overflow-hidden rounded-[var(--radius-card)] px-6 py-7 text-white shadow-card sm:px-9 sm:py-9">
+    <div className="theme-band relative isolate overflow-hidden rounded-[var(--radius-card)] px-6 py-7 shadow-card sm:px-9 sm:py-9">
       {butterfly ? (
-        <Butterfly
-          tone="soft"
-          className="drift pointer-events-none absolute right-5 top-4 w-11 opacity-45 sm:right-8 sm:w-16"
-        />
+        <Butterfly className="drift pointer-events-none absolute right-5 top-4 w-11 opacity-80 sm:right-8 sm:w-14" />
       ) : null}
 
       {eyebrow ? (
-        <p className="relative mb-3 text-xs font-bold uppercase tracking-[0.18em] text-white/80">
+        <p className="relative mb-3 text-xs font-bold uppercase tracking-[0.18em] text-accent-ink">
           {eyebrow}
         </p>
       ) : null}
 
-      <h1 className="garden-rule garden-rule-light relative inline-block pe-14 text-3xl text-white sm:pe-0 sm:text-4xl">
+      <h1 className="garden-rule relative inline-block pe-14 text-3xl sm:pe-0 sm:text-4xl">
         {title}
       </h1>
 
       {children ? (
-        <p className="relative mt-9 max-w-2xl text-lg text-white/85">{children}</p>
+        <p className="relative mt-9 max-w-2xl text-lg text-ink-soft">{children}</p>
       ) : null}
     </div>
   );

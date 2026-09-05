@@ -120,14 +120,14 @@ export default async function BookDetailPage({
           jacket, which is where a person compares them.
         */}
         <div className="mt-6">
-          <div className="theme-band relative isolate overflow-hidden rounded-[var(--radius-card)] px-6 py-7 text-white shadow-card sm:px-9 sm:py-8">
-            <p className="relative mb-3 text-xs font-bold uppercase tracking-[0.18em] text-white/80">
+          <div className="theme-band relative isolate overflow-hidden rounded-[var(--radius-card)] px-6 py-7 shadow-card sm:px-9 sm:py-8">
+            <p className="relative mb-3 text-xs font-bold uppercase tracking-[0.18em] text-accent-ink">
               {book.categoryName}
             </p>
-            <h1 className="garden-rule garden-rule-light relative inline-block pe-14 text-3xl leading-tight text-white sm:pe-0 sm:text-4xl">
+            <h1 className="garden-rule relative inline-block pe-14 text-3xl leading-tight sm:pe-0 sm:text-4xl">
               {book.title}
             </h1>
-            <p className="relative mt-9 text-lg text-white/85">{book.authors.join(", ")}</p>
+            <p className="relative mt-9 text-lg text-ink-soft">{book.authors.join(", ")}</p>
           </div>
         </div>
 

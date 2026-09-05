@@ -306,11 +306,9 @@ export async function StaffShell({
             shell is built to save. It is unmistakably the same product, and it
             costs about thirty pixels.
           */
-          <header className="theme-band relative isolate overflow-hidden rounded-[var(--radius-card)] px-5 py-4 text-white shadow-card sm:px-7 sm:py-5">
+          <header className="theme-band relative isolate overflow-hidden rounded-[var(--radius-card)] px-5 py-4 shadow-card sm:px-7 sm:py-5">
             <DeskEyebrow />
-            <h1 className="garden-rule garden-rule-light relative inline-block text-2xl text-white sm:text-3xl">
-              {title}
-            </h1>
+            <h1 className="garden-rule relative inline-block text-2xl sm:text-3xl">{title}</h1>
           </header>
         ) : null}
         <div className={title ? "mt-9" : undefined}>{children}</div>

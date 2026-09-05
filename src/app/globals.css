@@ -318,17 +318,6 @@
     background: linear-gradient(to right, var(--color-leaf), var(--color-primary));
   }
 
-  /*
-   * The rule, on the band.
-   *
-   * `garden-rule` runs leaf to primary, which is invisible on a deep primary
-   * ground. Same device, same left edge, same weight — the far end is the berry
-   * instead, so the mark still reads as the one from the mark.
-   */
-  .garden-rule-light::after {
-    background: linear-gradient(to right, var(--color-leaf), var(--color-accent));
-  }
-
   /* Full-width variant, for the foot of a hero or between major sections. */
   .garden-rule-wide::after {
     width: 100%;
@@ -538,34 +527,49 @@
   }
 
   /*
-   * The same room, as a band across the top of a page.
+   * The band every page opens with — the front door's own light, on a plate.
    *
-   * One device, two sizes. The sign-in panel is tall and its leaf light sits in
-   * a far corner with nothing over it; a banner is a few lines deep, so that
-   * same light lands directly under the words. Damped from 0.35 to 0.22 for
-   * exactly that reason — it is the difference between white-at-80% reading
-   * 4.17:1 on the lightest patch and reading 4.74:1, which is the difference
-   * between failing AA and passing it.
+   * The home page is warm paper with two soft lights on it: gold high on the
+   * left, the deep primary low on the right. That is the first thing a family
+   * sees and it is what the library looks like. This is the same two lights,
+   * a little stronger because a band sits on white rather than on the ground,
+   * so it reads as a lit surface rather than as tinted air.
    *
-   * Measured, like every other pair in this system:
+   * The dark room is still the sign-in's alone. A room is a moment — you are
+   * standing at a door, about to go in. A page is a place, and a place should
+   * not be a slab of night at the top of every screen a child opens.
    *
-   *   lightest patch (leaf 0.22 over primary-deep)  #2A6B44
-   *     white          6.39:1   — the heading
-   *     white at 85%   5.15:1   — the sentence under it
-   *     white at 80%   4.74:1   — the eyebrow
+   * CONTRAST IS MEASURED. The darkest patch is where the two lights overlap:
    *
-   * Nothing on a band may be quieter than 80% white.
+   *   sun 0.38 then primary 0.12 over white  →  #E0DABF
+   *     --color-ink         11.21:1   — the heading
+   *     --color-ink-soft     5.64:1   — the sentence under it
+   *     --color-accent-ink   6.03:1   — the eyebrow
+   *
+   * Every one of those clears AA on the worst pixel of the gradient, so the
+   * band takes the page's ordinary ink and needs no special palette.
    */
   .theme-band {
-    background-color: var(--color-primary-night);
+    background-color: var(--color-surface);
     background-image:
-      radial-gradient(60% 60% at 88% 8%, rgb(168 40 120 / 0.45), transparent 70%),
-      radial-gradient(55% 60% at 6% 96%, rgb(120 176 48 / 0.22), transparent 70%),
-      linear-gradient(160deg, var(--color-primary-deep), var(--color-primary-night) 65%);
+      radial-gradient(58% 78% at 14% 22%, rgb(242 197 124 / 0.38), transparent 70%),
+      radial-gradient(52% 68% at 88% 78%, rgb(31 111 92 / 0.12), transparent 70%);
   }
 
-  /* Ruled paper, faintly, so a panel is a surface and not a fill. */
-  .theme-band::before,
+  /*
+   * The same grain the page ground has, so a band is paper that has been lit
+   * rather than a white rectangle with a wash on it.
+   */
+  .theme-band::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle at 1px 1px, rgb(43 33 24 / 0.035) 1px, transparent 0);
+    background-size: 22px 22px;
+    pointer-events: none;
+  }
+
+  /* Ruled paper, faintly, so the sign-in room is a surface and not a fill. */
   .auth-panel::before {
     content: "";
     position: absolute;

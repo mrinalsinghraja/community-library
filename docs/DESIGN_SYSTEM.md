@@ -524,23 +524,23 @@ Behaviours that live in `globals.css` rather than in a component:
 
 ## The lit band (2026-09-06)
 
-See ADR-070. Every page opens on the same gradient the sign-in room is drawn in.
+See ADR-070 and ADR-071. Every page opens on a band; the band is the **home
+page's** light, and the dark room belongs to the sign-in alone.
 
-| class | where | leaf light |
+| class | where | how it is lit |
 |---|---|---|
-| `.auth-panel` | sign-in, forgotten password, activation, confirmation, joining | 0.22 berry / **0.35** leaf |
-| `.theme-band` | every page heading, the desk's, `/account`, a book's page | 0.45 berry / **0.22** leaf |
+| `.theme-band` | every page heading, the desk's, `/account`, a book's page | white plate, gold 0.38 top-left, primary 0.12 bottom-right, page grain over it |
+| `.auth-panel` | sign in, forgotten password, new password, activation, confirmation, joining | deep primary, berry 0.45 one corner, leaf 0.35 the other, faintly ruled |
+| `.hero-light` | the home page's hero | the ground, gold 0.28 and primary 0.12 |
 
-The leaf is damped on a band because a band is a few lines deep and the light
-lands under the words. Measured on the lightest patch:
+A band takes the page's ordinary ink. Measured on its darkest patch, where the
+two lights overlap:
 
-| | patch | white | white 85% | white 80% |
-|---|---|---|---|---|
-| `.auth-panel` | `#377641` | 5.48:1 | 4.46:1 | 4.17:1 |
-| `.theme-band` | `#2A6B44` | 6.39:1 | 5.15:1 | 4.74:1 |
+| `#E0DABF` | ratio |
+|---|---|
+| `--color-ink` | 11.21:1 |
+| `--color-ink-soft` | 5.64:1 |
+| `--color-accent-ink` | 6.03:1 |
 
-**Nothing on a band may be quieter than 80% white.** Headings are pure white,
-the sentence under a heading is 85%, an eyebrow is 80%. A test enforces it.
-
-`.garden-rule-light` is the mark's rule for a dark ground: same left edge, same
-weight, leaf to berry rather than leaf to primary.
+**Nothing on a band is ever white**, and nothing on the sign-in room is ever
+quieter than 80% white. Both are enforced by test.

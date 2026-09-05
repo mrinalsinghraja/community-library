@@ -86,7 +86,7 @@ export default async function AccountPage() {
           inside it rather than beside it — this is the one page whose heading is
           a person, so the picture belongs in the heading.
         */}
-        <div className="theme-band relative isolate flex items-center gap-4 overflow-hidden rounded-[var(--radius-card)] px-6 py-7 text-white shadow-card sm:px-9 sm:py-8">
+        <div className="theme-band relative isolate flex items-center gap-4 overflow-hidden rounded-[var(--radius-card)] px-6 py-7 shadow-card sm:px-9 sm:py-8">
           {/*
             The child's own card picture.
 
@@ -103,7 +103,7 @@ export default async function AccountPage() {
               photoUrl={profile?.photoMediaId ? `/api/media/${profile.photoMediaId}` : null}
               name={actor.displayName}
               size={72}
-              className="ring-2 ring-white/25"
+              className="ring-2 ring-accent/40"
             />
           </div>
           <div className="relative min-w-0">
@@ -112,10 +112,10 @@ export default async function AccountPage() {
               "Signed in" is a status the masthead already carries; on the page
               itself it was the loudest thing above a child's own name.
             */}
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/80">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent-ink">
               {actor.kind === "STAFF" ? "Library staff" : "My library"}
             </p>
-            <h1 className="garden-rule garden-rule-light mt-2 inline-block text-3xl text-white sm:text-4xl">
+            <h1 className="garden-rule mt-2 inline-block text-3xl sm:text-4xl">
               Hello, {actor.displayName}! 👋
             </h1>
           </div>

@@ -3237,3 +3237,61 @@ from beside the cover so the page opens the way the rest of the library does.
 The palette. The type. The paper ground the bands sit on. The desk's density
 from `sm` up. The 44px floor under every door. The `auth-panel` itself, which
 keeps its brighter leaf because the room it lights is tall.
+
+## ADR-071 — The band is the front door's light, not the sign-in's
+
+**Status:** accepted · **Date:** 2026-09-06 · **Reverses the colour of:** ADR-070
+
+ADR-070 gave every page a band and drew it in the sign-in room's deep primary,
+lit berry and leaf, white type on it. The library's owner looked at the result
+and chose the other direction: the **home page's** light everywhere instead.
+
+They were right, and the reason is worth writing down rather than filing as a
+preference.
+
+**A room is a moment; a page is a place.** The dark panel works on the sign-in
+because a person is standing at a door about to go in, and it works on the
+joining form because that is the same moment. It stops working when it is the
+first thing at the top of every screen a family then lives in — a policy page, a
+child's own card, a list of books. Thirty slabs of night is not a theme, it is a
+mood applied indiscriminately, and it argued with the warm paper ground that the
+entire rest of this system is built on.
+
+The home page had the right answer all along: paper, lit. Gold high on the left,
+the deep primary low on the right, ordinary ink on top. It is what a family sees
+first and it is what the library looks like.
+
+### The decision
+
+**`.theme-band` is the home page's two lights on a white plate.** Stronger than
+the hero's, because a band sits on white rather than on the ground and has to
+read as a lit surface rather than as tinted air, and carrying the same paper
+grain as the page ground so it is paper that has been lit rather than a white
+rectangle with a wash on it.
+
+**The band takes the page's ordinary ink**, and needs no palette of its own.
+Measured on the darkest patch, where the two lights overlap:
+
+| `#E0DABF` | ratio |
+|---|---|
+| `--color-ink` (heading) | 11.21:1 |
+| `--color-ink-soft` (the sentence under it) | 5.64:1 |
+| `--color-accent-ink` (eyebrow) | 6.03:1 |
+
+A test asserts no band anywhere writes in white.
+
+**`garden-rule` goes back to being itself.** `garden-rule-light` existed only
+because leaf-to-primary is invisible on a primary ground. Nothing is drawn on
+one any more, so it is deleted rather than left lying around.
+
+**The dark room keeps the six doors it was built for** — sign in, forgotten
+password, a new password, activation, confirmation, joining — and nothing else.
+A test asserts that no page heading, desk heading or account page references
+`auth-panel`.
+
+### What did not change
+
+Everything ADR-070 decided that was not a colour: that every page opens on a
+band, that `PageHeading` *is* the band so no page is edited to get one, that the
+desk's is two lines rather than five, that `/account` puts the reader's face in
+it and a book's page puts its shelf, title and author in it.
