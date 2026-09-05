@@ -166,14 +166,14 @@ export async function StaffShell({
             */}
             <Link
               href="/account"
-              className="rounded-md px-2 py-1.5 text-sm font-semibold text-ink no-underline hover:bg-surface-sunk"
+              className="inline-flex min-h-11 items-center rounded-md px-2 py-1.5 text-sm font-semibold text-ink no-underline hover:bg-surface-sunk sm:min-h-0"
             >
               {actor.displayName}
             </Link>
             <form action={signOutAction}>
               <button
                 type="submit"
-                className="rounded-md border border-control-border px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-surface-sunk hover:text-ink"
+                className="inline-flex min-h-11 items-center rounded-md border border-control-border px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-surface-sunk hover:text-ink sm:min-h-0"
               >
                 Sign out
               </button>
@@ -204,9 +204,19 @@ export async function StaffShell({
                   index > 0 && "lg:ms-3 lg:border-s lg:border-hairline lg:ps-3",
                 )}
               >
+                {/*
+                  Shown at every width, including the phone.
+
+                  It used to appear from `lg` up, which put the grouping on the
+                  screen that needed it least: on a laptop all fifteen doors are
+                  visible at once, and on a phone they are a strip somebody
+                  swipes blind. The label is 10px and costs a line; what it buys
+                  is a volunteer on their first afternoon knowing which four
+                  doors they are looking at.
+                */}
                 <span
                   aria-hidden="true"
-                  className="hidden ps-2.5 pb-0.5 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-ink-faint lg:block"
+                  className="ps-2.5 pb-0.5 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-ink-faint"
                 >
                   {cluster.group}
                 </span>
@@ -215,7 +225,7 @@ export async function StaffShell({
                     <li key={item.href} className="list-none">
                       <NavLink
                         href={item.href}
-                        className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-semibold whitespace-nowrap text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
+                        className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-semibold whitespace-nowrap text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink sm:min-h-0"
                       >
                         {item.label}
                         {item.badge ? (
@@ -251,7 +261,7 @@ export async function StaffShell({
                 key={item.href}
                 href={item.href}
                 exact={item.href === "/"}
-                className="rounded-md px-2.5 py-1 text-sm font-medium whitespace-nowrap text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink"
+                className="inline-flex min-h-11 items-center rounded-md px-2.5 py-1 text-sm font-medium whitespace-nowrap text-ink-soft no-underline hover:bg-surface-sunk hover:text-ink sm:min-h-0"
               >
                 {item.label}
               </NavLink>
@@ -311,7 +321,7 @@ export async function StaffShell({
             <Link
               key={item.href}
               href={item.href}
-              className="text-ink-soft no-underline hover:text-accent-ink"
+              className="inline-flex min-h-11 items-center text-ink-soft no-underline hover:text-accent-ink"
             >
               {item.label}
             </Link>

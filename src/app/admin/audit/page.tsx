@@ -111,7 +111,11 @@ export default async function AuditPage({
               <Button type="submit" size="md" icon={<Icon name="search" />}>
                 Search
               </Button>
-              <Link href="/admin/audit" className="text-base font-bold text-ink-soft">
+              {/* A control beside a button, so it is sized like one to a thumb. */}
+              <Link
+                href="/admin/audit"
+                className="inline-flex min-h-11 items-center px-1 text-base font-bold text-ink-soft no-underline"
+              >
                 Clear
               </Link>
             </div>
@@ -168,12 +172,18 @@ export default async function AuditPage({
         {result.pageCount > 1 ? (
           <nav aria-label="More events" className="flex items-center gap-4">
             {result.page > 1 ? (
-              <Link href={pageHref(result.page - 1)} className="font-bold">
+              <Link
+                href={pageHref(result.page - 1)}
+                className="inline-flex min-h-11 items-center px-1 font-bold"
+              >
                 ← Newer
               </Link>
             ) : null}
             {result.page < result.pageCount ? (
-              <Link href={pageHref(result.page + 1)} className="font-bold">
+              <Link
+                href={pageHref(result.page + 1)}
+                className="inline-flex min-h-11 items-center px-1 font-bold"
+              >
                 Older →
               </Link>
             ) : null}

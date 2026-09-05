@@ -344,3 +344,59 @@ describe("a page shared by staff and readers has one heading", () => {
     expect(shell).toMatch(/\{title \? \(\s*<header>/);
   });
 });
+
+describe("a thumb can find every door", () => {
+  /*
+   * Measured on a 375px phone, and the answer was no: the doors in the
+   * masthead were 39px tall, the desk's were 33, and every link in the footer
+   * — including the four policy links — was 23. Every *button* in this system
+   * is sized for a five-year-old's hand; the navigation had never been held to
+   * the same rule, which is the part of a page a child actually uses most.
+   *
+   * 44px is the floor. The desk drops back to its own density from `sm` up,
+   * because a librarian at a keyboard is not the person the floor is for and
+   * the desk buys its density from exactly this kind of vertical space.
+   *
+   * Links inside a sentence are deliberately not covered: a 44px box around
+   * three words of running prose would break the line it sits in, and the
+   * target-size rule has always exempted them.
+   */
+  const SITE = read("components", "layout", "site-shell.tsx");
+  const STAFF = read("components", "layout", "staff-shell.tsx");
+
+  it("gives the reader's doors and footer links a 44px box", () => {
+    expect(SITE).toMatch(/const NAV_LINK =\s*\n?\s*"inline-flex min-h-11 items-center/);
+    expect(SITE).toContain('const FOOT_LINK = "inline-flex min-h-11 items-center no-underline"');
+  });
+
+  it("uses that box for every list of links at the foot of the page", () => {
+    // Destinations, the way in, WhatsApp, the email address, the policy row.
+    expect(SITE.match(/\$\{FOOT_LINK\}/g)?.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("stops relying on a gap to separate them", () => {
+    // The hit areas touch now, so a gap on top of them would only add height.
+    expect(SITE).not.toMatch(/<ul className="mt-4 flex flex-col gap-2\.5">/);
+  });
+
+  it("gives the desk's doors the same floor on a phone, and its density back after", () => {
+    /*
+     * Scoped to the header, which is where the desk's density is actually
+     * bought. The policy row at the very foot of the page keeps its 44px at
+     * every width: it is the last thing on the screen and competing with
+     * nothing for the room.
+     */
+    const header = STAFF.slice(STAFF.indexOf("<header"), STAFF.indexOf("</header>"));
+    const boxes = [...header.matchAll(/className="inline-flex min-h-11[^"]*"/g)];
+
+    // Every door, the reader band under it, the person's name, and the way out.
+    expect(boxes.length).toBeGreaterThanOrEqual(4);
+    for (const box of boxes) expect(box[0]).toContain("sm:min-h-0");
+  });
+
+  it("names the desk's clusters at every width, phone included", () => {
+    // They were drawn from `lg` up, which is the screen that needed them least.
+    const label = STAFF.slice(STAFF.indexOf("{cluster.group}") - 400, STAFF.indexOf("{cluster.group}"));
+    expect(label).not.toMatch(/hidden[^"]*lg:block/);
+  });
+});

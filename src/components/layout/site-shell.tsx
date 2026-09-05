@@ -30,9 +30,21 @@ import {
  * headings keep Fraunces; the doors are quiet, so the reader's eye goes to the
  * page rather than to the way out of it.
  */
+/*
+ * `min-h-11` is 44px, and it is the whole reason this is a flex box rather than
+ * a padded inline element: the doors were 39px tall on a phone and the policy
+ * links at the foot of the page were 23px. Every button in this system is sized
+ * for a five-year-old's hand — see the note in `button.tsx` — and the
+ * navigation was the one part that had never been measured against that rule.
+ * Nothing here changes size on a wide screen by more than a few pixels.
+ */
 const NAV_LINK =
-  "rounded-[var(--radius-button)] px-2.5 py-2 text-base font-semibold text-ink-soft no-underline " +
-  "transition-colors hover:bg-accent-wash hover:text-accent-ink sm:px-3.5";
+  "inline-flex min-h-11 items-center rounded-[var(--radius-button)] px-2.5 py-2 text-base " +
+  "font-semibold text-ink-soft no-underline transition-colors hover:bg-accent-wash " +
+  "hover:text-accent-ink sm:px-3.5";
+
+/** The same 44px floor for a link that is not a door: footers, policy rows. */
+const FOOT_LINK = "inline-flex min-h-11 items-center no-underline";
 
 /**
  * The doors, written once.
@@ -157,7 +169,7 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
           ) : null}
           <Link
             href={signedIn ? "/account" : "/login"}
-            className="rounded-[var(--radius-button)] bg-primary px-4 py-2 text-base font-semibold text-white no-underline shadow-lift transition-colors hover:bg-primary-deep"
+            className="inline-flex min-h-11 items-center rounded-[var(--radius-button)] bg-primary px-4 py-2 text-base font-semibold text-white no-underline shadow-lift transition-colors hover:bg-primary-deep"
           >
             {signedIn ? "My library" : "Sign in"}
           </Link>
@@ -179,7 +191,7 @@ export async function SiteHeader({ branding }: { branding: Branding }) {
             <form action={signOutAction}>
               <button
                 type="submit"
-                className="rounded-[var(--radius-button)] border border-control-border px-3 py-2 text-base font-semibold text-ink-soft transition-colors hover:bg-accent-wash hover:text-accent-ink"
+                className="inline-flex min-h-11 items-center rounded-[var(--radius-button)] border border-control-border px-3 py-2 text-base font-semibold text-ink-soft transition-colors hover:bg-accent-wash hover:text-accent-ink"
               >
                 Sign out
               </button>
@@ -300,13 +312,11 @@ export async function SiteFooter({ branding }: { branding: Branding }) {
           <h2 className="font-display text-base font-bold uppercase tracking-[0.12em] text-ink">
             Find your way
           </h2>
-          <ul className="mt-4 flex flex-col gap-2.5">
+          {/* No gap: the 44px hit areas are what separate these now. */}
+          <ul className="mt-2 flex flex-col">
             {destinations.map((item) => (
               <li key={item.href} className="list-none">
-                <Link
-                  href={item.href}
-                  className="font-bold text-primary-deep no-underline"
-                >
+                <Link href={item.href} className={`${FOOT_LINK} font-bold text-primary-deep`}>
                   {item.label}
                 </Link>
               </li>
@@ -314,7 +324,7 @@ export async function SiteFooter({ branding }: { branding: Branding }) {
             <li className="list-none">
               <Link
                 href={signedIn ? "/account" : "/login"}
-                className="font-bold text-primary-deep no-underline"
+                className={`${FOOT_LINK} font-bold text-primary-deep`}
               >
                 {signedIn ? "My library" : "Sign in"}
               </Link>
@@ -326,7 +336,7 @@ export async function SiteFooter({ branding }: { branding: Branding }) {
           <h2 className="font-display text-base font-bold uppercase tracking-[0.12em] text-ink">
             Ask a person
           </h2>
-          <ul className="mt-4 flex flex-col gap-2.5">
+          <ul className="mt-2 flex flex-col">
             {whatsapp ? (
               <li className="list-none">
                 {/*
@@ -338,7 +348,7 @@ export async function SiteFooter({ branding }: { branding: Branding }) {
                   href={whatsapp}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-bold text-primary-deep no-underline"
+                  className={`${FOOT_LINK} font-bold text-primary-deep`}
                 >
                   Message us on WhatsApp
                 </a>
@@ -348,13 +358,13 @@ export async function SiteFooter({ branding }: { branding: Branding }) {
               <li className="list-none">
                 <a
                   href={`mailto:${branding.contactEmail}`}
-                  className="font-bold text-primary-deep no-underline"
+                  className={`${FOOT_LINK} font-bold text-primary-deep`}
                 >
                   {branding.contactEmail}
                 </a>
               </li>
             ) : null}
-            <li className="list-none pt-1 text-base">
+            <li className="list-none pt-3 text-base">
               A neighbour replies, not a robot — please allow a little time.
             </li>
           </ul>
@@ -373,12 +383,12 @@ export async function SiteFooter({ branding }: { branding: Branding }) {
       <div className="border-t border-hairline">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-6 text-base text-ink-soft sm:px-8 md:flex-row md:items-center md:justify-between">
           <nav aria-label="Policies">
-            <ul className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <ul className="flex flex-wrap items-center gap-x-6">
               {LEGAL_LINKS.map((item) => (
                 <li key={item.href} className="list-none">
                   <Link
                     href={item.href}
-                    className="text-ink-soft no-underline hover:text-accent-ink"
+                    className={`${FOOT_LINK} text-ink-soft hover:text-accent-ink`}
                   >
                     {item.label}
                   </Link>
