@@ -17,8 +17,9 @@ import {
   labelsPerSheet,
 } from "@/lib/labels";
 import { buildLabelSheet, wrapText, type LabelRow } from "@/server/reports/label-sheet";
+import { packagedMarkPng } from "@/server/reports/packaged-mark";
 
-import { drawnBaselines, drawnText } from "../pdf-text";
+import { drawnBaselines, drawnImageCount, drawnText } from "../pdf-text";
 
 /**
  * Shelf labels.
@@ -494,5 +495,65 @@ describe("what is actually printed on a label", () => {
     expect(text).toContain("All Ages");
     // No orphaned separator when one half is missing.
     expect(text).not.toMatch(/\u00b7\s*All Ages/);
+  });
+});
+
+describe("the mark in the corner", () => {
+  /**
+   * The label carries the library's own mark, and the interesting failures are
+   * not "is there a picture" — they are the two that end up glued inside a
+   * book: a title printed through the logo, and a sheet that refuses to render
+   * because somebody uploaded a broken PNG.
+   */
+  const MARK = { bytes: packagedMarkPng, format: "png" as const };
+
+  it("draws one image per label, from a single embedded copy", async () => {
+    const { bytes } = await sheet(ROWS, { mark: MARK });
+    const pdf = await PDFDocument.load(bytes);
+
+    // Two labels, two placements, one XObject: pdf-lib references the image
+    // rather than copying it, which is what keeps a 1000-label run small.
+    expect(drawnImageCount(bytes)).toBe(ROWS.length);
+    expect(pdf.getPages()).toHaveLength(1);
+  });
+
+  it("takes the corner out of the text width rather than printing through it", async () => {
+    const long: LabelRow[] = [
+      {
+        code: "TST-B0009",
+        title: "The Brilliant World of Tom Gates and the Extremely Long Wednesday Afternoon",
+        shelf: "Science & Knowledge",
+        age: "8–11 years",
+      },
+    ];
+
+    const [withMark, without] = await Promise.all([sheet(long, { mark: MARK }), sheet(long)]);
+
+    // The strip is reserved, not overpainted, so the same title has less room
+    // and gives up its tail. Without the mark the last word fits — which is
+    // what makes its absence evidence of the reservation, rather than of a
+    // title that was always too long for the label.
+    //
+    // The word rather than the ellipsis, because `winAnsi` encodes U+2026 to a
+    // byte that reads back as a control character, not as "…".
+    expect(drawnText(without.bytes)).toContain("Afternoon");
+    expect(drawnText(withMark.bytes)).not.toContain("Afternoon");
+  });
+
+  it("still prints the labels when the mark cannot be decoded", async () => {
+    const { bytes } = await sheet(ROWS, {
+      mark: { bytes: new Uint8Array([1, 2, 3, 4]), format: "png" },
+    });
+
+    const text = drawnText(bytes);
+    expect(text).toContain("TST-B0001");
+    expect(text).toContain("The Very Hungry Caterpillar");
+    expect(drawnImageCount(bytes)).toBe(0);
+  });
+
+  it("prints a sheet with no mark at all", async () => {
+    const { bytes } = await sheet(ROWS);
+    expect(drawnImageCount(bytes)).toBe(0);
+    expect(drawnText(bytes)).toContain("TST-B0002");
   });
 });

@@ -14,6 +14,7 @@ import { prisma } from "@/server/db";
 import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
 import { RuleViolationError } from "@/server/lib/errors";
 import { getCurrentLibrary } from "@/server/lib/settings";
+import { resolveCardMark } from "@/server/reports/card-mark";
 import { buildLabelSheet } from "@/server/reports/label-sheet";
 import {
   bookFilterToQuery,
@@ -136,6 +137,14 @@ export async function printBookLabels(request: LabelRequest): Promise<LabelFile>
 
   const generatedAt = new Date();
 
+  /*
+   * The same mark the reader's card is printed with, resolved the same way — an
+   * uploaded logo when the library has one, the packaged mark otherwise. A
+   * label and a card are the two things this software prints onto paper, and
+   * they should have come out of the same library.
+   */
+  const mark = await resolveCardMark(settings.logoUrl);
+
   const sheet = await buildLabelSheet({
     /*
      * The shelf and the age are turned into words here, not in the PDF writer.
@@ -178,6 +187,7 @@ export async function printBookLabels(request: LabelRequest): Promise<LabelFile>
     scopeLabel: describeScope(request.filter, settings.timezone, categoryName, selected.size),
     generatedAt,
     cutGuides: request.cutGuides,
+    mark,
   });
 
   /*

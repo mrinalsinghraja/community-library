@@ -10,6 +10,7 @@ import {
   labelCellSize,
   type LabelSize,
 } from "@/lib/labels";
+import type { CardMark } from "@/server/reports/card-mark";
 import { winAnsi } from "@/server/reports/winansi";
 
 /**
@@ -46,6 +47,8 @@ const GUIDE = rgb(0.8, 0.82, 0.8);
 
 /** The gap between the code's baseline and the first line of the title. */
 const LINE_GAP = 1.35;
+/** The mark's true aspect (640 x 690), so it is never squashed. */
+const MARK_RATIO = 690 / 640;
 /** At most two lines of title, which is what "two lines" in the brief means. */
 const MAX_TITLE_LINES = 2;
 
@@ -85,6 +88,18 @@ export interface LabelSheetRequest {
   generatedAt: Date;
   /** Hairlines on the grid, for cutting. Off when printing onto die-cut stock. */
   cutGuides: boolean;
+  /**
+   * The library's own mark, printed small in each label's top-right corner.
+   *
+   * Resolved by the caller through `resolveCardMark`, which is the same path
+   * the reader's card takes: an uploaded logo when the library has one, the
+   * packaged mark otherwise. This file is handed bytes and never decides whose
+   * they are — a renderer that reached for a particular logo would be the one
+   * place in `src/` that knew which library this is.
+   *
+   * Optional, and a sheet without it is still a correct sheet.
+   */
+  mark?: CardMark;
 }
 
 export interface RenderedLabels {
@@ -190,6 +205,35 @@ export async function buildLabelSheet(request: LabelSheetRequest): Promise<Rende
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
+  /*
+   * Embedded once for the whole run, not once per label: `pdf-lib` writes one
+   * image object and every `drawImage` after it is a reference, so a thousand
+   * stickers cost one copy of the artwork rather than a thousand.
+   *
+   * Wrapped, because a logo is administrator-supplied data. A PNG that pdf-lib
+   * cannot parse must cost the sheet its mark, never the sheet — the librarian
+   * pressing Print wants labels, and a corner drawing is not worth a failed
+   * download.
+   */
+  const markImage = request.mark
+    ? await (request.mark.format === "png"
+        ? pdf.embedPng(request.mark.bytes)
+        : pdf.embedJpg(request.mark.bytes)
+      ).catch(() => null)
+    : null;
+
+  /*
+   * The mark stands as tall as the code beside it and keeps half a padding of
+   * air, and that whole strip is taken out of the text width below rather than
+   * merely drawn over. Reserving it costs a few characters of a long title;
+   * not reserving it would one day print a title straight through the logo,
+   * and that label would already be glued inside a book before anybody noticed.
+   */
+  const contentWidth = cell.width - preset.padding * 2;
+  const markHeight = markImage ? preset.codeSize : 0;
+  const markWidth = markImage ? markHeight / MARK_RATIO : 0;
+  const markGap = markImage ? preset.padding * 0.5 : 0;
+
   pdf.setTitle(`Book labels — ${request.libraryName}`);
   pdf.setCreator(request.libraryName);
   pdf.setProducer(request.libraryName);
@@ -239,7 +283,7 @@ export async function buildLabelSheet(request: LabelSheetRequest): Promise<Rende
       const line = Math.floor(index / preset.columns);
 
       const left = SHEET_MARGIN + column * cell.width + preset.padding;
-      const innerWidth = cell.width - preset.padding * 2;
+      const innerWidth = contentWidth - markWidth - markGap;
 
       const code = safe(row.code);
       const codeSize = fitSize(code, bold, preset.codeSize, innerWidth);
@@ -303,6 +347,17 @@ export async function buildLabelSheet(request: LabelSheetRequest): Promise<Rende
       const cellTop = PAGE_HEIGHT - SHEET_MARGIN - line * cell.height;
       const blockTop = cellTop - Math.max(preset.padding, (cell.height - blockHeight) / 2);
       const codeBaseline = blockTop - codeSize;
+
+      // Pinned to the label's own top-right corner, not to the text block,
+      // which is centred and therefore moves with the length of the title.
+      if (markImage) {
+        page.drawImage(markImage, {
+          x: left + contentWidth - markWidth,
+          y: cellTop - preset.padding - markHeight,
+          width: markWidth,
+          height: markHeight,
+        });
+      }
 
       if (code) {
         page.drawText(code, { x: left, y: codeBaseline, size: codeSize, font: bold, color: BRAND });
