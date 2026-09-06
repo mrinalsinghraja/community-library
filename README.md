@@ -145,4 +145,10 @@ Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Licence and ownership
 
-Owned by the community it serves. Not a commercial product.
+[MIT](LICENSE). Take it, rebrand it, run it for your own community — free, for
+any purpose, commercial included. The only condition is that the copyright
+notice stays in the `LICENSE` file. It is never shown to anyone using your
+library: nothing in `src/` carries a name, and a lint rule keeps it that way.
+
+Each deployment is owned by the community it serves. This is not a commercial
+product and has no payment code in it.
