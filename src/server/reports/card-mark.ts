@@ -1,6 +1,7 @@
 import "server-only";
 
 import { packagedMarkPng } from "@/server/reports/packaged-mark";
+import { packagedPrintMarkPng } from "@/server/reports/packaged-print-mark";
 import { getAuthorizedMedia } from "@/server/services/media-service";
 
 /**
@@ -27,6 +28,7 @@ export interface CardMark {
 }
 
 const PACKAGED: CardMark = { bytes: packagedMarkPng, format: "png" };
+const PACKAGED_PRINT: CardMark = { bytes: packagedPrintMarkPng, format: "png" };
 
 /** `/api/media/<uuid>` is the only shape an uploaded logo ever takes. */
 function mediaIdFrom(logoUrl: string | null): string | null {
@@ -35,17 +37,34 @@ function mediaIdFrom(logoUrl: string | null): string | null {
 }
 
 export async function resolveCardMark(logoUrl: string | null): Promise<CardMark> {
+  return resolveMark(logoUrl, PACKAGED);
+}
+
+/**
+ * The mark that goes on a shelf label.
+ *
+ * Same rule, different fallback. An uploaded logo is what the library chose to
+ * be, so it wins here exactly as it wins on a card. A library that has uploaded
+ * nothing gets the drawing without the wordmark, because a label affords a
+ * mark about as tall as one line of type and a wordmark at that size is a grey
+ * smudge rather than a name.
+ */
+export async function resolveLabelMark(logoUrl: string | null): Promise<CardMark> {
+  return resolveMark(logoUrl, PACKAGED_PRINT);
+}
+
+async function resolveMark(logoUrl: string | null, fallback: CardMark): Promise<CardMark> {
   const mediaId = mediaIdFrom(logoUrl);
-  if (!mediaId) return PACKAGED;
+  if (!mediaId) return fallback;
 
   try {
     const media = await getAuthorizedMedia(mediaId);
     if (media.mimeType === "image/png") return { bytes: media.bytes, format: "png" };
     if (media.mimeType === "image/jpeg") return { bytes: media.bytes, format: "jpg" };
-    return PACKAGED;
+    return fallback;
   } catch {
     // A card with the packaged mark beats a download that 500s because a logo
     // row was mid-deletion.
-    return PACKAGED;
+    return fallback;
   }
 }

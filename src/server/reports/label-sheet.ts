@@ -47,8 +47,6 @@ const GUIDE = rgb(0.8, 0.82, 0.8);
 
 /** The gap between the code's baseline and the first line of the title. */
 const LINE_GAP = 1.35;
-/** The mark's true aspect (640 x 690), so it is never squashed. */
-const MARK_RATIO = 690 / 640;
 /** At most two lines of title, which is what "two lines" in the brief means. */
 const MAX_TITLE_LINES = 2;
 
@@ -230,8 +228,20 @@ export async function buildLabelSheet(request: LabelSheetRequest): Promise<Rende
    * and that label would already be glued inside a book before anybody noticed.
    */
   const contentWidth = cell.width - preset.padding * 2;
-  const markHeight = markImage ? preset.codeSize : 0;
-  const markWidth = markImage ? markHeight / MARK_RATIO : 0;
+  /*
+   * Half again the height of the code beside it. The mark is a drawing rather
+   * than type, and matching it to the cap height of the code made it read as a
+   * speck; this is the size at which the butterflies are still butterflies from
+   * the distance somebody reads a shelf.
+   */
+  const markHeight = markImage ? preset.codeSize * 1.5 : 0;
+  /*
+   * Width from the image's own pixels, never from a constant. The three things
+   * that can arrive here — the packaged print mark, the packaged card mark and
+   * whatever an administrator uploaded — have three different aspects, and a
+   * fixed ratio would stretch two of them.
+   */
+  const markWidth = markImage ? (markHeight * markImage.width) / markImage.height : 0;
   const markGap = markImage ? preset.padding * 0.5 : 0;
 
   pdf.setTitle(`Book labels — ${request.libraryName}`);

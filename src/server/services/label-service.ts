@@ -14,7 +14,7 @@ import { prisma } from "@/server/db";
 import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
 import { RuleViolationError } from "@/server/lib/errors";
 import { getCurrentLibrary } from "@/server/lib/settings";
-import { resolveCardMark } from "@/server/reports/card-mark";
+import { resolveLabelMark } from "@/server/reports/card-mark";
 import { buildLabelSheet } from "@/server/reports/label-sheet";
 import {
   bookFilterToQuery,
@@ -138,12 +138,11 @@ export async function printBookLabels(request: LabelRequest): Promise<LabelFile>
   const generatedAt = new Date();
 
   /*
-   * The same mark the reader's card is printed with, resolved the same way — an
-   * uploaded logo when the library has one, the packaged mark otherwise. A
-   * label and a card are the two things this software prints onto paper, and
-   * they should have come out of the same library.
+   * An uploaded logo when the library has one — the same one the card and every
+   * screen shows — and otherwise the drawing without its wordmark, which is the
+   * only part of a mark that survives being printed one line of type tall.
    */
-  const mark = await resolveCardMark(settings.logoUrl);
+  const mark = await resolveLabelMark(settings.logoUrl);
 
   const sheet = await buildLabelSheet({
     /*

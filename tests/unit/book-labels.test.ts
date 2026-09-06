@@ -18,8 +18,9 @@ import {
 } from "@/lib/labels";
 import { buildLabelSheet, wrapText, type LabelRow } from "@/server/reports/label-sheet";
 import { packagedMarkPng } from "@/server/reports/packaged-mark";
+import { packagedPrintMarkPng } from "@/server/reports/packaged-print-mark";
 
-import { drawnBaselines, drawnImageCount, drawnText } from "../pdf-text";
+import { drawnBaselines, drawnImageBoxes, drawnImageCount, drawnText } from "../pdf-text";
 
 /**
  * Shelf labels.
@@ -505,7 +506,9 @@ describe("the mark in the corner", () => {
    * book: a title printed through the logo, and a sheet that refuses to render
    * because somebody uploaded a broken PNG.
    */
-  const MARK = { bytes: packagedMarkPng, format: "png" as const };
+  const MARK = { bytes: packagedPrintMarkPng, format: "png" as const };
+  /** The card's mark, which is a different shape — used only to prove the aspect. */
+  const CARD_MARK = { bytes: packagedMarkPng, format: "png" as const };
 
   it("draws one image per label, from a single embedded copy", async () => {
     const { bytes } = await sheet(ROWS, { mark: MARK });
@@ -538,6 +541,29 @@ describe("the mark in the corner", () => {
     // byte that reads back as a control character, not as "…".
     expect(drawnText(without.bytes)).toContain("Afternoon");
     expect(drawnText(withMark.bytes)).not.toContain("Afternoon");
+  });
+
+  it("draws every mark at its own aspect, never squashed to a fixed one", async () => {
+    for (const mark of [MARK, CARD_MARK]) {
+      const source = await PDFDocument.create().then((pdf) => pdf.embedPng(mark.bytes));
+      const { bytes } = await sheet(ROWS, { mark });
+
+      for (const box of drawnImageBoxes(bytes)) {
+        expect(box.width / box.height).toBeCloseTo(source.width / source.height, 3);
+      }
+    }
+  });
+
+  it("sizes the mark against the code beside it, at every preset", async () => {
+    for (const size of LABEL_SIZES) {
+      const { bytes } = await sheet(ROWS, { size, mark: MARK });
+
+      // Half again the code's size: a drawing matched to the cap height of type
+      // reads as a speck, and this is the one number that decides that.
+      for (const box of drawnImageBoxes(bytes)) {
+        expect(box.height).toBeCloseTo(LABEL_PRESETS[size].codeSize * 1.5, 5);
+      }
+    }
   });
 
   it("still prints the labels when the mark cannot be decoded", async () => {

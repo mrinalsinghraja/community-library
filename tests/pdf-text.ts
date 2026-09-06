@@ -68,6 +68,34 @@ export function drawnImageCount(bytes: Buffer): number {
  * a test asking "is the title printed" would have answered no for every label
  * on a sheet that was in fact perfect.
  */
+/**
+ * How big each image is actually painted, in PDF points.
+ *
+ * pdf-lib wraps an image in `q … Do Q` and writes several `cm` matrices inside
+ * it — a translate, a scale, and identities between them — so the drawn size is
+ * the product of their scale factors rather than any one of them. Multiplying
+ * is exact and needs no guess about which matrix is which; reading only the
+ * first one gives 1 x 1 and quietly passes any aspect assertion made about it.
+ *
+ * The drawn size is what a squashed logo shows up in. Inspecting the embedded
+ * pixels would not: those stay the right shape however badly they are scaled.
+ */
+export function drawnImageBoxes(bytes: Buffer): { width: number; height: number }[] {
+  const boxes: { width: number; height: number }[] = [];
+  for (const content of contentStreams(bytes)) {
+    for (const block of content.matchAll(/q([\s\S]{0,400}?)\/[A-Za-z0-9_.-]+\s+Do\b/g)) {
+      let width = 1;
+      let height = 1;
+      for (const cm of block[1].matchAll(/([\d.-]+) 0 0 ([\d.-]+) [\d.-]+ [\d.-]+ cm/g)) {
+        width *= Number(cm[1]);
+        height *= Number(cm[2]);
+      }
+      boxes.push({ width, height });
+    }
+  }
+  return boxes;
+}
+
 function* contentStreams(bytes: Buffer): Generator<string> {
   const raw = bytes.toString("latin1");
   let at = 0;
