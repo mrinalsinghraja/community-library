@@ -55,6 +55,7 @@ export default async function SettingsPage() {
             ageMax: view.settings.ageMax,
             memberCodePrefix: view.settings.memberCodePrefix,
             copyCodePrefix: view.settings.copyCodePrefix,
+            shelfRowSize: view.settings.shelfRowSize,
             catalogueVisibility: view.settings.catalogueVisibility,
           }}
         />

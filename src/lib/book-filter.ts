@@ -3,6 +3,7 @@ import type { AgeGroup, CopyCondition, CopyStatus } from "@prisma/client";
 import {
   STATUSES,
   ageGroupLabel,
+  bookNumber,
   conditionLabel,
   isAgeGroup,
   isCondition,
@@ -173,15 +174,14 @@ export function isFilteringBooks(filter: BookFilter): boolean {
  * A librarian typing a range types what is printed on the book — the whole code
  * — or, once they have typed the first one, often just the number. Both are the
  * same question, so the trailing digits are what is compared rather than the
- * string: comparing codes as text also breaks the day the code padding changes
- * and a book numbered 9 starts sorting after one numbered 10.
+ * string.
+ *
+ * Re-exported rather than defined here: the reader's shelf reads the same digits
+ * to work out which physical row a book is on, and a helper two screens share
+ * belongs with the catalogue vocabulary they both already import. Call sites and
+ * tests that learned it from this module keep working.
  */
-export function bookNumber(value: string): number | null {
-  const digits = /(\d+)\s*$/.exec(value.trim());
-  if (!digits) return null;
-  const parsed = Number.parseInt(digits[1], 10);
-  return Number.isSafeInteger(parsed) ? parsed : null;
-}
+export { bookNumber };
 
 /**
  * What is wrong with this filter, in the librarian's words.

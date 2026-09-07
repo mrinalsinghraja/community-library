@@ -109,6 +109,57 @@ export function borrowCountLabel(count: number): string | null {
   return count === 1 ? "Borrowed once" : `Borrowed ${count} times`;
 }
 
+// ---------------------------------------------------------------------------
+// Finding the book on the shelf
+// ---------------------------------------------------------------------------
+
+/**
+ * The number in a book ID.
+ *
+ * Codes are `PREFIX` + zero-padded counter — `MJCL-B0087` — and it is the
+ * counter that carries the meaning. The trailing digits are what is read rather
+ * than the whole string: comparing codes as text breaks the day the padding
+ * changes and a book numbered 9 starts sorting after one numbered 10. Leading
+ * zeroes are stripped by the parse, so `0087` is 87 and not an octal surprise.
+ *
+ * Null when there are no trailing digits at all. A hand-written code or one
+ * imported from another library's scheme carries no number, and inventing one
+ * would answer a question nobody can answer.
+ *
+ * Lives here rather than beside the desk filter that first needed it because
+ * the reader's shelf needs it too, and `book-filter` already imports this file
+ * — putting it the other way round would make the two import each other.
+ */
+export function bookNumber(value: string): number | null {
+  const digits = /(\d+)\s*$/.exec(value.trim());
+  if (!digits) return null;
+  const parsed = Number.parseInt(digits[1], 10);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+/**
+ * Which physical row a book is on, counting from one.
+ *
+ * The library shelves in code order and fills a row before starting the next,
+ * so the row is arithmetic: with 40 to a row, books 1–40 are row 1, 41–80 are
+ * row 2, and 87 is row 3. Doing the division here rather than printing the raw
+ * number is the difference between "go to row 3" and "here is a number, work it
+ * out" — and the person reading it is often nine.
+ *
+ * Null whenever the answer would be a guess: no row size configured, or a code
+ * with no counter in it. Every caller shows the code either way; the row is the
+ * part that can be absent.
+ */
+export function shelfRow(code: string, rowSize: number | null | undefined): number | null {
+  if (rowSize === null || rowSize === undefined) return null;
+  if (!Number.isInteger(rowSize) || rowSize < 1) return null;
+
+  const number = bookNumber(code);
+  if (number === null || number < 1) return null;
+
+  return Math.ceil(number / rowSize);
+}
+
 /** Said once, in full, wherever a child might mistake the band for a rule. */
 export const AGE_BAND_NOTE =
   "This is a suggestion, not a rule. Anyone may borrow any book in our library.";

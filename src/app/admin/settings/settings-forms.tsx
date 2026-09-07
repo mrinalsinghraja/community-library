@@ -8,6 +8,7 @@ import { Field, Select, TextInput } from "@/components/ui/field";
 import {
   DATE_FORMAT_OPTIONS,
   SETTING_BOUNDS,
+  SHELF_ROW_SIZE_BOUND,
   TIMEZONE_OPTIONS,
   UNAVAILABLE_FEATURES,
 } from "@/lib/settings-schema";
@@ -94,6 +95,8 @@ export interface SettingsFormValues {
   ageMax: number;
   memberCodePrefix: string;
   copyCodePrefix: string;
+  /** Null when nobody has measured the shelving. Rendered as an empty box. */
+  shelfRowSize: number | null;
   catalogueVisibility: string;
 }
 
@@ -239,6 +242,24 @@ export function LibrarySettingsForm({
               defaultValue={settings.copyCodePrefix}
               required
               className="max-w-48 uppercase"
+            />
+          </Field>
+
+          <Field
+            id="shelfRowSize"
+            label="Books on one row of shelving"
+            hint="Books are numbered in the order they are shelved, so this turns a book’s number into a row — with 40 to a row, book 87 is on row 3. Leave it empty if your shelves are not filled in number order, and no row will be shown."
+            error={errors.shelfRowSize}
+          >
+            <TextInput
+              id="shelfRowSize"
+              name="shelfRowSize"
+              type="number"
+              inputMode="numeric"
+              min={SHELF_ROW_SIZE_BOUND.min}
+              max={SHELF_ROW_SIZE_BOUND.max}
+              defaultValue={settings.shelfRowSize ?? ""}
+              className="max-w-32"
             />
           </Field>
 

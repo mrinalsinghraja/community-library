@@ -17,6 +17,7 @@ import {
   isAgeGroup,
   isCondition,
   isSelectableStatus,
+  shelfRow,
   statusDefinition,
 } from "@/lib/catalogue";
 import { dateOnlyInTimezone } from "@/lib/dates";
@@ -355,6 +356,73 @@ describe("crediting a donor on a label", () => {
     for (const consent of ["NAMED", "APARTMENT_ONLY", "ANONYMOUS"] as const) {
       const credit = donorLabelCredit({ ...named, displayConsent: consent }, "Aug 2026");
       expect(credit?.credit).not.toMatch(/\p{Extended_Pictographic}/u);
+    }
+  });
+});
+
+describe("which row a book is on", () => {
+  /*
+   * The arithmetic the owner described: forty books to a row, filled in the
+   * order the codes were handed out. The boundaries are the whole test — an
+   * off-by-one here sends a child to the wrong shelf, which is the only failure
+   * mode this feature has.
+   */
+  it.each([
+    ["MJCL-B0001", 1],
+    ["MJCL-B0040", 1],
+    ["MJCL-B0041", 2],
+    ["MJCL-B0080", 2],
+    ["MJCL-B0081", 3],
+    ["MJCL-B0087", 3],
+    ["MJCL-B0120", 3],
+    ["MJCL-B0121", 4],
+  ])("puts %s on row %i when forty fit on a row", (code, expected) => {
+    expect(shelfRow(code, 40)).toBe(expected);
+  });
+
+  it("says nothing when the library has not measured its shelving", () => {
+    // Null is the state every library is in until somebody types a number, and
+    // the answer has to be "no row" rather than a guess.
+    expect(shelfRow("MJCL-B0087", null)).toBeNull();
+    expect(shelfRow("MJCL-B0087", undefined)).toBeNull();
+  });
+
+  it("says nothing for a code with no number in it", () => {
+    // A hand-written or imported code carries no position. Inventing one would
+    // be confidently wrong, which is worse than silent.
+    expect(shelfRow("MJCL-B", 40)).toBeNull();
+    expect(shelfRow("", 40)).toBeNull();
+  });
+
+  it("refuses a row size that is not a whole positive number of books", () => {
+    // A row of nought books divides by zero; the rest are typos. Each would
+    // otherwise print Infinity, NaN or a negative row onto a child's screen.
+    expect(shelfRow("MJCL-B0087", 0)).toBeNull();
+    expect(shelfRow("MJCL-B0087", -40)).toBeNull();
+    expect(shelfRow("MJCL-B0087", 12.5)).toBeNull();
+    expect(shelfRow("MJCL-B0087", Number.NaN)).toBeNull();
+  });
+
+  it("counts from one, so no book is ever on row nought", () => {
+    // `bookNumber` will read a 0 out of a code, and ceil(0 / 40) is 0 — a row
+    // that does not exist in a room where the first row is called one.
+    expect(shelfRow("MJCL-B0000", 40)).toBeNull();
+  });
+
+  it("reads the number rather than the code, so the padding may change", () => {
+    // Codes are compared as numbers everywhere else for this reason; a library
+    // that widens its padding must not have its whole shelf renumbered.
+    expect(shelfRow("MJCL-B0041", 40)).toBe(shelfRow("MJCL-B00041", 40));
+  });
+
+  it("puts every book of a row on that row, one row at a time", () => {
+    // The property behind the table above, checked across three row lengths so
+    // the rule is the rule and not four hand-picked cases.
+    for (const size of [10, 40, 999]) {
+      for (let number = 1; number <= size * 3; number += 1) {
+        const row = shelfRow(`MJCL-B${String(number).padStart(4, "0")}`, size);
+        expect(row).toBe(Math.floor((number - 1) / size) + 1);
+      }
     }
   });
 });

@@ -71,6 +71,8 @@ const VALID = {
   ageMax: "16",
   memberCodePrefix: "TST-R",
   copyCodePrefix: "TST-B",
+  // Blank on purpose: shelving nobody has measured is the ordinary case.
+  shelfRowSize: "",
   catalogueVisibility: "MEMBER_ONLY",
 };
 

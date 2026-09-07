@@ -5,14 +5,16 @@ import { z } from "zod";
 
 import {
   AGE_GROUP_VALUES,
+  bookNumber,
   CATALOGUE_LIMITS,
   CONDITION_VALUES,
   donorAcknowledgement,
   PAGE_SIZES,
   SELECTABLE_STATUSES,
+  shelfRow,
   type Page,
 } from "@/lib/catalogue";
-import { bookNumber, type BookFilter } from "@/lib/book-filter";
+import { type BookFilter } from "@/lib/book-filter";
 import { dateOnlyInTimezone, endOfDayInTimezone } from "@/lib/dates";
 import { NO_RATINGS, type RatingSummary } from "@/lib/reviews";
 import { prisma } from "@/server/db";
@@ -218,6 +220,18 @@ export interface ReaderBookCard {
    * unborrowed book says so, and `borrowCountLabel` says it stays quiet.
    */
   borrowCount: number;
+  /**
+   * Which physical row of shelving this copy is on, or null when the library
+   * has not said how many books a row holds.
+   *
+   * Derived from the code, not stored: the shelf is filled in code order, so
+   * the row is arithmetic over `shelf_row_size`. Computed here rather than in a
+   * template because the row size is a setting, and a setting read in a
+   * component is a setting read once per card.
+   *
+   * Says where a book is, never who has it — this is furniture, not a loan.
+   */
+  shelfRow: number | null;
 }
 
 export interface ReaderBookDetail extends ReaderBookCard {
@@ -257,19 +271,24 @@ export { donorAcknowledgement, type Page };
  * neither is refused, which is what makes a suspended or role-less account
  * unable to browse.
  */
-async function requireCatalogueAccess(): Promise<{ libraryId: string; actor: Actor | null }> {
+async function requireCatalogueAccess(): Promise<{
+  libraryId: string;
+  actor: Actor | null;
+  /** Books to a physical row, or null when the library has not measured it. */
+  shelfRowSize: number | null;
+}> {
   const { library, settings } = await getCurrentLibrary();
 
   if (settings.catalogueVisibility === "PUBLIC") {
     const actor = await getActor();
-    return { libraryId: library.id, actor };
+    return { libraryId: library.id, actor, shelfRowSize: settings.shelfRowSize };
   }
 
   const actor = await requireActor();
   if (!actor.permissions.has("book.view")) {
     throw new NotFoundError(`User ${actor.userId} may not browse the catalogue`);
   }
-  return { libraryId: actor.libraryId, actor };
+  return { libraryId: actor.libraryId, actor, shelfRowSize: settings.shelfRowSize };
 }
 
 // ---------------------------------------------------------------------------
@@ -754,7 +773,7 @@ export async function getBookForStaff(copyId: string): Promise<StaffBookDetail> 
 export async function browseCatalogue(
   query: CatalogueQuery = {},
 ): Promise<Page<ReaderBookCard>> {
-  const { libraryId } = await requireCatalogueAccess();
+  const { libraryId, shelfRowSize } = await requireCatalogueAccess();
 
   const page = await queryCopies(
     libraryId,
@@ -771,13 +790,14 @@ export async function browseCatalogue(
 
   return {
     ...page,
-    items: page.items.map(toReaderCard),
+    items: page.items.map((row) => toReaderCard(row, shelfRowSize)),
   };
 }
 
-function toReaderCard(row: CopyRow): ReaderBookCard {
+function toReaderCard(row: CopyRow, shelfRowSize: number | null): ReaderBookCard {
   return {
     code: row.copy_code,
+    shelfRow: shelfRow(row.copy_code, shelfRowSize),
     title: row.title,
     authors: row.authors,
     categoryName: row.category_name,
@@ -811,7 +831,7 @@ function toRatingSummary(row: Pick<CopyRow, "rating_average" | "rating_count">):
  * id — the thing a reader can read off the book in their hand.
  */
 export async function getBookByCode(code: string): Promise<ReaderBookDetail> {
-  const { libraryId } = await requireCatalogueAccess();
+  const { libraryId, shelfRowSize } = await requireCatalogueAccess();
 
   const copy = await prisma.bookCopy.findFirst({
     where: {
@@ -843,6 +863,7 @@ export async function getBookByCode(code: string): Promise<ReaderBookDetail> {
 
   return {
     code: copy.copyCode,
+    shelfRow: shelfRow(copy.copyCode, shelfRowSize),
     title: copy.title.title,
     authors: copy.title.authors,
     categoryName: copy.title.category.name,

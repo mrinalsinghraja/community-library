@@ -74,6 +74,9 @@ export async function updateSettingsAction(
       ageMax: text(formData, "ageMax"),
       memberCodePrefix: text(formData, "memberCodePrefix"),
       copyCodePrefix: text(formData, "copyCodePrefix"),
+      // An empty box is the answer "we do not shelve in number order", and the
+      // schema turns it into null. It must reach the schema as "" to say that.
+      shelfRowSize: text(formData, "shelfRowSize"),
       catalogueVisibility: text(formData, "catalogueVisibility"),
     });
 

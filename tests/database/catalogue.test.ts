@@ -939,3 +939,101 @@ describe("how often a book has gone home", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Where the book physically is.
+ *
+ * The library shelves in code order, forty to a row, and a reader who has found
+ * a book on the website is then meant to walk to a row and pick it up. So the
+ * row is arithmetic over the code, and these tests exist because the failure
+ * mode is not an error message — it is a child sent confidently to the wrong
+ * shelf.
+ */
+describe("finding a book on the shelf", () => {
+  beforeEach(async () => {
+    await addBook({ title: "The Jungle Book" });
+    await actingAs(reader.id, "MEMBER");
+  });
+
+  it("says no row at all until the library has measured its shelving", async () => {
+    // The fixture leaves `shelf_row_size` null, which is where every library
+    // starts. The code is still shown; only the row is missing.
+    const page = await browseCatalogue();
+    expect(page.items[0].code).toBe("TST-B0001");
+    expect(page.items[0].shelfRow).toBeNull();
+
+    const book = await getBookByCode("TST-B0001");
+    expect(book.shelfRow).toBeNull();
+  });
+
+  it("works the row out from the code once a row length is set", async () => {
+    await db.librarySettings.update({
+      where: { libraryId: fixture.libraryId },
+      data: { shelfRowSize: 40 },
+    });
+
+    // Book 1 of a 40-book row is row 1 — the boundary that would be row 0 if
+    // the division counted from zero.
+    const page = await browseCatalogue();
+    expect(page.items[0].shelfRow).toBe(1);
+  });
+
+  it("gives the shelf and the book's own page the same answer", async () => {
+    // Two different queries — raw SQL for the grid, Prisma for the page — and a
+    // reader who is told row 3 on one and row 2 on the other has been told
+    // nothing. This is what pins them together.
+    await db.librarySettings.update({
+      where: { libraryId: fixture.libraryId },
+      data: { shelfRowSize: 40 },
+    });
+
+    // `addBook` acts as the librarian, so the reader's session is put back.
+    for (let extra = 0; extra < 3; extra += 1) await addBook();
+    await actingAs(reader.id, "MEMBER");
+
+    const page = await browseCatalogue();
+    for (const card of page.items) {
+      const detail = await getBookByCode(card.code);
+      expect(detail.shelfRow, card.code).toBe(card.shelfRow);
+    }
+  });
+
+  it("tells a signed-out visitor the row too, once the shelf is public", async () => {
+    // The whole point of the request: somebody who has not joined can look a
+    // book up and walk to it. If the row needed a card, it would not help the
+    // parent standing in the doorway.
+    await db.librarySettings.update({
+      where: { libraryId: fixture.libraryId },
+      data: { shelfRowSize: 40, catalogueVisibility: "PUBLIC" },
+    });
+
+    __setSessionHandle(null);
+
+    const page = await browseCatalogue();
+    expect(page.items[0].shelfRow).toBe(1);
+    expect(page.items[0].code).toBe("TST-B0001");
+
+    const book = await getBookByCode("TST-B0001");
+    expect(book.shelfRow).toBe(1);
+  });
+
+  it("still says nothing about who has borrowed it", async () => {
+    // The row says where the book lives, and that is all it may say. A field
+    // that started naming a borrower would be a privacy change wearing a
+    // wayfinding hat.
+    await db.librarySettings.update({
+      where: { libraryId: fixture.libraryId },
+      data: { shelfRowSize: 40, catalogueVisibility: "PUBLIC" },
+    });
+
+    __setSessionHandle(null);
+    const book = await getBookByCode("TST-B0001");
+
+    const keys = Object.keys(book);
+    for (const forbidden of ["borrowerName", "borrowerId", "memberCode", "loans", "copyId", "id"]) {
+      expect(keys, forbidden).not.toContain(forbidden);
+    }
+  });
+});

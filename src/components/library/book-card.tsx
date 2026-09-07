@@ -10,11 +10,17 @@ import { Icon } from "@/components/ui/icon";
 /**
  * A book, as a child sees it.
  *
- * Eight things and no more: the cover, the title, who wrote it, what readers
- * made of it, how often it has gone home, which shelf, who it is for, and
- * whether it is here. A card with ten pieces of metadata on it is an inventory
- * row, and a shelf of inventory rows is not somewhere a nine-year-old wants to
- * spend a Saturday.
+ * The cover, the title, who wrote it, what readers made of it, how often it has
+ * gone home, which shelf, who it is for, whether it is here — and, on its own
+ * strip at the foot, where to find it. A card with ten pieces of metadata on it
+ * is an inventory row, and a shelf of inventory rows is not somewhere a
+ * nine-year-old wants to spend a Saturday.
+ *
+ * The book ID is the exception that earns its place, because it is the only
+ * thing on the card that does anything off the screen. The shelves are filled in
+ * code order, so the code plus the row is a walking direction: find it here, go
+ * and get it there. It is the last line rather than a badge on the cover for the
+ * same reason — nobody needs it until they have chosen.
  *
  * The rating earned its place because it changes which book gets picked up, and
  * it is drawn in the `sm` size — stars, the figure, and the count in brackets —
@@ -116,6 +122,23 @@ export function BookCardTile({ book }: { book: ReaderBookCard }) {
               {ageGroupSuggestion(book.ageGroup)}
             </span>
           </div>
+
+          {/*
+            Where to walk, once the browsing is done.
+
+            Its own strip below the divider because it is a different kind of
+            fact from everything above it: the rest of the card helps somebody
+            choose a book, and this is what they read off the screen and carry to
+            the shelves. Tabular figures so a column of codes lines up, and the
+            row — when the library has said how long a row is — spelled out as a
+            word rather than left as arithmetic for a nine-year-old.
+          */}
+          <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-hairline pt-2 text-base text-ink-soft">
+            <span className="font-mono font-bold tracking-tight text-ink tabular-nums">
+              {book.code}
+            </span>
+            {book.shelfRow === null ? null : <span>Row {book.shelfRow}</span>}
+          </p>
         </div>
       </Link>
     </li>

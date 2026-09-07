@@ -36,6 +36,9 @@ const VALID = {
   ageMax: "14",
   memberCodePrefix: "TST-R",
   copyCodePrefix: "TST-B",
+  // Empty on purpose: a library that has not measured its shelving is the
+  // ordinary case, and the schema has to accept it as an answer.
+  shelfRowSize: "",
   catalogueVisibility: "MEMBER_ONLY",
 };
 
@@ -94,6 +97,24 @@ describe("library settings validation", () => {
         true,
       );
     }
+  });
+
+  /*
+   * The row length is the one number on this form that may be left unanswered,
+   * and "unanswered" has to survive as null all the way to the column. A blank
+   * box read as 0 would divide every book into row Infinity.
+   */
+  it("reads an empty row length as no answer rather than nought", () => {
+    expect(librarySettingsSchema.parse({ ...VALID, shelfRowSize: "" }).shelfRowSize).toBeNull();
+    expect(librarySettingsSchema.parse({ ...VALID, shelfRowSize: null }).shelfRowSize).toBeNull();
+  });
+
+  it("takes a row length as a number", () => {
+    expect(librarySettingsSchema.parse({ ...VALID, shelfRowSize: "40" }).shelfRowSize).toBe(40);
+  });
+
+  it.each(["0", "-40", "1001", "forty", "12.5"])("refuses %s books to a row", (value) => {
+    expect(librarySettingsSchema.safeParse({ ...VALID, shelfRowSize: value }).success).toBe(false);
   });
 
   it("shouts a code prefix, because it is printed on a label", () => {

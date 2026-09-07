@@ -229,6 +229,40 @@ export default async function BookDetailPage({
               </p>
             </div>
 
+            {/*
+              Where the book physically is, said plainly enough to act on.
+
+              This is the one thing on the page that sends somebody across the
+              room, so it gets its own panel rather than a line of small print.
+              The code is what is printed on the book's own spine label, set in
+              the same figures, so matching one against the other is a
+              comparison and not a translation.
+
+              The row appears only when the library has told the settings screen
+              how many books a row holds. Without that number there is no row to
+              work out, and a guess would send a child confidently to the wrong
+              shelf — so the panel says the code and stops.
+            */}
+            <div className="mt-6 rounded-[var(--radius-card)] border-2 border-hairline bg-surface-sunk px-5 py-4">
+              <h2 className="flex items-center gap-2 text-lg font-bold text-ink-soft">
+                <Icon name="search" className="text-ink-faint" />
+                Finding it on the shelf
+              </h2>
+              <div className="mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-2">
+                <p className="font-mono text-3xl font-bold tracking-tight text-ink tabular-nums">
+                  {book.code}
+                </p>
+                {book.shelfRow === null ? null : (
+                  <p className="text-2xl font-bold text-primary-deep">Row {book.shelfRow}</p>
+                )}
+              </div>
+              <p className="mt-2 text-base text-ink-soft">
+                {book.shelfRow === null
+                  ? "This number is on a sticker on the book’s spine. Our books sit in number order."
+                  : "Our books sit in number order. Go to that row and look for this number on the spine."}
+              </p>
+            </div>
+
             <BorrowRequest
               code={book.code}
               title={book.title}

@@ -42,6 +42,21 @@ export const SETTING_BOUNDS = {
   ageMax: { min: 2, max: 18, standard: 16 },
 } as const;
 
+/**
+ * How many books may be said to sit on one row of shelving.
+ *
+ * Kept out of `SETTING_BOUNDS` because every bound in there carries the
+ * `standard` the owner approved, and this one has none to carry: there is no
+ * sensible default for somebody else's furniture. The column is nullable for
+ * exactly that reason — a library that has not measured its rows says nothing
+ * rather than a number somebody invented for it.
+ *
+ * The upper bound catches a slipped keystroke, not a shelf. It is mirrored by a
+ * CHECK constraint in the migration, so a value that got past this schema still
+ * cannot reach the table.
+ */
+export const SHELF_ROW_SIZE_BOUND = { min: 1, max: 1000 } as const;
+
 /** Code prefixes are printed on physical labels and cards, so: short and plain. */
 export const CODE_PREFIX_PATTERN = /^[A-Z0-9][A-Z0-9-]{1,9}$/;
 
@@ -106,6 +121,7 @@ export const EDITABLE_SETTING_FIELDS = [
   "ageMax",
   "memberCodePrefix",
   "copyCodePrefix",
+  "shelfRowSize",
   "catalogueVisibility",
 ] as const;
 
@@ -232,6 +248,17 @@ export const librarySettingsSchema = z
     ageMax: bounded(SETTING_BOUNDS.ageMax, "The oldest age"),
     memberCodePrefix: prefix("The reader card prefix"),
     copyCodePrefix: prefix("The book label prefix"),
+    /*
+     * Blank is a real answer, and it is the answer for any library that does not
+     * shelve in code order. `z.literal("")` before the number is what makes an
+     * emptied field mean "stop telling people a row" rather than "0 books to a
+     * row" — the same shape the retention periods use, and for the same reason.
+     */
+    shelfRowSize: z.union([
+      z.literal("").transform(() => null),
+      z.null(),
+      bounded(SHELF_ROW_SIZE_BOUND, "The number of books on a row"),
+    ]),
     catalogueVisibility: z.enum(["MEMBER_ONLY", "PUBLIC"], {
       error: "Choose who may browse the books.",
     }),

@@ -431,6 +431,21 @@ model LibrarySettings {
   memberCodePrefix  String @default("LIB-R") @map("member_code_prefix")
   memberCodePadding Int    @default(4) @map("member_code_padding")
 
+  /// How many books sit on one physical row of shelving, or null when nobody
+  /// has measured it.
+  ///
+  /// Book codes are handed out in order, so a shelf filled in that order turns
+  /// the number in a code into a row: with 40 to a row, book 87 is on row 3.
+  /// That arithmetic is the whole reason this column exists — a child who has
+  /// found a book on the website should be told where to walk, not left to
+  /// divide by forty in their head.
+  ///
+  /// Nullable, and null is the honest default: a library that shelves
+  /// alphabetically, or by shelf band, or has rows of different lengths, would
+  /// be sent to the wrong row by any number we invented for it. Null means the
+  /// row is simply not mentioned, and the code is still shown.
+  shelfRowSize Int? @map("shelf_row_size")
+
   // Visibility and privacy
   catalogueVisibility CatalogueVisibility @default(MEMBER_ONLY) @map("catalogue_visibility")
   donorDisplayDefault DonorDisplayConsent @default(NAMED) @map("donor_display_default")
