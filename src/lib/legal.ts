@@ -92,6 +92,19 @@ export function privacyDocument(
         ],
       },
       {
+        // The distinction that matters under the DPDP Act: the library decides
+        // what is collected and why, so the library is the fiduciary. The
+        // software and its hosting are a separate person acting on the
+        // library's instructions. Blurring the two would leave nobody
+        // accountable, which is the opposite of what a notice is for.
+        heading: "Who is answerable for this information",
+        paragraphs: [
+          `${context.libraryName} decides what is collected about a child and why, so under India's Digital Personal Data Protection Act 2023 the library is the data fiduciary. Questions about a child's record go to the library first.`,
+          'The software this library runs on was built and is hosted by Mrinal Singh Raja, an individual publishing under the name "MSRX". MSRX is a brand name, not a registered company. He acts on the library\'s instructions as a data processor: he keeps the system running and can reach the database to fix a fault, and he does not use anything in it for any purpose of his own.',
+          `A complaint the library cannot resolve can be raised with him at mrinalsinghraja@gmail.com, which is also the grievance contact under India's Information Technology (Intermediary Guidelines and Digital Media Ethics Code) Rules, 2021. If you are in India you may also complain to the Data Protection Board.`,
+        ],
+      },
+      {
         heading: "What we hold about a child",
         paragraphs: [
           "Only what is needed to lend a book to the right child and let a guardian reach them. Specifically:",
@@ -239,6 +252,21 @@ export function termsDocument(context: LegalContext): LegalDocument {
         paragraphs: [
           "The library runs this site as best it can, in evenings and at weekends. It may be unavailable sometimes, and a book shown as available may already be in somebody's bag.",
           "If something on this site is wrong, tell us and we will fix it.",
+        ],
+      },
+      {
+        heading: "What we can and cannot promise",
+        paragraphs: [
+          "This is a free library run by volunteers, using software written by one person in his own time. Nothing here is sold and nothing is charged for, so there is no service anybody has bought and no guarantee that the site will be working when you want it.",
+          "The site is offered as it is. To the fullest extent the law allows, neither the library nor the person who wrote the software is liable for any indirect or consequential loss arising from using it, and where liability cannot lawfully be excluded it is limited to one thousand Indian rupees (\u20b91,000). Nothing here limits liability for death or personal injury caused by negligence, for fraud, or for anything else Indian law does not allow to be excluded.",
+          "None of that changes how the library behaves. If something goes wrong with a child's record, tell a librarian and it will be put right.",
+        ],
+      },
+      {
+        heading: "Which law applies",
+        paragraphs: [
+          "These terms are governed by the laws of India, and the courts at Bengaluru, Karnataka have jurisdiction over any dispute arising out of them.",
+          "If any part of this page turns out to be unenforceable, the rest still applies.",
         ],
       },
     ],
