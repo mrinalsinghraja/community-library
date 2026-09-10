@@ -117,6 +117,17 @@ export function privacyDocument(
           "Which books they have borrowed, when, and when each came back.",
           "Any rating or short review they have written about a book.",
           "The name, email address and phone number of the guardian who signed them up.",
+          "Anything a librarian has written in the notes on their record — for example that a book came back damaged, or why an account was paused. These are written by people, about your child, and you are entitled to ask what they say. Ask a librarian and they will read them to you.",
+        ],
+      },
+      {
+        // Hashed rather than raw, which is the right design — but hashing is
+        // not the same as not collecting, and a notice that omitted it would
+        // be describing a system tidier than the one that exists.
+        heading: "The record of who did what",
+        paragraphs: [
+          "The library keeps an activity log so that a change to a child's record can be traced to the librarian who made it. Each entry records who acted, what they did, which record it touched and when.",
+          "Two technical details go with it: a scrambled form of the internet address the action came from, and a scrambled form of the browser used. They are one-way scrambles kept to spot somebody trying to break into an account. They are not readable as an address, they are not used to work out where anybody lives, and they are never looked at in the ordinary running of the library.",
         ],
       },
       {

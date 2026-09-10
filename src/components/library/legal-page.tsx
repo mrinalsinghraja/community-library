@@ -46,6 +46,13 @@ export function LegalPage({ document }: { document: LegalDocument }) {
             ) : null}
           </section>
         ))}
+
+        {/* Said once, at the end, in the same voice as the rest. Families read
+            these pages; the point is that they know what they are looking at. */}
+        <p className="mt-12 border-t border-line pt-8 text-base leading-relaxed text-ink-soft">
+          This page describes how the library and this website actually work, in plain
+          language. It is not legal advice, and it has not been checked by a lawyer.
+        </p>
       </div>
     </div>
   );
