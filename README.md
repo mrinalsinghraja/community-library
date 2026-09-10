@@ -12,6 +12,8 @@ the children themselves can eventually operate it.
 
 **First deployment:** [Mana Jardin Children's Library](https://library.msrx.co.in) — live, with real readers.
 
+**This one is yours to take.** It is [MIT licensed](#licence-and-ownership): clone it, rebrand it and run it for your own community, commercial use included. It is the only MSRX project published this way — the rest are free to *use* but their source is private.
+
 **Status:** in service. Phases 0–5 built the foundation — identity, guardian
 verification, catalogue, circulation, reminders and renewal requests, and a
 settings, branding and audit screen so the library can be configured without
