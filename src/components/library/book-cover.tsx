@@ -196,6 +196,24 @@ export function BookCover({
           small at the point of upload (see the cover picker), so the bytes a
           thumbnail downloads are already thumbnail-sized.
         */}
+        {/*
+          Absolutely positioned, which is load-bearing rather than tidiness.
+
+          The box above takes its height from `aspect-ratio` alone — nothing in
+          the chain declares one. Chromium treats that derived height as
+          definite, so `height: 100%` on the image resolves against it. WebKit
+          inside a table does not: the parent's height reads as indefinite,
+          `height: 100%` falls back to `auto`, and the image lays itself out at
+          its own intrinsic height. On the desk book list that meant a 1270px
+          image in a 44x66 box, clipped by `overflow-hidden` to its top-left
+          corner — a cover that looked right in Chrome and like a zoomed-in
+          fragment in Safari.
+
+          `inset-0` takes the height from the containing block instead, which is
+          definite in both engines. The parent already carries `relative`.
+          Measured in WKWebView and Chromium against this exact markup before
+          and after: 44x1270 -> 44x66 in WebKit, unchanged at 44x66 in Chromium.
+        */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={`/api/media/${coverMediaId}`}
@@ -203,7 +221,7 @@ export function BookCover({
           sizes={sizes}
           loading="lazy"
           decoding="async"
-          className="h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-cover"
         />
       </div>
     );
