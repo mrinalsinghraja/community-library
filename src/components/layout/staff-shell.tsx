@@ -184,24 +184,40 @@ export async function StaffShell({
         {/*
           The doors, in their clusters.
 
-          One row that scrolls sideways on a narrow screen rather than wrapping
-          into a wall. Each cluster carries its name above it from a wide
-          screen up — "Lending", "People" — so a volunteer on their first
-          afternoon reads five jobs rather than fifteen links. The current page
-          is underlined in the same berry-to-green as every other current page
-          on the site.
+          Wraps onto a second line rather than scrolling sideways.
+
+          This used to be one sideways-scrolling row with the scrollbar hidden,
+          on the reasoning that a strip somebody swipes beats a wall of links.
+          That reasoning only holds where swiping is the gesture. On a laptop
+          the row overflowed at any window under about 1600px and there was
+          nothing on screen to say so — no scrollbar, no cut-off cue — so the
+          last cluster was simply gone, and with a mouse rather than a trackpad
+          there was no way to reach it at all. Sixteen doors that wrap are worth
+          more than sixteen doors where four are invisible.
+
+          Each cluster carries its name above it — "Lending", "People" — so a
+          volunteer on their first afternoon reads five jobs rather than fifteen
+          links, and the clusters stay whole when a line breaks between them.
+          The current page is underlined in the same berry-to-green as every
+          other current page on the site.
         */}
         <nav
           aria-label="Desk"
-          className="mx-auto w-full max-w-[104rem] overflow-x-auto px-5 [scrollbar-width:none] sm:px-7 [&::-webkit-scrollbar]:hidden"
+          className="mx-auto w-full max-w-[104rem] px-5 sm:px-7"
         >
-          <ul className="flex items-stretch gap-1 pb-1.5 pt-1 lg:gap-0">
+          <ul className="flex flex-wrap items-stretch gap-x-1 gap-y-1.5 pb-1.5 pt-1 lg:gap-x-0">
             {clusters.map((cluster, index) => (
               <li
                 key={cluster.group}
                 className={cn(
                   "flex list-none flex-col",
-                  index > 0 && "lg:ms-3 lg:border-s lg:border-hairline lg:ps-3",
+                  /*
+                    Margin rather than a border now that the row wraps: a
+                    left-hand rule on a cluster that happens to land first on a
+                    wrapped line is a divider dividing nothing, and CSS cannot
+                    say "unless you wrapped".
+                  */
+                  index > 0 && "lg:ms-4",
                 )}
               >
                 {/*
