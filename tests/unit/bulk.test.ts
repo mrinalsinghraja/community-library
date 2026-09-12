@@ -20,6 +20,7 @@ const BULK_ACTION_FILES = [
   "src/server/actions/registration-actions.ts",
   "src/server/actions/review-actions.ts",
   "src/server/actions/profile-actions.ts",
+  "src/server/actions/visit-actions.ts",
 ];
 
 function read(path: string): string {
@@ -176,6 +177,7 @@ describe("every queue keeps its per-row buttons", () => {
     ["src/app/desk/registrations/page.tsx", "ReviewActions"],
     ["src/app/desk/reviews/page.tsx", "ModerationActions"],
     ["src/app/desk/changes/page.tsx", "ChangeDecision"],
+    ["src/app/desk/visits/page.tsx", "CancelSlot"],
   ];
 
   it.each(rowLevel)("%s still renders %s", (path, component) => {
@@ -214,6 +216,7 @@ describe("every confirmation says the number and the consequence", () => {
     "src/app/desk/registrations/page.tsx",
     "src/app/desk/reviews/page.tsx",
     "src/app/desk/changes/page.tsx",
+    "src/app/desk/visits/page.tsx",
   ];
 
   it.each(pages)("%s never asks a bare 'are you sure'", (path) => {
@@ -266,5 +269,43 @@ describe("cancelling several loans at once", () => {
     // return. The sentence has to draw that line before the press, not after.
     const cancel = bulkBlock.slice(bulkBlock.indexOf('value: "CANCEL"'));
     expect(cancel).toMatch(/return, not a cancellation/);
+  });
+});
+
+describe("calling off several visiting times at once", () => {
+  const page = read("src/app/desk/visits/page.tsx");
+  const action = code("src/server/actions/visit-actions.ts");
+  const bulkBlock = page.slice(page.indexOf("bulk={"), page.indexOf("<DataTable"));
+
+  it("is the single-row cancellation, run once per ticked row", () => {
+    const body = action.slice(action.indexOf("export async function bulkCancelVisitSlotsAction"));
+    expect(body).toContain("cancelVisitSlot(id, note)");
+  });
+
+  it("offers nothing to somebody who may not cancel", () => {
+    // `visit.cancel` is the Super Admin's key alone — a Librarian may put times
+    // up all term without ever being the person who takes one down. The service
+    // checks again regardless; this only decides who is shown the button.
+    expect(page).toContain('const canCancel = actor.permissions.has("visit.cancel");');
+    expect(bulkBlock).toContain("canCancel");
+  });
+
+  it("lets only the times that are still up be ticked", () => {
+    // A cancelled slot is a no-op in the service. Ticking one would be counted
+    // as done, and the number a librarian reads afterwards would be a lie.
+    expect(page).toContain("ids={open.map((slot) => slot.id)}");
+    expect(page).toContain('{slot.status === "OPEN" && canCancel ? (');
+  });
+
+  it("insists on a reason, because readers are the ones who read it", () => {
+    expect(bulkBlock).toMatch(/notePrompt:\s*\n?\s*"Why, for readers to see/);
+  });
+
+  it("says in the confirmation that the times stay on the reader's page", () => {
+    // The whole design of a cancelled slot: it is crossed out, not removed, so
+    // nobody walks to a locked door. The confirmation has to say so before the
+    // press, because "call off" sounds like "delete".
+    expect(bulkBlock).toMatch(/crossed out/);
+    expect(bulkBlock).toMatch(/locked door/);
   });
 });

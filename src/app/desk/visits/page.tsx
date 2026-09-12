@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { CancelSlot } from "@/app/desk/visits/cancel-slot";
 import { VisitForm } from "@/app/desk/visits/visit-form";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
+import { DeskSelection, SelectionCheckbox } from "@/components/desk/selection-toolbar";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { Callout, EmptyState } from "@/components/ui/states";
@@ -16,6 +17,7 @@ import {
   schedulableDates,
   toIsoDate,
 } from "@/lib/visits";
+import { bulkCancelVisitSlotsAction } from "@/server/actions/visit-actions";
 import { requirePermissionForPage } from "@/server/page-guards";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { listUpcomingVisitSlots } from "@/server/services/visit-service";
@@ -94,7 +96,36 @@ export default async function DeskVisitsPage() {
             Set a time above and readers will see it on their own page straight away.
           </EmptyState>
         ) : (
-          <DataTable headers={["Day", "Time", "Note", "", ""]}>
+          <DeskSelection
+            /*
+             * Only the times that are still up can be ticked. A cancelled row
+             * has nothing left to do — the service would no-op on it and the
+             * toolbar would count it as done, which is a number that would lie
+             * about what just happened.
+             */
+            ids={open.map((slot) => slot.id)}
+            bulk={
+              canCancel
+                ? {
+                    noun: "time",
+                    nounPlural: "times",
+                    run: bulkCancelVisitSlotsAction,
+                    actions: [
+                      {
+                        value: "CANCEL",
+                        label: "Call these off",
+                        tone: "danger",
+                        notePrompt:
+                          "Why, for readers to see — one line, put against every time you are calling off:",
+                        confirm:
+                          "Call off {count} visiting {time|times}? Readers who were counting on {it|them} see {it|them} crossed out on their own page straight away, with your reason beside {it|them}. The {time|times} stay on the page rather than vanishing, so nobody arrives to a locked door.",
+                      },
+                    ],
+                  }
+                : undefined
+            }
+          >
+          <DataTable headers={["", "Day", "Time", "Note", "", ""]}>
             {slots.map((slot) => {
               const date = fromIsoDate(slot.date);
               const dayLabel = date ? formatDayLabel(date) : slot.date;
@@ -102,6 +133,15 @@ export default async function DeskVisitsPage() {
 
               return (
                 <tr key={slot.id} className="border-t-2 border-hairline align-top">
+                  <td className="px-3.5 py-2.5 align-top">
+                    {slot.status === "OPEN" && canCancel ? (
+                      <SelectionCheckbox
+                        id={slot.id}
+                        label={`${dayLabel}, ${timeLabel}`}
+                      />
+                    ) : null}
+                  </td>
+
                   <td className="whitespace-nowrap px-3.5 py-2.5 font-bold text-ink">
                     {dayLabel}
                     {slot.date === today ? (
@@ -140,6 +180,7 @@ export default async function DeskVisitsPage() {
               );
             })}
           </DataTable>
+          </DeskSelection>
         )}
       </div>
     </StaffShell>
