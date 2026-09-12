@@ -428,3 +428,48 @@ export async function bulkReturnLoansAction(ids: string[]): Promise<BulkResult> 
   revalidateCirculation();
   return result;
 }
+
+/**
+ * The loans screen's bulk button, for either thing it can do.
+ *
+ * One entry point because one toolbar is one `run`, and the two operations
+ * behind it stay exactly what they are: a return is `returnBook`, a
+ * cancellation is `cancelLoan`, each run once per ticked row through
+ * `runBulk`. Nothing here merges them into a single cleverer query.
+ *
+ * Cancelling is the correction of a mis-issue, not the end of a loan. The book
+ * goes back on the shelf with its condition untouched, the loan row and its
+ * events stay exactly where they are, and the reason is written against every
+ * one of them — which is why this half asks for a reason and the return half
+ * does not. A return is the ordinary end of a loan and explains itself; six
+ * loans that should never have existed do not.
+ *
+ * The reason is shared across the selection, and that is the honest shape of
+ * the mistake this exists for: a row of books issued to the wrong card during a
+ * busy evening is one error with six rows, not six errors. Anything needing six
+ * different sentences should be cancelled a row at a time, where each one can
+ * have its own.
+ */
+export async function bulkLoanAction(
+  ids: string[],
+  action: string,
+  note: string,
+): Promise<BulkResult> {
+  // Anything that is not explicitly the cancellation is the return. The
+  // dangerous half must be the one that has to be asked for by name.
+  if (action !== "CANCEL") return bulkReturnLoansAction(ids);
+
+  const chosen = limitBulkSelection(ids);
+
+  const page = await listLoansForStaff({ filter: "active" });
+  const labels = new Map(page.items.map((row) => [row.loanId, `${row.title} from ${row.readerName}`]));
+
+  const result = await runBulk(
+    chosen,
+    (id) => labels.get(id) ?? "That book",
+    (id) => cancelLoan({ loanId: id, reason: note }),
+  );
+
+  revalidateCirculation();
+  return result;
+}

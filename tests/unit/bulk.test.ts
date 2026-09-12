@@ -228,3 +228,43 @@ describe("every confirmation says the number and the consequence", () => {
     }
   });
 });
+
+describe("cancelling several loans at once", () => {
+  const page = read("src/app/desk/loans/page.tsx");
+  const action = code("src/server/actions/circulation-actions.ts");
+  const bulkBlock = page.slice(page.indexOf("bulk={"), page.indexOf("<DataTable"));
+
+  it("sends the cancellation to cancelLoan and everything else to returnBook", () => {
+    // The dispatch, in the order that matters: the dangerous half has to be
+    // asked for by name, and anything unrecognised falls through to the return.
+    const body = action.slice(action.indexOf("export async function bulkLoanAction"));
+    expect(body).toContain('if (action !== "CANCEL") return bulkReturnLoansAction(ids);');
+    expect(body).toContain("cancelLoan({ loanId: id, reason: note })");
+  });
+
+  it("asks for a reason, because a cancellation without one is refused", () => {
+    // cancelLoan throws on a blank reason. Offering the button without the
+    // prompt would mean every row failing for a reason nobody was asked for.
+    const cancel = bulkBlock.slice(bulkBlock.indexOf('value: "CANCEL"'));
+    expect(cancel).toMatch(/notePrompt:\s*\n?\s*"/);
+  });
+
+  it("is offered on loan.correct, separately from the return half", () => {
+    // Two authorities, not one. Somebody may take books back all evening
+    // without ever being the person who can say a loan should not have existed.
+    expect(page).toContain('const canCancel = actor.permissions.has("loan.correct");');
+    expect(bulkBlock).toContain("...(canCancel");
+    expect(bulkBlock).toContain("...(canReturn");
+  });
+
+  it("is not offered where every row is already back", () => {
+    expect(bulkBlock).toContain('(canReturn || canCancel) && filter !== "returned"');
+  });
+
+  it("says in the confirmation what a cancellation is not", () => {
+    // The one dangerous confusion on this screen: a book that came home is a
+    // return. The sentence has to draw that line before the press, not after.
+    const cancel = bulkBlock.slice(bulkBlock.indexOf('value: "CANCEL"'));
+    expect(cancel).toMatch(/return, not a cancellation/);
+  });
+});

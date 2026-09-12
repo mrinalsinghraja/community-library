@@ -6,7 +6,7 @@ import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { DueCountdownInline } from "@/components/library/due-countdown";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";
 import { DeskSelection, SelectionCheckbox } from "@/components/desk/selection-toolbar";
-import { bulkReturnLoansAction } from "@/server/actions/circulation-actions";
+import { bulkLoanAction } from "@/server/actions/circulation-actions";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
@@ -203,24 +203,46 @@ export default async function DeskLoansPage({
             filter={{ filter, ...(search ? { search } : {}) }}
             bulk={
               /*
-               * Only where a returnable book can actually be on screen. On the
-               * "returned" filter every row is already back, so a Take back
-               * button would be an offer to do nothing.
+               * Only where a book that can still be acted on is on screen. On
+               * the "returned" filter every row is already back, so both
+               * buttons would be an offer to do nothing.
+               *
+               * The two halves are offered on their own permissions, not on
+               * one combined check. `loan.return` is the everyday desk job;
+               * `loan.correct` is the authority to say a loan should never
+               * have happened, and somebody may hold either without the other.
                */
-              canReturn && filter !== "returned"
+              (canReturn || canCancel) && filter !== "returned"
                 ? {
                     noun: "book",
                     nounPlural: "books",
-                    run: bulkReturnLoansAction,
+                    run: bulkLoanAction,
                     actions: [
-                      {
-                        value: "RETURN",
-                        label: "Accept these returns",
-                        tone: "primary",
-                        notePrompt: null,
-                        confirm:
-                          "Take {count} {book|books} back? Each one goes straight onto the shelf, with nothing said about what shape it is in. A book that came back damaged should go back on its own row instead.",
-                      },
+                      ...(canReturn
+                        ? [
+                            {
+                              value: "RETURN",
+                              label: "Accept these returns",
+                              tone: "primary" as const,
+                              notePrompt: null,
+                              confirm:
+                                "Take {count} {book|books} back? Each one goes straight onto the shelf, with nothing said about what shape it is in. A book that came back damaged should go back on its own row instead.",
+                            },
+                          ]
+                        : []),
+                      ...(canCancel
+                        ? [
+                            {
+                              value: "CANCEL",
+                              label: "Cancel these loans",
+                              tone: "danger" as const,
+                              notePrompt:
+                                "Why these are being called off — one line, kept in the library's own records:",
+                              confirm:
+                                "Cancel {count} {loan|loans}? This is for books that were never really lent — issued to the wrong child, or against the wrong copy. Each one goes back on the shelf and the record of it stays, with your reason attached. A book a child did take home and has now brought back is a return, not a cancellation.",
+                            },
+                          ]
+                        : []),
                     ],
                   }
                 : undefined
