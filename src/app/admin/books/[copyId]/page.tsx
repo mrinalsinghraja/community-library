@@ -67,7 +67,7 @@ export default async function EditBookPage({
 
       <div className="mt-6 flex flex-col gap-8 lg:flex-row lg:items-start">
         <div className="w-40 shrink-0">
-          <CoverThumbnail coverMediaId={book.coverMediaId} title={book.title} sizes="160px" />
+          <CoverThumbnail image="original" coverMediaId={book.coverMediaId} title={book.title} sizes="160px" />
           {book.coverMediaId ? <RemoveCoverButton copyId={book.copyId} /> : null}
         </div>
 

@@ -44,12 +44,18 @@ export function CoverThumbnail({
   className,
   sizes,
   variant = "full",
+  image = "thumb",
 }: {
   coverMediaId: string | null;
   title: string;
   className?: string;
   sizes?: string;
   variant?: "thumb" | "full";
+  /**
+   * What the small picture fetches. The enlarged picture in the dialog is always
+   * the original -- that is the point of opening it. See `BookCover`.
+   */
+  image?: "thumb" | "original";
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -84,6 +90,7 @@ export function CoverThumbnail({
           className={cn("transition-transform group-hover:scale-[1.02]", className)}
           sizes={sizes}
           variant={variant}
+          image={image}
         />
       </button>
 

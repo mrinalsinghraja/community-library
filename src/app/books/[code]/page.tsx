@@ -145,7 +145,7 @@ export default async function BookDetailPage({
                 navigated to — it is the same picture from the same authorised
                 route, shown at a size a child can actually look at.
               */}
-              <CoverThumbnail
+              <CoverThumbnail image="original"
                 coverMediaId={book.coverMediaId}
                 title={book.title}
                 sizes="(min-width: 640px) 288px, 224px"

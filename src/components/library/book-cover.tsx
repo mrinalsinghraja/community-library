@@ -163,6 +163,7 @@ export function BookCover({
   title,
   className,
   variant = "full",
+  image = "thumb",
   sizes = "(min-width: 1024px) 220px, (min-width: 640px) 30vw, 45vw",
 }: {
   coverMediaId: string | null;
@@ -170,6 +171,12 @@ export function BookCover({
   className?: string;
   /** `thumb` simplifies the drawn stand-in for row-sized thumbnails. */
   variant?: "thumb" | "full";
+  /**
+   * Which stored picture to fetch. `thumb` -- the default -- is the small WebP
+   * copy made on upload, right for every card, row and tile. `original` is for
+   * the one place a cover is shown big: a book's own page. See ADR-072.
+   */
+  image?: "thumb" | "original";
   sizes?: string;
 }) {
   /*
@@ -192,9 +199,17 @@ export function BookCover({
           than an oversight. Next's optimiser fetches the source once and then
           serves the resized result from /_next/image?url=… — a URL with no
           session on it. Putting a member-only cover behind that cache would
-          hand out an unauthenticated way to read it. Covers are instead kept
-          small at the point of upload (see the cover picker), so the bytes a
-          thumbnail downloads are already thumbnail-sized.
+          hand out an unauthenticated way to read it.
+
+          Size is handled on the server instead, in two steps. The cover picker
+          keeps the original between 100 KB and 1 MB, which is right for a
+          book's own page and wrong for a 44x66 desk row. So every upload also
+          stores a ~320 px WebP thumbnail (usually 10-30 KB), served by the same
+          authorised route at /thumb, and that is what this component fetches
+          unless `image="original"` asks for the full picture. A cover with no
+          thumbnail yet gets the original from that same URL. Both are sent
+          `private, immutable`: the browser keeps them and stops asking, and no
+          shared cache ever does. See ADR-072.
         */}
         {/*
           Absolutely positioned, which is load-bearing rather than tidiness.
@@ -216,7 +231,7 @@ export function BookCover({
         */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={`/api/media/${coverMediaId}`}
+          src={image === "original" ? `/api/media/${coverMediaId}` : `/api/media/${coverMediaId}/thumb`}
           alt={`Cover of ${title}`}
           sizes={sizes}
           loading="lazy"
