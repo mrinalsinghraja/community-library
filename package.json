@@ -28,7 +28,8 @@
     "test:all": "vitest run",
     "test:coverage": "vitest run --project unit --coverage",
     "verify": "npm run typecheck && npm run lint && npm run test",
-    "reconcile:circulation": "tsx scripts/reconcile-circulation.ts"
+    "reconcile:circulation": "tsx scripts/reconcile-circulation.ts",
+    "thumbnails:backfill": "tsx --conditions=react-server scripts/backfill-cover-thumbnails.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed/index.ts"
@@ -48,6 +49,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "^0.0.1",
+    "sharp": "0.35.3",
     "zod": "^4.4.3"
   },
   "overrides": {

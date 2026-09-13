@@ -8,6 +8,10 @@ import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
 import { NotFoundError, ValidationError } from "@/server/lib/errors";
 import { catalogueIsPubliclyVisible, getCurrentLibrary } from "@/server/lib/settings";
 import { memberIsOnReadersBoard } from "@/server/services/readers-board-service";
+import {
+  buildCoverThumbnailStorageKey,
+  tryMakeCoverThumbnail,
+} from "@/server/lib/cover-thumbnail";
 import { storage } from "@/server/lib/storage";
 import { UPLOAD_PURPOSES, validateUpload, type UploadPurpose } from "@/server/lib/uploads";
 
@@ -180,6 +184,22 @@ async function storeUpload(params: {
     originalFilename: params.originalFilename,
   });
 
+  /*
+   * A book cover also gets a small WebP copy for lists and cards (ADR-072).
+   *
+   * Made from validated.bytes -- what is stored, EXIF already gone -- and ONLY
+   * for a cover. No other purpose is ever copied, and the database refuses a
+   * thumbnail on any other row (`media_object_thumb_only_for_covers`), so a
+   * derived copy of a child's photograph cannot exist even by mistake.
+   *
+   * A cover sharp cannot decode is still stored; it just has no thumbnail, and
+   * lists fall back to the original for that one book.
+   */
+  const thumbnail =
+    validated.purpose === UPLOAD_PURPOSES.BOOK_COVER
+      ? await tryMakeCoverThumbnail(validated.bytes)
+      : null;
+
   // validated.bytes, NOT params.bytes: the caller's array still carries the
   // EXIF that validateUpload stripped, GPS coordinates and all.
   const stored = await storage().put(
@@ -188,6 +208,15 @@ async function storeUpload(params: {
     validated.mimeType,
     validated.visibility,
   );
+
+  const storedThumbnail = thumbnail
+    ? await storage().put(
+        buildCoverThumbnailStorageKey(),
+        thumbnail.bytes,
+        thumbnail.mimeType,
+        validated.visibility,
+      )
+    : null;
 
   const media = await prisma.mediaObject.create({
     data: {
@@ -203,6 +232,14 @@ async function storeUpload(params: {
       byteSize: validated.byteSize,
       checksumSha256: validated.checksumSha256,
       purpose: validated.purpose,
+      ...(thumbnail && storedThumbnail
+        ? {
+            thumbStorageKey: storedThumbnail.storageKey,
+            thumbMimeType: thumbnail.mimeType,
+            thumbByteSize: thumbnail.byteSize,
+            thumbChecksumSha256: thumbnail.checksumSha256,
+          }
+        : {}),
       uploadedById: params.uploadedById ?? null,
       // Born with a deadline. Whatever claims it clears this.
       pendingDeletionAt: new Date(Date.now() + UNCLAIMED_UPLOAD_MINUTES * 60_000),
@@ -278,6 +315,15 @@ export async function scheduleMediaDeletion(db: Db, mediaId: string): Promise<vo
 // Reading — the authorization decision
 // ---------------------------------------------------------------------------
 
+/**
+ * Which bytes of an object to read.
+ *
+ * `thumb` is honoured only for a book cover that has one. For anything else --
+ * and for a cover whose thumbnail has not been made yet -- the original is
+ * returned and reported as such.
+ */
+export type MediaVariant = "original" | "thumb";
+
 export interface AuthorizedMedia {
   bytes: Uint8Array;
   mimeType: string;
@@ -296,6 +342,8 @@ export interface AuthorizedMedia {
    * single request.
    */
   checksumSha256: string;
+  /** Which bytes these are. See `MediaVariant`. */
+  variant: MediaVariant;
 }
 
 /**
@@ -325,7 +373,16 @@ export interface AuthorizedMedia {
  * one mistake that would matter most here is a change meant for covers
  * loosening what applies to a child's photograph.
  */
-export async function getAuthorizedMedia(mediaId: string): Promise<AuthorizedMedia> {
+export async function getAuthorizedMedia(
+  mediaId: string,
+  options: { variant?: MediaVariant } = {},
+): Promise<AuthorizedMedia> {
+  /*
+   * `variant` decides WHICH bytes are read once the answer is yes. It takes no
+   * part in deciding whether the answer is yes: every rule below is exactly the
+   * one that guards the original, asked about the original's id.
+   */
+  const variant = options.variant ?? "original";
   const actor = await getActor();
 
   /*
@@ -347,6 +404,10 @@ export async function getAuthorizedMedia(mediaId: string): Promise<AuthorizedMed
       mimeType: true,
       byteSize: true,
       checksumSha256: true,
+      thumbStorageKey: true,
+      thumbMimeType: true,
+      thumbByteSize: true,
+      thumbChecksumSha256: true,
       purpose: true,
       pendingDeletionAt: true,
       memberProfile: { select: { userId: true } },
@@ -368,8 +429,8 @@ export async function getAuthorizedMedia(mediaId: string): Promise<AuthorizedMed
   // that opening the shelf to the public later is one switch and not a hunt for
   // every place a cover is rendered.
   if (media.purpose === UPLOAD_PURPOSES.BOOK_COVER) {
-    if (actor) return readBytes(media);
-    if (await catalogueIsPubliclyVisible()) return readBytes(media);
+    if (actor) return readBytes(media, variant);
+    if (await catalogueIsPubliclyVisible()) return readBytes(media, variant);
     /*
      * One narrow exception, and it is not "covers are public now".
      *
@@ -386,7 +447,7 @@ export async function getAuthorizedMedia(mediaId: string): Promise<AuthorizedMed
      * about the gate is unchanged, and the check is a query rather than a flag
      * so it cannot drift away from what the page actually shows.
      */
-    if (await coverAppearsOnDonorPage(libraryId, media.bookTitles)) return readBytes(media);
+    if (await coverAppearsOnDonorPage(libraryId, media.bookTitles)) return readBytes(media, variant);
     throw new NotFoundError(`Signed-out request for cover ${mediaId} while catalogue is member-only`);
   }
 
@@ -395,7 +456,7 @@ export async function getAuthorizedMedia(mediaId: string): Promise<AuthorizedMed
   // every email. It is public by definition, and it is the one purpose where a
   // signed-out request is the normal case rather than a probe.
   if (media.purpose === UPLOAD_PURPOSES.BRANDING) {
-    return readBytes(media);
+    return readBytes(media, variant);
   }
 
   // --- Everything else -----------------------------------------------------
@@ -404,7 +465,7 @@ export async function getAuthorizedMedia(mediaId: string): Promise<AuthorizedMed
   if (!actor) throw new NotFoundError(`Signed-out request for private media ${mediaId}`);
 
   if (media.visibility === "PUBLIC") {
-    return readBytes(media);
+    return readBytes(media, variant);
   }
 
   const isOwnPhoto = media.memberProfile?.userId === actor.userId;
@@ -443,7 +504,7 @@ export async function getAuthorizedMedia(mediaId: string): Promise<AuthorizedMed
     );
   }
 
-  return readBytes(media);
+  return readBytes(media, variant);
 }
 
 /**
@@ -471,13 +532,44 @@ async function coverAppearsOnDonorPage(
   return credited !== null;
 }
 
-async function readBytes(media: {
-  storageKey: string;
-  mimeType: string;
-  byteSize: number;
-  purpose: string;
-  checksumSha256: string;
-}): Promise<AuthorizedMedia> {
+async function readBytes(
+  media: {
+    storageKey: string;
+    mimeType: string;
+    byteSize: number;
+    purpose: string;
+    checksumSha256: string;
+    thumbStorageKey: string | null;
+    thumbMimeType: string | null;
+    thumbByteSize: number | null;
+    thumbChecksumSha256: string | null;
+  },
+  variant: MediaVariant,
+): Promise<AuthorizedMedia> {
+  if (
+    variant === "thumb" &&
+    media.purpose === UPLOAD_PURPOSES.BOOK_COVER &&
+    media.thumbStorageKey &&
+    media.thumbMimeType &&
+    media.thumbByteSize &&
+    media.thumbChecksumSha256
+  ) {
+    const thumb = await storage().get(media.thumbStorageKey);
+    if (thumb) {
+      return {
+        bytes: thumb,
+        mimeType: media.thumbMimeType,
+        byteSize: media.thumbByteSize,
+        purpose: media.purpose,
+        checksumSha256: media.thumbChecksumSha256,
+        variant: "thumb",
+      };
+    }
+    // A thumbnail is an optimisation. Losing one is worth a log line, never a
+    // missing cover: the original below is what the reader gets instead.
+    console.error(`Cover thumbnail missing for key ${media.thumbStorageKey}; serving the original`);
+  }
+
   const bytes = await storage().get(media.storageKey);
   if (!bytes) {
     // The row outlived its bytes. Treated as missing, and worth seeing in logs
@@ -491,6 +583,7 @@ async function readBytes(media: {
     byteSize: media.byteSize,
     purpose: media.purpose,
     checksumSha256: media.checksumSha256,
+    variant: "original",
   };
 }
 
@@ -673,7 +766,7 @@ export async function claimUnclaimedBookCover(
 export async function purgeScheduledMedia(mediaId: string): Promise<boolean> {
   const media = await prisma.mediaObject.findUnique({
     where: { id: mediaId },
-    select: { id: true, storageKey: true, pendingDeletionAt: true },
+    select: { id: true, storageKey: true, thumbStorageKey: true, pendingDeletionAt: true },
   });
 
   // Refuses to delete anything that is not scheduled. This is the guard that
@@ -681,6 +774,10 @@ export async function purgeScheduledMedia(mediaId: string): Promise<boolean> {
   if (!media || !media.pendingDeletionAt) return false;
 
   try {
+    // The thumbnail first, then the original, then the row. A failure part way
+    // leaves the row, so the next sweep tries again -- and both drivers treat an
+    // already-missing key as done, so the retry is safe.
+    if (media.thumbStorageKey) await storage().delete(media.thumbStorageKey);
     await storage().delete(media.storageKey);
     await prisma.mediaObject.delete({ where: { id: media.id } });
     return true;

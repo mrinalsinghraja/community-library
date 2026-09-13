@@ -1590,6 +1590,23 @@ model MediaObject {
   /// retried forever in silence.
   deleteAttempts    Int       @default(0) @map("delete_attempts")
 
+  /// A small WebP copy of a book cover, for everywhere a cover is drawn smaller
+  /// than a book's own page: catalogue cards, desk rows, recommendations.
+  ///
+  /// The four columns are all set or all null (a CHECK in the migration), and
+  /// they may only be set on a `book_cover` row -- also a CHECK, so that no code
+  /// path, script or hand-written SQL can ever store a derived copy of a
+  /// child's photograph. A thumbnail of a child's face would be new personal
+  /// data with its own erasure and retention story; this schema refuses to hold
+  /// one rather than trusting every caller to remember. See ADR-072.
+  ///
+  /// The bytes live under their own storage key and are deleted with the row by
+  /// `purgeScheduledMedia`, so a thumbnail never outlives its cover.
+  thumbStorageKey     String? @unique @map("thumb_storage_key")
+  thumbMimeType       String? @map("thumb_mime_type")
+  thumbByteSize       Int?    @map("thumb_byte_size")
+  thumbChecksumSha256 String? @map("thumb_checksum_sha256")
+
   library    Library  @relation(fields: [libraryId], references: [id], onDelete: Cascade)
   uploadedBy AppUser? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
 
