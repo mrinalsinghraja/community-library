@@ -8,8 +8,10 @@ import { COVER_MIN_BYTES } from "@/lib/cover-image";
 import { describeSize } from "@/lib/file-size";
 import { ValidationError } from "@/server/lib/errors";
 import {
+  MEDIA_CACHE_CONTROL,
   MEDIA_MAY_REVALIDATE,
   UPLOAD_PURPOSES,
+  mediaCacheControl,
   UPLOAD_RULES,
   validateUpload,
 } from "@/server/lib/uploads";
@@ -319,6 +321,52 @@ describe("what a browser may keep", () => {
     const known = new Set<string>(Object.values(UPLOAD_PURPOSES));
     for (const purpose of MEDIA_MAY_REVALIDATE) {
       expect(known.has(purpose)).toBe(true);
+    }
+  });
+});
+
+describe("how long a stored picture may be kept", () => {
+  /*
+   * The whole of ADR-072's caching change is this table, so the safety of it is
+   * asserted here rather than trusted: a child's photograph is exactly what it
+   * always was, a cover is kept by the browser alone, and only the logo may sit
+   * in a shared cache.
+   */
+  it("serves a child's photograph exactly as before: private, no-store, never kept", () => {
+    const policy = MEDIA_CACHE_CONTROL[UPLOAD_PURPOSES.CHILD_PHOTO];
+
+    expect(policy).toBe("private, no-store, max-age=0, must-revalidate");
+    expect(policy).not.toMatch(/immutable/);
+    expect(policy).not.toMatch(/public/);
+    expect(policy).not.toMatch(/s-maxage/);
+    expect(policy).not.toMatch(/max-age=[1-9]/);
+  });
+
+  it("lets a browser keep a book cover for good, and no shared cache at all", () => {
+    const policy = MEDIA_CACHE_CONTROL[UPLOAD_PURPOSES.BOOK_COVER];
+
+    expect(policy).toBe("private, max-age=31536000, immutable");
+    expect(policy).not.toMatch(/public/);
+    expect(policy).not.toMatch(/s-maxage/);
+  });
+
+  it("lets the CDN cache a library's logo", () => {
+    const policy = MEDIA_CACHE_CONTROL[UPLOAD_PURPOSES.BRANDING];
+
+    expect(policy).toMatch(/^public,/);
+    expect(policy).toMatch(/s-maxage=\d+/);
+    expect(policy).toMatch(/immutable/);
+  });
+
+  it("has a policy for every purpose this application defines", () => {
+    for (const purpose of Object.values(UPLOAD_PURPOSES)) {
+      expect(mediaCacheControl(purpose)).toBe(MEDIA_CACHE_CONTROL[purpose]);
+    }
+  });
+
+  it("treats a purpose it does not recognise like a child's photograph, never like a logo", () => {
+    for (const unknown of ["", "Book_Cover", "branding ", "avatar", "__proto__", "toString"]) {
+      expect(mediaCacheControl(unknown)).toBe(MEDIA_CACHE_CONTROL[UPLOAD_PURPOSES.CHILD_PHOTO]);
     }
   });
 });

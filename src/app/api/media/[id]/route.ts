@@ -1,7 +1,4 @@
-import { NextResponse } from "next/server";
-
-import { isAppError } from "@/server/lib/errors";
-import { MEDIA_MAY_REVALIDATE } from "@/server/lib/uploads";
+import { mediaRefusal, mediaResponse } from "@/server/lib/media-response";
 import { getAuthorizedMedia } from "@/server/services/media-service";
 
 /**
@@ -21,9 +18,11 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /*
- * Which objects may be revalidated rather than re-sent is decided in
- * `src/server/lib/uploads.ts`, alongside the rest of the upload rules and the
- * reason a child's photograph is not on that list. It is unit-tested there.
+ * How a response may be cached is decided per purpose in
+ * `src/server/lib/uploads.ts` (`MEDIA_CACHE_CONTROL`, `MEDIA_MAY_REVALIDATE`),
+ * alongside the reason a child's photograph keeps `no-store`. The headers
+ * themselves are built in `src/server/lib/media-response.ts`, shared with the
+ * thumbnail route so the two can never drift apart. See ADR-072.
  */
 
 export async function GET(
@@ -33,56 +32,8 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const media = await getAuthorizedMedia(id);
-
-    const cacheable = MEDIA_MAY_REVALIDATE.has(media.purpose);
-    const etag = cacheable ? `"${media.checksumSha256}"` : null;
-
-    if (etag && request.headers.get("if-none-match") === etag) {
-      // Authorization has already been decided above, on this request, for this
-      // viewer. Only then is the shortcut offered.
-      return new NextResponse(null, {
-        status: 304,
-        headers: {
-          ETag: etag,
-          "Cache-Control": "private, no-cache, must-revalidate",
-        },
-      });
-    }
-
-    return new NextResponse(Buffer.from(media.bytes) as unknown as BodyInit, {
-      status: 200,
-      headers: {
-        "Content-Type": media.mimeType,
-        "Content-Length": String(media.byteSize),
-        // Never a shared cache. `private` keeps it out of any proxy; a child's
-        // photograph additionally gets `no-store`, which keeps it off a shared
-        // family device's disk cache after they sign out.
-        "Cache-Control": cacheable
-          ? "private, no-cache, must-revalidate"
-          : "private, no-store, max-age=0, must-revalidate",
-        ...(etag ? { ETag: etag } : {}),
-        // The bytes were sniffed on upload; this stops a browser second-guessing
-        // the declared type and executing something.
-        "X-Content-Type-Options": "nosniff",
-        "Content-Disposition": "inline",
-        // Defence in depth: even if a non-image ever reached storage, it is
-        // served with no privileges at all.
-        "Content-Security-Policy": "default-src 'none'; sandbox; base-uri 'none'",
-        /*
-         * next.config.ts already sets strict-origin-when-cross-origin globally
-         * and that wins, so this is not repeated here. It is the right value
-         * anyway: the id in the path is an opaque uuid, not a credential, and
-         * authorization is decided per request rather than by knowing the URL.
-         */
-      },
-    });
+    return mediaResponse(request, await getAuthorizedMedia(id));
   } catch (error) {
-    // One response for every refusal, including unexpected errors — the reason
-    // belongs in the server log, not in a response to whoever is probing.
-    if (!isAppError(error)) {
-      console.error(`Media request for ${id} failed:`, error);
-    }
-    return new NextResponse(null, { status: 404 });
+    return mediaRefusal(id, error);
   }
 }

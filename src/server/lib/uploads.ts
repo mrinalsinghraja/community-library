@@ -116,14 +116,16 @@ export const UPLOAD_RULES: Record<UploadPurpose, UploadRules> = {
 };
 
 /**
- * Purposes whose bytes a browser may keep, subject to revalidating every time.
+ * Purposes that are offered an ETag.
  *
- * `/api/media/[id]` reads this to decide whether to offer an ETag. It is a
- * caching decision, not an authorization one — the route runs the full
- * authorization check on every request either way, and `no-cache` means the
- * browser must ask before reusing anything it holds. All that changes for a
- * purpose on this list is that an unchanged answer costs an empty 304 instead
- * of the whole picture again.
+ * `/api/media/[id]` reads this to decide whether to send one, and answers a
+ * matching `If-None-Match` with an empty 304. It is a caching decision, not an
+ * authorization one -- the route runs the full authorization check on every
+ * request either way, and only then is the shortcut offered.
+ *
+ * With `MEDIA_CACHE_CONTROL` below a browser rarely needs to ask at all, but a
+ * copy fetched before that change still carries `no-cache`, and the ETag is what
+ * lets it be answered with nothing.
  *
  * **A child's photograph is not on this list and must never be added to it.**
  * It keeps `no-store`, so it is not written to a shared family device's disk at
@@ -134,6 +136,49 @@ export const MEDIA_MAY_REVALIDATE: ReadonlySet<string> = new Set<UploadPurpose>(
   UPLOAD_PURPOSES.BOOK_COVER,
   UPLOAD_PURPOSES.BRANDING,
 ]);
+
+/**
+ * The `Cache-Control` each purpose is served with. The one place it is decided.
+ *
+ * Why these are safe (ADR-072):
+ *
+ * - **Bytes never change under an id.** Every upload mints a new id and a new
+ *   random storage key; replacing a cover creates a new object and schedules the
+ *   old one for deletion. Nothing ever rewrites an object's bytes. So a URL's
+ *   answer cannot go stale, which is the whole requirement for `immutable`.
+ *
+ * - **A book cover is `private`.** The browser keeps it and stops asking, but no
+ *   shared cache may. A CDN keys on the URL, not on who is signed in, so a
+ *   shared copy of a member-only cover would be handed to a signed-out visitor.
+ *   Every cover still goes through the authorization decision the first time a
+ *   given browser asks for it.
+ *
+ * - **A logo may be CDN-cached.** It is public by definition: signed-out
+ *   requests for it are the normal case, not a probe, and the media route sets
+ *   no cookie.
+ *
+ * - **A child's photograph is exactly what it always was.** `no-store`: never
+ *   written to a family device's disk, never shared, asked for every time.
+ *   Nothing here may make it longer-lived, and a unit test holds the string.
+ */
+export const MEDIA_CACHE_CONTROL: Readonly<Record<UploadPurpose, string>> = {
+  [UPLOAD_PURPOSES.CHILD_PHOTO]: "private, no-store, max-age=0, must-revalidate",
+  [UPLOAD_PURPOSES.BOOK_COVER]: "private, max-age=31536000, immutable",
+  [UPLOAD_PURPOSES.BRANDING]: "public, max-age=86400, s-maxage=31536000, immutable",
+};
+
+/**
+ * The policy for a purpose read back from the database.
+ *
+ * Fails closed: a purpose this application does not recognise is served like a
+ * child's photograph, never like a logo. `purpose` is a free-text column, and a
+ * typo in a future migration must not be what makes something cacheable.
+ */
+export function mediaCacheControl(purpose: string): string {
+  return Object.hasOwn(MEDIA_CACHE_CONTROL, purpose)
+    ? MEDIA_CACHE_CONTROL[purpose as UploadPurpose]
+    : MEDIA_CACHE_CONTROL[UPLOAD_PURPOSES.CHILD_PHOTO];
+}
 
 /**
  * Magic-byte signatures. A file is what its bytes say it is, not what its
