@@ -341,6 +341,10 @@ describe("a book cover, served", () => {
     expect(response.headers.get("content-type")).toBe("image/png");
     expect(response.headers.get("etag")).toBe(`"${row.checksumSha256}"`);
     expect((await response.arrayBuffer()).byteLength).toBe(row.byteSize);
+    // The bytes at /thumb will change once a thumbnail is made, so this answer
+    // must be revalidated, never kept for good.
+    expect(response.headers.get("cache-control")).toBe("private, no-cache");
+    expect(response.headers.get("cache-control")).not.toMatch(/immutable|public|max-age=[1-9]/);
   });
 
   it("falls back to the original when the thumbnail's bytes have gone missing", async () => {
@@ -354,7 +358,28 @@ describe("a book cover, served", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/jpeg");
+    expect(response.headers.get("cache-control")).toBe("private, no-cache");
     expect((await response.arrayBuffer()).byteLength).toBe(row.byteSize);
+  });
+
+  it("stops serving the original at /thumb the moment a thumbnail exists", async () => {
+    const member = await createMember(fixture.libraryId);
+    const cover = await jacket();
+    const mediaId = await uploadCover(cover, null);
+    await actingAs(member.id);
+
+    const before = await call(getThumb, mediaId);
+    const beforeEtag = before.headers.get("etag")!;
+    expect(before.headers.get("content-type")).toBe("image/jpeg");
+
+    await backfillCoverThumbnails({ dryRun: false });
+
+    // The browser revalidates with what it holds, and is handed the thumbnail.
+    const after = await call(getThumb, mediaId, { "if-none-match": beforeEtag });
+    expect(after.status).toBe(200);
+    expect(after.headers.get("content-type")).toBe("image/webp");
+    expect(after.headers.get("cache-control")).toBe("private, max-age=31536000, immutable");
+    expect(after.headers.get("etag")).not.toBe(beforeEtag);
   });
 
   it("takes its thumbnail with it when it is purged", async () => {

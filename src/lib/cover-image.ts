@@ -35,6 +35,15 @@ export const COVER_MAX_BYTES = 1024 * 1024;
  */
 export const COVER_THUMB_LONG_EDGE = 320;
 
+/**
+ * Appended to every thumbnail URL. Bump it to make every browser fetch
+ * thumbnails afresh.
+ *
+ * 2: on the day thumbnails shipped, /thumb briefly served full originals as
+ * `immutable` before the backfill ran, and browsers kept them under v1's URL.
+ */
+export const COVER_THUMB_URL_VERSION = 2;
+
 /** Encoder quality, 0 to 1. Covers are flat artwork and type; 0.72 keeps both clean. */
 export const COVER_THUMB_QUALITY = 0.72;
 

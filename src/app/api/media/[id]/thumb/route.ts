@@ -1,5 +1,5 @@
 import { mediaRefusal, mediaResponse } from "@/server/lib/media-response";
-import { UPLOAD_PURPOSES } from "@/server/lib/uploads";
+import { MEDIA_THUMB_FALLBACK_CACHE_CONTROL, UPLOAD_PURPOSES } from "@/server/lib/uploads";
 import { getAuthorizedMedia } from "@/server/services/media-service";
 
 /**
@@ -10,7 +10,9 @@ import { getAuthorizedMedia } from "@/server/services/media-service";
  * same bare 404 as the original route's, so this path reveals nothing the
  * other one does not.
  *
- * - A cover with no thumbnail yet gets its original, from this same URL.
+ * - A cover with no thumbnail yet gets its original, from this same URL, and
+ *   that answer is NOT cached for good: the bytes here change once a thumbnail
+ *   exists. See MEDIA_THUMB_FALLBACK_CACHE_CONTROL.
  * - Anything that is not a book cover is refused here, after the authorization
  *   decision and with the same 404. There is no such thing as a thumbnail of a
  *   child's photograph, and this route will not pretend to serve one.
@@ -31,7 +33,9 @@ export async function GET(
     if (media.purpose !== UPLOAD_PURPOSES.BOOK_COVER) {
       return mediaRefusal(id, null);
     }
-    return mediaResponse(request, media);
+    return media.variant === "thumb"
+      ? mediaResponse(request, media)
+      : mediaResponse(request, media, { cacheControl: MEDIA_THUMB_FALLBACK_CACHE_CONTROL });
   } catch (error) {
     return mediaRefusal(id, error);
   }

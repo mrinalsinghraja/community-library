@@ -168,6 +168,19 @@ export const MEDIA_CACHE_CONTROL: Readonly<Record<UploadPurpose, string>> = {
 };
 
 /**
+ * `/api/media/[id]/thumb` when the cover has no thumbnail yet and the original
+ * is sent in its place.
+ *
+ * NOT immutable, and this is the one exception to "bytes never change under a
+ * URL": the answer at /thumb changes the moment a thumbnail is made. Found on
+ * production the day thumbnails shipped -- a browser that loaded the catalogue
+ * before the backfill kept each full original under its /thumb URL for a year.
+ * `no-cache` with the ETag costs an empty 304 until the thumbnail exists, then
+ * the new bytes. Private, like every cover.
+ */
+export const MEDIA_THUMB_FALLBACK_CACHE_CONTROL = "private, no-cache";
+
+/**
  * The policy for a purpose read back from the database.
  *
  * Fails closed: a purpose this application does not recognise is served like a

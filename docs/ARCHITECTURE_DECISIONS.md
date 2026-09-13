@@ -3366,6 +3366,16 @@ the original.
 
 An unrecognised purpose gets the child-photograph policy, never the logo's.
 
+**One exception, found on production the same day.** When `/thumb` has no
+thumbnail yet it serves the original, and that answer changes once a thumbnail
+is made. The first deploy sent it `immutable`. A browser that opened the
+catalogue before the backfill ran kept each full original under its `/thumb` URL
+for a year (measured: 24 covers, 629 KB average, all from disk cache). That
+fallback is now `private, no-cache` with the ETag
+(`MEDIA_THUMB_FALLBACK_CACHE_CONTROL`). Thumbnail URLs carry
+`?v=COVER_THUMB_URL_VERSION`, bumped to 2, so the browsers already holding
+originals fetch the real thumbnail once.
+
 `immutable` is safe only because **an object's bytes never change under its id**.
 This was checked before relying on it: every upload mints a new id and a random
 storage key, every update to a media row touches only `pendingDeletionAt` or

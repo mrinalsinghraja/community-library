@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { COVER_THUMB_URL_VERSION } from "@/lib/cover-image";
 
 /**
  * A book's cover, or a drawn stand-in when it has none.
@@ -232,7 +233,11 @@ export function BookCover({
         */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={image === "original" ? `/api/media/${coverMediaId}` : `/api/media/${coverMediaId}/thumb`}
+          src={
+            image === "original"
+              ? `/api/media/${coverMediaId}`
+              : `/api/media/${coverMediaId}/thumb?v=${COVER_THUMB_URL_VERSION}`
+          }
           alt={`Cover of ${title}`}
           sizes={sizes}
           loading="lazy"

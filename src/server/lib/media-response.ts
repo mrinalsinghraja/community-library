@@ -19,8 +19,14 @@ import type { AuthorizedMedia } from "@/server/services/media-service";
  * this function with exactly the headers it had before that table existed, and a
  * database test holds them byte for byte.
  */
-export function mediaResponse(request: Request, media: AuthorizedMedia): NextResponse {
-  const cacheControl = mediaCacheControl(media.purpose);
+export function mediaResponse(
+  request: Request,
+  media: AuthorizedMedia,
+  options: { cacheControl?: string } = {},
+): NextResponse {
+  // An override may only ever come from the thumbnail route's fallback, which
+  // is shorter-lived than the purpose's own policy, never longer.
+  const cacheControl = options.cacheControl ?? mediaCacheControl(media.purpose);
   const etag = MEDIA_MAY_REVALIDATE.has(media.purpose) ? `"${media.checksumSha256}"` : null;
 
   if (etag && request.headers.get("if-none-match") === etag) {

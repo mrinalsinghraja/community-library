@@ -10,6 +10,7 @@ import { ValidationError } from "@/server/lib/errors";
 import {
   MEDIA_CACHE_CONTROL,
   MEDIA_MAY_REVALIDATE,
+  MEDIA_THUMB_FALLBACK_CACHE_CONTROL,
   UPLOAD_PURPOSES,
   mediaCacheControl,
   UPLOAD_RULES,
@@ -356,6 +357,12 @@ describe("how long a stored picture may be kept", () => {
     expect(policy).toMatch(/^public,/);
     expect(policy).toMatch(/s-maxage=\d+/);
     expect(policy).toMatch(/immutable/);
+  });
+
+  it("never lets the thumbnail route's stand-in original be kept for good", () => {
+    expect(MEDIA_THUMB_FALLBACK_CACHE_CONTROL).toMatch(/^private,/);
+    expect(MEDIA_THUMB_FALLBACK_CACHE_CONTROL).toMatch(/no-cache/);
+    expect(MEDIA_THUMB_FALLBACK_CACHE_CONTROL).not.toMatch(/immutable|public|max-age=[1-9]|s-maxage/);
   });
 
   it("has a policy for every purpose this application defines", () => {
