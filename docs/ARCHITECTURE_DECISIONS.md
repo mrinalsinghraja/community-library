@@ -3295,3 +3295,118 @@ Everything ADR-070 decided that was not a colour: that every page opens on a
 band, that `PageHeading` *is* the band so no page is edited to get one, that the
 desk's is two lines rather than five, that `/account` puts the reader's face in
 it and a book's page puts its shelf, title and author in it.
+
+## ADR-072 — Covers get thumbnails and are kept by the browser; children's photographs get neither
+
+**Status:** accepted · **Date:** 2026-09-13 · **Amends:** the cover caching described in `DESIGN_SYSTEM.md` (ETag + `no-cache`)
+
+### Why this was needed
+
+Vercel's Hobby plan gives the whole team 10 GB of Fast Origin Transfer a month,
+and going over pauses **every** project on the team, not just this one. On
+2026-09-13 the team was at 100%, and this project was 8.24 GB of it (80%).
+
+The cause was covers. Every cover is served by `/api/media/[id]`, a Node
+function that reads the bytes from the private Blob store on each request. Two
+things made that expensive:
+
+- **Every size got the full picture.** A cover is kept at 100 KB–1 MB so a book's
+  own page can show it half a screen wide. The same bytes went into a 44×66 px
+  desk row and a catalogue card. A list page of twenty books was twenty full
+  jackets. On a real 1,038,600 B cover, a 218×320 WebP is 14,338 B.
+- **Nothing was ever kept.** Covers were `private, no-cache, must-revalidate` with
+  an ETag. The 304 worked (verified on production), but every view still called
+  the function, and every browser's first view still sent the whole jacket.
+
+Production when this was decided: 286 covers, 141 MB; 9 child photographs,
+2.9 MB; no uploaded logo; catalogue visibility PUBLIC.
+
+### The decision
+
+**1. Every cover gets a thumbnail at upload.** `sharp` makes a WebP, 320 px on the
+long edge, quality 72, from the *stored* bytes (EXIF already stripped; sharp
+writes no metadata). It is its own object under its own key, recorded in four
+nullable `thumb_*` columns on the cover's `media_object` row, which are all set or
+all null. `purgeScheduledMedia` deletes it with the cover, so a thumbnail never
+outlives its jacket. A cover sharp cannot decode is still stored, just without
+one. Existing covers get theirs from `npm run thumbnails:backfill`, which is a dry
+run unless given `--write`, never touches an original, and does nothing on a
+second run.
+
+**2. `/api/media/[id]/thumb` serves it.** It calls the same
+`getAuthorizedMedia(id)` on the same id; the variant only chooses which bytes are
+read once the answer is yes. Every refusal is the same empty 404 as the original
+route's. With no thumbnail it serves the original. For anything that is not a
+book cover it refuses. `BookCover` and `CoverThumbnail` fetch the thumbnail by
+default; a book's own page, the admin edit page and the enlarge dialog ask for
+the original.
+
+**3. Caching is decided per purpose in one table**, `MEDIA_CACHE_CONTROL` in
+`src/server/lib/uploads.ts`, read by a response builder both routes share:
+
+| Purpose | `Cache-Control` |
+|---|---|
+| `child_photo` | `private, no-store, max-age=0, must-revalidate` — unchanged |
+| `book_cover` (original and thumbnail) | `private, max-age=31536000, immutable` |
+| `branding` | `public, max-age=86400, s-maxage=31536000, immutable` |
+
+An unrecognised purpose gets the child-photograph policy, never the logo's.
+
+`immutable` is safe only because **an object's bytes never change under its id**.
+This was checked before relying on it: every upload mints a new id and a random
+storage key, every update to a media row touches only `pendingDeletionAt` or
+`deleteAttempts`, and replacing a cover creates a new object and schedules the
+old one for deletion. A new cover is a new URL, so there is nothing to purge.
+
+**4. `robots.txt`** disallows `/api/`, `/desk`, `/admin`, `/account`, `/my-*`,
+`/verify`, `/reset`, `/activate` and `/dev`. The pages were already `noindex`, but a
+crawler has to download a page, and its covers, to find that out.
+
+### Why covers are not CDN-cached
+
+A CDN keys on the URL, not on who is signed in. The first signed-in member to
+load a member-only cover would put it in the shared cache, and the next
+signed-out visitor to ask for that URL would get it without the authorization
+check ever running. `private` keeps covers in the viewer's own browser, where
+that viewer has already been allowed to see them.
+
+The catalogue is PUBLIC today, so right now that leak would expose nothing.
+It is still not done, because turning the catalogue back to MEMBER_ONLY is one
+setting, and a year of `s-maxage` would quietly defeat it. If the library decides
+the shelf stays public for good, CDN-caching covers is a sound follow-up. It
+would need the cache purged whenever `catalogue_visibility` changes, and the
+donor-page exception re-examined, and it is the owner's call, not a default.
+
+The logo is different: it is public by definition, the route sets no cookie, and
+a signed-out request for it is the normal case. So it may sit in the CDN.
+
+What `private, immutable` does give up: a browser that loaded a cover while the
+catalogue was public keeps its own copy if the catalogue is later made
+member-only. That is a copy of something that same person was already shown, on
+their own device, and it cannot travel to anyone else.
+
+### Why children's photographs are excluded from both
+
+**No thumbnail.** A derived copy of a child's photograph is new personal data. It
+would need to be found and erased by the retention jobs, by account closure and
+by photo removal, each of which was written against exactly one object per
+photograph. Getting any of those wrong would leave a child's face in storage
+after the family was told it was gone. The saving would be about 3 MB across the
+whole library. So the schema refuses it outright
+(`media_object_thumb_only_for_covers`), the thumbnail route refuses it, and a
+database test tries to write one directly and expects the database to say no. If
+smaller child photographs are ever wanted, that is its own decision with its own
+erasure design.
+
+**No new caching.** A child's photograph keeps `private, no-store`, so it is
+never written to a shared family device's disk. It is not on
+`MEDIA_MAY_REVALIDATE` and gets no ETag. A database test calls the real route
+handler and asserts its response headers byte for byte against what they were
+before this change.
+
+### What did not change
+
+`getAuthorizedMedia`'s decision logic, `catalogue_visibility`, the donor-page
+cover exception, the storage posture (everything still PRIVATE in one private
+Blob store, ADR-036), the rule that no stored object has a public or signed URL,
+and the refusal to route covers through `next/image`.

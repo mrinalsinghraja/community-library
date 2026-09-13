@@ -374,20 +374,29 @@ metadata strip and the generated storage key all still run on the server against
 the bytes that actually arrive. Every failure path returns the original file: a
 librarian with a queue in front of them is never stopped by an image codec.
 
-**Revalidated rather than re-sent.** `/api/media/[id]` gives covers and logos an
-`ETag` and `Cache-Control: private, no-cache, must-revalidate`, so a second view
-of the same jacket costs an empty 304. `no-cache` — not `max-age` — is what
-makes that safe: the browser must ask, so **the authorization check runs on
-every single request, exactly as before**. The list of purposes this applies to
-lives in `src/server/lib/uploads.ts` and is unit-tested. A child's photograph is
-not on it and must never be: it keeps `no-store`.
+**Two sizes, and kept for good.** Every cover upload also stores a ~320 px WebP
+thumbnail (usually 10–30 KB). Cards, rows and tiles fetch it from
+`/api/media/[id]/thumb`; a book's own page and the enlarge dialog fetch the
+original from `/api/media/[id]`. Both routes ask `getAuthorizedMedia` the same
+question about the same id and refuse with the same empty 404, and a cover with
+no thumbnail yet gets its original from the thumbnail URL.
+
+Both are sent `Cache-Control: private, max-age=31536000, immutable`. That is safe
+because an object's bytes never change under its id — a replaced cover is a new
+object — and `private` means only the viewer's own browser keeps it, never a CDN
+or proxy. The first fetch on any browser still goes through the authorization
+check. The per-purpose table lives in `src/server/lib/uploads.ts`
+(`MEDIA_CACHE_CONTROL`) and is unit-tested. A child's photograph keeps
+`private, no-store`, has no thumbnail, and cannot have one: the database refuses
+it. See ADR-072.
 
 ### What is never done to a cover
 
 - **No `next/image`.** The optimiser serves resized output from
   `/_next/image?url=…`, a URL with no session on it. Putting a member-only cover
   behind that cache would hand out an unauthenticated way to read it. Covers
-  are kept small at upload instead.
+  get a thumbnail made on the server at upload instead, served through the same
+  authorised route.
 - **No public URL, no signed URL, no storage path** — in the page, in the
   viewer, or anywhere else. Enlarging a cover asks the same authorised route the
   same question a second time.
