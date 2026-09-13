@@ -1,3 +1,5 @@
+import { COVER_THUMB_LONG_EDGE, COVER_THUMB_MAX_BYTES, COVER_THUMB_QUALITY } from "@/lib/cover-image";
+
 /**
  * Shrinking a picture before it is uploaded.
  *
@@ -161,4 +163,63 @@ export async function downscaleImage(
 export function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+/**
+ * Makes the small copy of a cover that cards and rows draw (ADR-072).
+ *
+ * Browser only, for the same reasons as `downscaleImage` above: pixels are
+ * decoded on the librarian's own device, never on the server, and a canvas
+ * re-encode carries no metadata. It runs on the picture the cover picker has
+ * already prepared.
+ *
+ * WebP where the browser can encode it, JPEG where it cannot (an older Safari
+ * silently hands back a PNG for `image/webp`, which is checked for rather than
+ * trusted). Returns null whenever it cannot make one under the size the server
+ * accepts. A missing thumbnail is never a problem: the cover still saves, and
+ * lists show the full picture for that one book until one exists.
+ */
+export async function makeCoverThumbnailFile(file: File): Promise<File | null> {
+  if (typeof createImageBitmap !== "function" || typeof document === "undefined") return null;
+  if (!file.type.startsWith("image/")) return null;
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  } catch {
+    return null;
+  }
+
+  try {
+    const scale = Math.min(1, COVER_THUMB_LONG_EDGE / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+
+    context.fillStyle = "#FFFFFF";
+    context.fillRect(0, 0, width, height);
+    context.imageSmoothingQuality = "high";
+    context.drawImage(bitmap, 0, 0, width, height);
+
+    for (const type of ["image/webp", "image/jpeg"] as const) {
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, type, COVER_THUMB_QUALITY);
+      });
+      if (blob && blob.type === type && blob.size <= COVER_THUMB_MAX_BYTES) {
+        const extension = type === "image/webp" ? "webp" : "jpg";
+        return new File([blob], `cover-thumbnail.${extension}`, { type, lastModified: Date.now() });
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    bitmap.close();
+  }
 }

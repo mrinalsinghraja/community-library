@@ -1,40 +1,55 @@
 import "server-only";
 
-import sharp from "sharp";
-
-import { generateToken, sha256Bytes } from "@/server/lib/crypto";
+import {
+  COVER_THUMB_LONG_EDGE,
+  COVER_THUMB_MAX_BYTES,
+  COVER_THUMB_QUALITY,
+} from "@/lib/cover-image";
+import { generateToken } from "@/server/lib/crypto";
+import { UPLOAD_PURPOSES, validateUpload } from "@/server/lib/uploads";
 
 /**
  * The small copy of a book cover that lists and cards draw (ADR-072).
  *
  * A cover is kept at 100 KB to 1 MB because a book's own page shows it half a
- * screen wide and the enlarge dialog shows it bigger still. Everywhere else it
- * is a 36 to 220 pixel tile, and sending the whole jacket into a 44x66 desk row
- * is what made covers most of this deployment's Fast Origin Transfer.
+ * screen wide. Everywhere else it is a 36 to 220 pixel tile, and sending the
+ * whole jacket into a 44x66 desk row is what made covers most of this
+ * deployment's Fast Origin Transfer.
  *
- * Measured on a real 1,038,600 B cover from production: 218x320 WebP at q72 is
- * 14,338 B and takes about 12 ms. At 480 px it would be 26,982 B.
+ * **The thumbnail is made in the librarian's browser, not here.** The cover
+ * picker already re-encodes every cover on the device (`image-downscale.ts`), so
+ * it makes the 320 px copy too and uploads it alongside. That keeps two things
+ * true that a server-side encoder broke:
  *
- * **Book covers only.** Nothing in this module knows about any other purpose,
- * and the database refuses a thumbnail on any row that is not a `book_cover`
- * (`media_object_thumb_only_for_covers`). A derived copy of a child's
- * photograph is new personal data, and this is not where that decision gets
- * made.
+ * - the server never decodes attacker-controlled pixels, which has been this
+ *   application's posture from the start (see `stripImageMetadata`);
+ * - no native image library ships in the deployed functions. `sharp` added
+ *   16.5 MB to every deployment's bundle (36.3 MB -> 52.8 MB, measured), on a
+ *   Hobby team whose Functions Storage was at 9.74 GB of 10.
+ *
+ * Here, the uploaded thumbnail is treated like any other upload: same magic-byte
+ * check, same executable refusal, same metadata strip, plus a size cap of its
+ * own. Anything it does not like is dropped, never an error -- the cover is what
+ * the librarian asked to save.
+ *
+ * **Book covers only.** The database refuses a thumbnail on any row that is not
+ * a `book_cover` (`media_object_thumb_only_for_covers`).
+ *
+ * `sharp` lives in `cover-thumbnail-sharp.ts`, used only by the backfill script
+ * and tests. A unit test fails if anything deployable imports it.
  */
 
-/** Longest side of a thumbnail, in pixels. */
-export const COVER_THUMB_LONG_EDGE = 320;
+export { COVER_THUMB_LONG_EDGE, COVER_THUMB_MAX_BYTES, COVER_THUMB_QUALITY };
 
-/** WebP quality. Covers are flat artwork and type; 72 keeps both clean. */
-export const COVER_THUMB_QUALITY = 72;
-
-export const COVER_THUMB_MIME_TYPE = "image/webp";
+/** What a thumbnail may be. WebP, or JPEG from a browser that cannot encode WebP. */
+export const COVER_THUMB_MIME_TYPES: readonly string[] = ["image/webp", "image/jpeg"];
 
 /**
  * What one thumbnail is assumed to weigh when nothing has been generated yet.
  *
  * Used only by the backfill's dry run, which must not download a single cover
- * to answer "how much will this write". Rounded up from the measurement above.
+ * to answer "how much will this write". Rounded up from a real 1,038,600 B cover
+ * whose 218x320 WebP was 14,338 B.
  */
 export const COVER_THUMB_ESTIMATED_BYTES = 16 * 1024;
 
@@ -43,64 +58,40 @@ export interface CoverThumbnail {
   mimeType: string;
   byteSize: number;
   checksumSha256: string;
-  width: number;
-  height: number;
 }
 
 /**
- * Makes a thumbnail from a cover's STORED bytes.
+ * Checks a thumbnail uploaded with a cover, and returns what to store -- or null
+ * to store the cover without one.
  *
- * Always call it with what was stored -- already stripped of EXIF by
- * `validateUpload` -- never with what the browser sent. sharp writes no
- * metadata unless asked to, so the output carries none either way.
- *
- * Throws when the bytes are not an image sharp can decode.
+ * Never throws: a thumbnail that is too big, not a picture, or a disguised
+ * executable is simply not kept.
  */
-export async function makeCoverThumbnail(source: Uint8Array): Promise<CoverThumbnail> {
-  const { data, info } = await sharp(source, {
-    // A jacket is a few megapixels at most. Refusing anything absurd keeps a
-    // hostile "image" from being a memory bomb in a serverless function.
-    limitInputPixels: 50_000_000,
-    failOn: "error",
-  })
-    .resize({
-      width: COVER_THUMB_LONG_EDGE,
-      height: COVER_THUMB_LONG_EDGE,
-      fit: "inside",
-      withoutEnlargement: true,
-    })
-    .webp({ quality: COVER_THUMB_QUALITY })
-    .toBuffer({ resolveWithObject: true });
+export function acceptCoverThumbnail(bytes: Uint8Array): CoverThumbnail | null {
+  if (bytes.byteLength === 0 || bytes.byteLength > COVER_THUMB_MAX_BYTES) return null;
 
-  const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-
-  return {
-    bytes,
-    mimeType: COVER_THUMB_MIME_TYPE,
-    byteSize: bytes.byteLength,
-    checksumSha256: sha256Bytes(bytes),
-    width: info.width,
-    height: info.height,
-  };
-}
-
-/**
- * The same, but a cover that cannot be thumbnailed is not an upload failure.
- *
- * The original is what the library asked for; the thumbnail is an optimisation
- * on top of it. A picture sharp will not decode still gets stored, and every
- * list simply falls back to the original for that one book.
- */
-export async function tryMakeCoverThumbnail(source: Uint8Array): Promise<CoverThumbnail | null> {
   try {
-    return await makeCoverThumbnail(source);
-  } catch (error) {
-    console.warn("Could not make a cover thumbnail; the original will be served instead:", error);
+    const validated = validateUpload({ bytes, purpose: UPLOAD_PURPOSES.BOOK_COVER });
+    if (!COVER_THUMB_MIME_TYPES.includes(validated.mimeType)) return null;
+    if (validated.byteSize > COVER_THUMB_MAX_BYTES) return null;
+
+    return {
+      // The stripped bytes, not the uploaded ones.
+      bytes: validated.bytes,
+      mimeType: validated.mimeType,
+      byteSize: validated.byteSize,
+      checksumSha256: validated.checksumSha256,
+    };
+  } catch {
     return null;
   }
 }
 
 /** `book_cover_thumb/2026/9/<random>.webp` -- no user-supplied component anywhere. */
-export function buildCoverThumbnailStorageKey(now = new Date()): string {
-  return `book_cover_thumb/${now.getUTCFullYear()}/${now.getUTCMonth() + 1}/${generateToken(16)}.webp`;
+export function buildCoverThumbnailStorageKey(
+  mimeType: string = "image/webp",
+  now = new Date(),
+): string {
+  const extension = mimeType === "image/jpeg" ? "jpg" : "webp";
+  return `book_cover_thumb/${now.getUTCFullYear()}/${now.getUTCMonth() + 1}/${generateToken(16)}.${extension}`;
 }

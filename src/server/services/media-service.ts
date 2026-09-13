@@ -9,8 +9,8 @@ import { NotFoundError, ValidationError } from "@/server/lib/errors";
 import { catalogueIsPubliclyVisible, getCurrentLibrary } from "@/server/lib/settings";
 import { memberIsOnReadersBoard } from "@/server/services/readers-board-service";
 import {
+  acceptCoverThumbnail,
   buildCoverThumbnailStorageKey,
-  tryMakeCoverThumbnail,
 } from "@/server/lib/cover-thumbnail";
 import { storage } from "@/server/lib/storage";
 import { UPLOAD_PURPOSES, validateUpload, type UploadPurpose } from "@/server/lib/uploads";
@@ -98,6 +98,11 @@ export async function storeChildPhoto(params: {
 export async function storeBookCover(params: {
   libraryId: string;
   bytes: Uint8Array;
+  /**
+   * The small copy the cover picker made in the browser, if it made one
+   * (ADR-072). Checked like any upload and dropped, never refused, if it fails.
+   */
+  thumbnailBytes?: Uint8Array;
   declaredMimeType?: string;
   originalFilename?: string;
   uploadedById?: string | null;
@@ -172,6 +177,7 @@ export async function storeBrandingImage(params: {
 async function storeUpload(params: {
   libraryId: string;
   bytes: Uint8Array;
+  thumbnailBytes?: Uint8Array;
   purpose: UploadPurpose;
   declaredMimeType?: string;
   originalFilename?: string;
@@ -185,19 +191,19 @@ async function storeUpload(params: {
   });
 
   /*
-   * A book cover also gets a small WebP copy for lists and cards (ADR-072).
+   * A book cover may arrive with a small copy for lists and cards (ADR-072),
+   * made in the librarian's browser -- this server never decodes pixels.
    *
-   * Made from validated.bytes -- what is stored, EXIF already gone -- and ONLY
-   * for a cover. No other purpose is ever copied, and the database refuses a
-   * thumbnail on any other row (`media_object_thumb_only_for_covers`), so a
-   * derived copy of a child's photograph cannot exist even by mistake.
+   * Kept ONLY for a cover. No other purpose is ever given one, and the database
+   * refuses a thumbnail on any other row (`media_object_thumb_only_for_covers`),
+   * so a derived copy of a child's photograph cannot exist even by mistake.
    *
-   * A cover sharp cannot decode is still stored; it just has no thumbnail, and
-   * lists fall back to the original for that one book.
+   * One that fails the checks is dropped rather than refused: the cover still
+   * saves, and lists show the full picture for that one book.
    */
   const thumbnail =
-    validated.purpose === UPLOAD_PURPOSES.BOOK_COVER
-      ? await tryMakeCoverThumbnail(validated.bytes)
+    validated.purpose === UPLOAD_PURPOSES.BOOK_COVER && params.thumbnailBytes
+      ? acceptCoverThumbnail(params.thumbnailBytes)
       : null;
 
   // validated.bytes, NOT params.bytes: the caller's array still carries the
@@ -211,7 +217,7 @@ async function storeUpload(params: {
 
   const storedThumbnail = thumbnail
     ? await storage().put(
-        buildCoverThumbnailStorageKey(),
+        buildCoverThumbnailStorageKey(thumbnail.mimeType),
         thumbnail.bytes,
         thumbnail.mimeType,
         validated.visibility,

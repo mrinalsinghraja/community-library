@@ -3323,15 +3323,29 @@ Production when this was decided: 286 covers, 141 MB; 9 child photographs,
 
 ### The decision
 
-**1. Every cover gets a thumbnail at upload.** `sharp` makes a WebP, 320 px on the
-long edge, quality 72, from the *stored* bytes (EXIF already stripped; sharp
-writes no metadata). It is its own object under its own key, recorded in four
-nullable `thumb_*` columns on the cover's `media_object` row, which are all set or
-all null. `purgeScheduledMedia` deletes it with the cover, so a thumbnail never
-outlives its jacket. A cover sharp cannot decode is still stored, just without
-one. Existing covers get theirs from `npm run thumbnails:backfill`, which is a dry
-run unless given `--write`, never touches an original, and does nothing on a
-second run.
+**1. Every cover gets a thumbnail at upload, made in the librarian's browser.**
+The cover picker already re-encodes each cover on the device
+(`image-downscale.ts`). It now also makes a 320 px copy on a canvas — WebP at 0.72,
+or JPEG where the browser cannot encode WebP — and uploads it as a second file.
+The server treats it like any upload: magic-byte check, executable refusal,
+metadata strip, and a 64 KB cap. A thumbnail that fails any check is dropped,
+never refused: the cover still saves. It is its own object under its own key,
+recorded in four nullable `thumb_*` columns on the cover's `media_object` row,
+all set or all null. `purgeScheduledMedia` deletes it with the cover, so a
+thumbnail never outlives its jacket.
+
+The first version made the thumbnail on the server with `sharp`. It was deployed
+and then reversed the same day, for two reasons. It grew every deployment's
+function bundle from 36.3 MB to 52.8 MB, on a team whose Functions Storage stood
+at 9.74 GB of 10. And it had the server decode uploaded pixels, which this
+application had deliberately never done (see `stripImageMetadata`). `sharp` is now
+a devDependency, reachable only from `src/server/lib/cover-thumbnail-sharp.ts`, and
+`tests/unit/runtime-imports.test.ts` fails if anything deployable imports it.
+
+Existing covers get theirs from `npm run thumbnails:backfill`, which uses `sharp`
+on a person's machine. It is a dry run unless given `--write`, never touches an
+original, and does nothing on a second run. It reads every original once, so on a
+Hobby team it belongs just after a usage period resets, not at the end of one.
 
 **2. `/api/media/[id]/thumb` serves it.** It calls the same
 `getAuthorizedMedia(id)` on the same id; the variant only chooses which bytes are

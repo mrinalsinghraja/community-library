@@ -22,3 +22,25 @@
  */
 export const COVER_MIN_BYTES = 100 * 1024;
 export const COVER_MAX_BYTES = 1024 * 1024;
+
+/**
+ * The small copy of a cover that cards and rows draw (ADR-072).
+ *
+ * Made in the librarian's browser by the cover picker, from the picture it has
+ * just prepared, and checked again on the server like any other upload. Here
+ * because both ends must agree: the browser must not produce a thumbnail the
+ * server will drop.
+ *
+ * 320 px on the long edge is a 218x320 jacket, about 14 KB as WebP.
+ */
+export const COVER_THUMB_LONG_EDGE = 320;
+
+/** Encoder quality, 0 to 1. Covers are flat artwork and type; 0.72 keeps both clean. */
+export const COVER_THUMB_QUALITY = 0.72;
+
+/**
+ * The most a thumbnail may weigh. Several times what one should, so a busy
+ * jacket is never refused; far under a cover, so a full picture sent in its
+ * place is.
+ */
+export const COVER_THUMB_MAX_BYTES = 64 * 1024;

@@ -8,6 +8,7 @@ import { GET as getMedia } from "@/app/api/media/[id]/route";
 import { GET as getThumb } from "@/app/api/media/[id]/thumb/route";
 import { createSession } from "@/server/auth/session-store";
 import { COVER_THUMB_LONG_EDGE } from "@/server/lib/cover-thumbnail";
+import { makeCoverThumbnail } from "@/server/lib/cover-thumbnail-sharp";
 import { __setStorageDriverForTests } from "@/server/lib/storage";
 import { backfillCoverThumbnails } from "@/server/services/cover-thumbnail-backfill";
 import {
@@ -72,8 +73,25 @@ async function setCatalogue(visibility: "PUBLIC" | "MEMBER_ONLY") {
   });
 }
 
-async function uploadCover(bytes: Uint8Array): Promise<string> {
-  const stored = await storeBookCover({ libraryId: fixture.libraryId, bytes });
+/**
+ * Uploads a cover the way the book form does: the picture, plus the thumbnail
+ * the cover picker made in the browser. sharp stands in for the browser's canvas
+ * here, and a picture it cannot decode goes up without one -- as it would from a
+ * browser that could not make one. Pass `thumbnailBytes` to send something else.
+ */
+async function uploadCover(
+  bytes: Uint8Array,
+  thumbnailBytes?: Uint8Array | null,
+): Promise<string> {
+  const thumbnail =
+    thumbnailBytes === undefined
+      ? await makeCoverThumbnail(bytes).then((made) => made.bytes, () => null)
+      : thumbnailBytes;
+  const stored = await storeBookCover({
+    libraryId: fixture.libraryId,
+    bytes,
+    thumbnailBytes: thumbnail ?? undefined,
+  });
   await claimUnclaimedBookCover(db, { mediaId: stored.mediaId, libraryId: fixture.libraryId });
   return stored.mediaId;
 }
@@ -188,7 +206,7 @@ describe("a child's photograph, served", () => {
 // ---------------------------------------------------------------------------
 
 describe("a book cover, served", () => {
-  it("uploads with a WebP thumbnail no longer than 320 px", async () => {
+  it("stores the thumbnail uploaded with it, a WebP no longer than 320 px", async () => {
     const mediaId = await uploadCover(await jacket(800, 1200));
 
     const row = await db.mediaObject.findUniqueOrThrow({ where: { id: mediaId } });
@@ -204,6 +222,42 @@ describe("a book cover, served", () => {
     expect(meta.format).toBe("webp");
     expect(Math.max(meta.width!, meta.height!)).toBeLessThanOrEqual(COVER_THUMB_LONG_EDGE);
     expect(Math.max(meta.width!, meta.height!)).toBeLessThanOrEqual(320);
+  });
+
+  it("drops a thumbnail that is too big, not a picture, or an executable, and still stores the cover", async () => {
+    const cover = await jacket();
+    const elf = new Uint8Array(512);
+    elf.set([0x7f, 0x45, 0x4c, 0x46], 0);
+    const tooBig = new Uint8Array(await sharp({
+      create: {
+        width: 1200,
+        height: 1800,
+        channels: 3,
+        background: { r: 128, g: 128, b: 128 },
+        noise: { type: "gaussian", mean: 128, sigma: 60 },
+      },
+    }).webp({ quality: 95 }).toBuffer());
+    expect(tooBig.byteLength).toBeGreaterThan(64 * 1024);
+
+    for (const bad of [tooBig, new Uint8Array(4096).fill(9), elf]) {
+      const mediaId = await uploadCover(cover, bad);
+      const row = await db.mediaObject.findUniqueOrThrow({ where: { id: mediaId } });
+      expect(row.byteSize).toBe(cover.byteLength);
+      expect(row.thumbStorageKey).toBeNull();
+    }
+  });
+
+  it("is stored without a thumbnail when the browser sent none, and lists get the original", async () => {
+    const member = await createMember(fixture.libraryId);
+    const cover = await jacket();
+    const mediaId = await uploadCover(cover, null);
+    await actingAs(member.id);
+
+    const response = await call(getThumb, mediaId);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/jpeg");
+    expect((await response.arrayBuffer()).byteLength).toBe(cover.byteLength);
   });
 
   it("is kept privately and for good by the browser, and never by a shared cache", async () => {

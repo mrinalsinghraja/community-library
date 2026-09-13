@@ -375,7 +375,8 @@ the bytes that actually arrive. Every failure path returns the original file: a
 librarian with a queue in front of them is never stopped by an image codec.
 
 **Two sizes, and kept for good.** Every cover upload also stores a ~320 px WebP
-thumbnail (usually 10–30 KB). Cards, rows and tiles fetch it from
+thumbnail (usually 10–30 KB), made by the cover picker in the librarian's browser
+and checked on the server like the cover itself. Cards, rows and tiles fetch it from
 `/api/media/[id]/thumb`; a book's own page and the enlarge dialog fetch the
 original from `/api/media/[id]`. Both routes ask `getAuthorizedMedia` the same
 question about the same id and refuse with the same empty 404, and a cover with
@@ -395,7 +396,7 @@ it. See ADR-072.
 - **No `next/image`.** The optimiser serves resized output from
   `/_next/image?url=…`, a URL with no session on it. Putting a member-only cover
   behind that cache would hand out an unauthenticated way to read it. Covers
-  get a thumbnail made on the server at upload instead, served through the same
+  get a thumbnail made in the browser at upload instead, served through the same
   authorised route.
 - **No public URL, no signed URL, no storage path** — in the page, in the
   viewer, or anywhere else. Enlarging a cover asks the same authorised route the

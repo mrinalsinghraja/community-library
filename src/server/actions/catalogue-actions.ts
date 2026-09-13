@@ -127,9 +127,17 @@ async function storeCoverIfPresent(
   const file = formData.get("cover");
   if (!(file instanceof File) || file.size === 0) return "";
 
+  // The small copy the cover picker made, if the browser could make one.
+  // Checked on the server like the cover itself; see ADR-072.
+  const thumbnail = formData.get("coverThumb");
+
   const stored = await storeBookCover({
     libraryId,
     bytes: new Uint8Array(await file.arrayBuffer()),
+    thumbnailBytes:
+      thumbnail instanceof File && thumbnail.size > 0
+        ? new Uint8Array(await thumbnail.arrayBuffer())
+        : undefined,
     // Read, never trusted: validation reads the actual bytes.
     declaredMimeType: file.type,
     originalFilename: file.name,

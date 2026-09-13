@@ -4,8 +4,10 @@ import { prisma } from "@/server/db";
 import {
   COVER_THUMB_ESTIMATED_BYTES,
   buildCoverThumbnailStorageKey,
-  makeCoverThumbnail,
 } from "@/server/lib/cover-thumbnail";
+// The one deployable-looking module allowed to reach sharp: it only ever runs
+// from `npm run thumbnails:backfill`. See cover-thumbnail-sharp.ts.
+import { makeCoverThumbnail } from "@/server/lib/cover-thumbnail-sharp";
 import { storage } from "@/server/lib/storage";
 import { UPLOAD_PURPOSES } from "@/server/lib/uploads";
 
@@ -107,7 +109,7 @@ export async function backfillCoverThumbnails(options: {
       continue;
     }
 
-    const key = buildCoverThumbnailStorageKey();
+    const key = buildCoverThumbnailStorageKey(thumbnail.mimeType);
     await storage().put(key, thumbnail.bytes, thumbnail.mimeType, cover.visibility);
 
     const { count } = await prisma.mediaObject.updateMany({

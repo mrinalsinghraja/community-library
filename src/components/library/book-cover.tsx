@@ -204,7 +204,8 @@ export function BookCover({
           Size is handled on the server instead, in two steps. The cover picker
           keeps the original between 100 KB and 1 MB, which is right for a
           book's own page and wrong for a 44x66 desk row. So every upload also
-          stores a ~320 px WebP thumbnail (usually 10-30 KB), served by the same
+          stores a ~320 px WebP thumbnail (usually 10-30 KB), made by the cover
+          picker in the librarian's browser and served by the same
           authorised route at /thumb, and that is what this component fetches
           unless `image="original"` asks for the full picture. A cover with no
           thumbnail yet gets the original from that same URL. Both are sent

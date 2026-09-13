@@ -11,6 +11,7 @@ import { COVER_MAX_BYTES, COVER_MIN_BYTES } from "@/lib/cover-image";
 import { describeSize } from "@/lib/file-size";
 import { MAX_COVER_EDGE } from "@/lib/image-downscale";
 import { COMPRESS_TOOL_URL, shrinkToBand, sizeStory } from "@/lib/shrink-to-band";
+import { makeCoverThumbnailFile } from "@/lib/image-downscale";
 import { AGE_GROUPS, CATALOGUE_LIMITS, CONDITIONS, SELECTABLE_STATUSES, statusDefinition } from "@/lib/catalogue";
 import {
   createBookAction,
@@ -473,6 +474,12 @@ function CoverField({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   /**
+   * A hidden second file: the small copy of the cover that cards and rows draw
+   * (ADR-072), made here in the browser so the server never decodes pixels.
+   */
+  const thumbRef = useRef<HTMLInputElement>(null);
+  const chosenThumb = useRef<File | null>(null);
+  /**
    * The picture the librarian chose, kept so it can be put back.
    *
    * React empties every uncontrolled field — a file input included — once the
@@ -504,7 +511,21 @@ function CoverField({
     const transfer = new DataTransfer();
     transfer.items.add(file);
     input.files = transfer.files;
+
+    // The thumbnail was emptied with it, and goes back with it.
+    const thumbInput = thumbRef.current;
+    if (thumbInput && chosenThumb.current && !thumbInput.files?.length) {
+      const thumbTransfer = new DataTransfer();
+      thumbTransfer.items.add(chosenThumb.current);
+      thumbInput.files = thumbTransfer.files;
+    }
   });
+
+  /** Forgets any thumbnail, so it can never ride along with a different picture. */
+  function clearThumbnail() {
+    chosenThumb.current = null;
+    if (thumbRef.current) thumbRef.current.value = "";
+  }
 
   /**
    * Lets go of the chosen picture, keeping whatever the note says about it.
@@ -517,6 +538,7 @@ function CoverField({
    */
   function releasePicture() {
     chosenFile.current = null;
+    clearThumbnail();
     setPreviewUrl((current) => {
       if (current) URL.revokeObjectURL(current);
       return null;
@@ -526,6 +548,7 @@ function CoverField({
 
   async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
+    clearThumbnail();
 
     setPreviewUrl((current) => {
       if (current) URL.revokeObjectURL(current);
@@ -602,6 +625,19 @@ function CoverField({
       return;
     }
 
+    /*
+     * The small copy for cards and rows, made from the picture just prepared.
+     * If this browser cannot make one, the cover still saves and lists show the
+     * full picture for this book.
+     */
+    const thumbnail = await makeCoverThumbnailFile(prepared);
+    if (thumbnail && thumbRef.current && typeof DataTransfer === "function") {
+      const transfer = new DataTransfer();
+      transfer.items.add(thumbnail);
+      thumbRef.current.files = transfer.files;
+      chosenThumb.current = thumbnail;
+    }
+
     setNote({
       text: `${file.name} — ${sizeStory(file, prepared)}. Ready.`,
       problem: false,
@@ -623,6 +659,16 @@ function CoverField({
         accept="image/jpeg,image/png,image/webp"
         onChange={handleFile}
         className="min-h-14 w-full rounded-[var(--radius-field)] border border-control-border bg-surface px-4 py-3 text-base file:me-4 file:rounded-full file:border-0 file:bg-primary file:px-4 file:py-2 file:text-base file:font-bold file:text-white"
+      />
+      {/* Filled by handleFile, never by the librarian. */}
+      <input
+        ref={thumbRef}
+        name="coverThumb"
+        type="file"
+        accept="image/webp,image/jpeg"
+        hidden
+        tabIndex={-1}
+        aria-hidden="true"
       />
 
       {chosen || note ? (
