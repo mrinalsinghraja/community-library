@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 
 import { PageBody, PageHeading, PublicShell } from "@/components/layout/site-shell";
 import { Card, CardBody } from "@/components/ui/card";

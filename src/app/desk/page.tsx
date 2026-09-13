@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 
 import { StaffShell } from "@/components/layout/staff-shell";
 import { Card, CardBody, CardTitle } from "@/components/ui/card";

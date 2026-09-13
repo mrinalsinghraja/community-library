@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 
 import { LoanActions } from "@/app/desk/loans/loan-actions";
 import { CoverThumbnail } from "@/components/library/cover-viewer";

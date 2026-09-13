@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 
 import { IssueConfirm } from "@/app/desk/circulation/issue-confirm";
 import { MemberAvatar } from "@/components/library/avatar";

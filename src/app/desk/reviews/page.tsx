@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 
 import { ModerationActions } from "@/app/desk/reviews/moderation-actions";
 import { DataTable, StaffShell } from "@/components/layout/staff-shell";

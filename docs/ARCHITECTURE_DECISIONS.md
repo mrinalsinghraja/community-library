@@ -3424,3 +3424,48 @@ before this change.
 cover exception, the storage posture (everything still PRIVATE in one private
 Blob store, ADR-036), the rule that no stored object has a public or signed URL,
 and the refusal to route covers through `next/image`.
+
+## ADR-073 — Links do not prefetch
+
+**Status:** accepted · **Date:** 2026-09-13 · **Follows:** ADR-072
+
+Next's `<Link>` prefetches every link that comes into view. On static pages
+that costs nothing. Here every page is dynamic, because the site and staff shells
+read the session to draw the header, so each prefetch is a full server render:
+a function invocation, an edge request and Active CPU, for a page nobody opened.
+
+Measured on production after ADR-072:
+
+- One view of `/rules` fired **15 prefetch requests to 8 routes**.
+- Over twelve hours, every nav destination showed about **350 invocations,
+  0% cached**. `/`, `/books`, `/rules`, `/faq`, `/donors` and `/how-to-join`
+  matched `/desk`, `/desk/members` and `/desk/registrations` almost exactly.
+  Vercel's bot classification found no bots. The traffic was the nav being
+  prefetched on each page view, largely from a day of bulk cataloguing in the
+  admin screens.
+- A catalogue page of 24 book cards prefetches 24 book pages on top.
+
+On the way back to Hobby, Edge Requests (1M a month across the whole team)
+and Function Invocations are the limits this spends.
+
+### The decision
+
+`src/components/ui/app-link.tsx` wraps `next/link` with `prefetch` defaulting to
+`false`, and every file imports `Link` from there. Nothing else in the JSX
+changed. A link that is worth prefetching can still pass `prefetch`.
+`tests/unit/app-link.test.ts` fails if any file imports `next/link` directly.
+
+### The trade
+
+A click now waits for its page to render instead of finding it ready. These
+pages render in about 15 ms and reach first byte in about 300 ms, so a visitor
+sees a short pause rather than an empty screen. One render per click instead of
+sixteen per page view is the better bargain for a community library.
+
+### Not done, and why
+
+Serving public pages from the CDN would save more, but it needs two things this
+change does not attempt. The header would have to stop reading the session
+during the server render, so the "Sign in" and "My books" links would move to the
+client. And the per-response CSP nonce would need a static-page alternative.
+The second is a security change, and it would need its own ADR.

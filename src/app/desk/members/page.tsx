@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 
 import { MemberActions } from "@/app/desk/members/member-actions";
 import { PhotoActions } from "@/app/desk/members/photo-actions";

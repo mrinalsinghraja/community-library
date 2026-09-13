@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { ButtonLink } from "@/components/ui/button";

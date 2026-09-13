@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 
 import { BookCover } from "@/components/library/book-cover";
 import { RatingSummaryLine } from "@/components/ui/star-rating";

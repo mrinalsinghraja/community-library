@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 
 import { PrintLabelsButton } from "@/app/admin/books/labels/print-button";
 import { BookFilterFields } from "@/components/desk/book-filter-fields";

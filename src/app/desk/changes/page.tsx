@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 
 import { DeskSelection, SelectionCheckbox } from "@/components/desk/selection-toolbar";
 import { bulkDecideProfileChangesAction } from "@/server/actions/profile-actions";

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import type { ReactNode } from "react";
 
 import { Butterfly, LibraryLogo } from "@/components/library/library-logo";

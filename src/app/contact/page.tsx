@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 
 import { PageHeading, PublicShell } from "@/components/layout/site-shell";
 import { WhatsAppHelp } from "@/components/library/whatsapp-help";

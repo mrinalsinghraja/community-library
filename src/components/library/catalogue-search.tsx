@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import type { BookCategory } from "@prisma/client";
 
 import { Icon } from "@/components/ui/icon";
