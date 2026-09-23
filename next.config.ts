@@ -63,11 +63,21 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
 
   images: {
-    // Only our own Blob store. No remote image host may be added without a
-    // deliberate change here.
-    remotePatterns: [
-      { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },
-    ],
+    /*
+     * No remote image host at all. Every stored image is private and served by
+     * /api/media, so the optimiser only ever needs our own paths.
+     *
+     * This used to allow `*.public.blob.vercel-storage.com` — which is not our
+     * store but every public Blob store on Vercel. Anyone could have had this
+     * domain fetch, resize and serve their own picture (billed to us, and
+     * shown under the library's address), and the Next.js image-optimiser
+     * advisory fixed in 16.3.3 was reachable through exactly that door. Verified on production
+     * before the change: a made-up store's URL was fetched (404 from upstream)
+     * where example.com was refused (400).
+     */
+    remotePatterns: [],
+    // And of our own paths, only the two that hold pictures.
+    localPatterns: [{ pathname: "/brand/**" }, { pathname: "/api/media/**" }],
   },
 
   async headers() {

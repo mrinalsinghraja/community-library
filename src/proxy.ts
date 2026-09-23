@@ -51,7 +51,14 @@ function buildContentSecurityPolicy(nonce: string, isDev: boolean): string {
     // Tailwind compiles to a real stylesheet, but Next injects a small amount of
     // inline style for streaming and route transitions.
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' blob: data: https://*.public.blob.vercel-storage.com",
+    /*
+     * Our own origin only. Every stored image — covers, the logo, a child's
+     * photograph — is private and reaches the page through /api/media, so no
+     * storage host ever needs to be named here. This used to allow
+     * *.public.blob.vercel-storage.com, which is every public Blob store on
+     * Vercel, anybody's, not ours.
+     */
+    "img-src 'self' blob: data:",
     "font-src 'self' data:",
     // No third-party analytics, no ad networks, no tracking pixels: children's
     // screens must not talk to anyone but us.
