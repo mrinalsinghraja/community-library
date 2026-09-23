@@ -3479,3 +3479,74 @@ change does not attempt. The header would have to stop reading the session
 during the server render, so the "Sign in" and "My books" links would move to the
 client. And the per-response CSP nonce would need a static-page alternative.
 The second is a security change, and it would need its own ADR.
+
+## ADR-074 — A review pass: close the doors that were ajar, and help a child choose
+
+**Status:** accepted · **Date:** 2026-09-22 · **Follows:** ADR-073
+
+The owner asked for the whole portal to be reviewed for security, speed and
+usefulness. What was found and changed, in order of severity.
+
+### Security
+
+- **Next.js 16.3.1 → 16.3.6.** 16.3.1 carried a critical advisory: remote code
+  execution through the image optimisation API with AVIF input (fixed in
+  16.3.3). `eslint-config-next` follows it.
+- **The image optimiser allowed every public Blob store on Vercel.**
+  `images.remotePatterns` named `*.public.blob.vercel-storage.com`, which is not
+  our store but anybody's. Verified on production before the change: a made-up
+  store's URL was fetched (upstream 404) where `example.com` was refused (400).
+  Anybody could have had this domain resize and serve their own picture, billed
+  to us, under the library's name — and the advisory above ran through that
+  door. Every stored image here is private and served by `/api/media`, so the
+  list is now empty, `localPatterns` names only `/brand/**` and `/api/media/**`,
+  and the page CSP's `img-src` lost the same wildcard. `tests/unit/image-hosts.test.ts`
+  pins all three.
+- **The sign-in `next=` check was an open redirect.** It accepted anything that
+  started with one slash and not two. Browsers read a backslash as a slash and
+  drop tabs and newlines, so `/\evil.example` and `/\t/evil.example` passed the
+  check and left the site right after a password had been typed.
+  `safeNextPath` in `src/lib/sign-in.ts` refuses backslashes and control
+  characters, then resolves the value against a throwaway origin and keeps it
+  only if it is still on that origin.
+- **Nodemailer 9.0.5 → 9.1.1** (one high and three moderate advisories on
+  address parsing), and `deepmerge-ts` is overridden to 8.x under the Prisma CLI.
+  `npm audit --omit=dev` now reports **0 vulnerabilities**. sharp, a dev
+  dependency only (ADR-072), moved to 0.35.4 for the libheif advisories.
+
+### Speed
+
+- **The display face went from 118 KB to 60 KB.** Google serves Fraunces with
+  all four axes. These pages only ever use SOFT 40, WONK 1 and weights 400–700,
+  so `src/app/fonts/fraunces-display.woff2` is the same Latin subset with SOFT
+  and WONK fixed and weight cut to that range (fontTools' instancer; the font is
+  OFL-1.1). `opsz` stays live. It was the largest single file on a first visit,
+  and it is preloaded.
+  One visible difference: display text outside h1–h4 used to render at SOFT 0,
+  because only headings set the axis. It now has the same soft terminals as
+  the headings.
+
+### Helping a child choose
+
+- **"Only books on the shelf right now"** on `/books` (`?here=1`). A book that
+  is out cannot be asked for, so this is the question a child picking for this
+  week's visit is actually asking. The reader's service maps it to AVAILABLE
+  only; a reader's query still cannot name a status of its own, and a test
+  proves that handing `status` to `browseCatalogue` does nothing.
+- **"More by this author" and "More from this shelf"** on every book page
+  (`listRelatedBooks`). One card per work, preferring a copy that is on the
+  shelf; the same public card the catalogue shows, with no donor, borrower or
+  date; gated by `requireCatalogueAccess` like the page itself. "Unknown",
+  "Anonymous" and similar never match each other (`isNamedAuthor`). An
+  "Everything by …" button searches the catalogue for the first named author.
+- **Add to home screen.** `src/app/manifest.ts` plus 192 and 512 px icons made
+  from the packaged mark. Name from branding. Revalidated daily rather than
+  rendered per request, because browsers ask for it as pages load. No service
+  worker: an offline copy of "is it on the shelf" would be a wrong answer kept
+  on the phone.
+
+### Not done here, and why
+
+- **Two-step sign-in for staff** and **automatic encrypted backups** both need a
+  production database change or an account secret. Those are the owner's
+  decisions, so they are proposed, not shipped.
