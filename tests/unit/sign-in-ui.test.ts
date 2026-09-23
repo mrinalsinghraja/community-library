@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { DESK_DESTINATIONS, DESK_GROUPS, deskDestinationsFor } from "@/lib/desk-nav";
-import { audienceFor } from "@/lib/sign-in";
+import { audienceFor, safeNextPath } from "@/lib/sign-in";
 
 /**
  * The way in, and the desk's front.
@@ -508,5 +508,45 @@ describe("the masthead actually sticks", () => {
     const tag = SITE.slice(SITE.indexOf("<header className="), SITE.indexOf("<header className=") + 90);
     expect(tag).toContain('className="masthead"');
     expect(tag).not.toMatch(/\b(relative|absolute|fixed|static|sticky)\b/);
+  });
+});
+
+describe("where signing in sends you", () => {
+  const FALLBACK = "/account";
+
+  it("keeps an ordinary path on this site, with its query", () => {
+    expect(safeNextPath("/desk/loans", FALLBACK)).toBe("/desk/loans");
+    expect(safeNextPath("/books?q=kipling&page=2", FALLBACK)).toBe("/books?q=kipling&page=2");
+    expect(safeNextPath("/books/MJCL-B0003", FALLBACK)).toBe("/books/MJCL-B0003");
+  });
+
+  it("refuses every shape of address that leaves the site", () => {
+    for (const hostile of [
+      "https://evil.example",
+      "//evil.example",
+      "/\\evil.example",
+      "\\\\evil.example",
+      "/\t/evil.example",
+      "/\n/evil.example",
+      "/\\/evil.example",
+      "javascript:alert(1)",
+      "evil.example",
+      " /desk",
+    ]) {
+      expect(safeNextPath(hostile, FALLBACK), JSON.stringify(hostile)).toBe(FALLBACK);
+    }
+  });
+
+  it("refuses nothing-at-all and things that are not text", () => {
+    expect(safeNextPath(undefined, FALLBACK)).toBe(FALLBACK);
+    expect(safeNextPath("", FALLBACK)).toBe(FALLBACK);
+    expect(safeNextPath(null, FALLBACK)).toBe(FALLBACK);
+    expect(safeNextPath("/" + "a".repeat(600), FALLBACK)).toBe(FALLBACK);
+  });
+
+  it("is what the sign-in action actually uses", () => {
+    const action = read("server", "actions", "auth-actions.ts");
+    expect(action).toMatch(/safeNextPath\(value, POST_LOGIN_PATH\)/);
+    expect(action).not.toMatch(/startsWith\("\/\/"\)/);
   });
 });

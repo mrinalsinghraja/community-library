@@ -7,6 +7,7 @@ import { POST_LOGIN_PATH } from "@/lib/routes";
 import { z } from "zod";
 
 import { LIFECYCLE_MESSAGES } from "@/lib/account-lifecycle";
+import { safeNextPath } from "@/lib/sign-in";
 import { GENERIC_LOGIN_FAILURE, signIn, signOut } from "@/server/auth";
 
 /**
@@ -20,15 +21,14 @@ const signInSchema = z.object({
   identifier: z.string().trim().min(1).max(120),
   password: z.string().min(1).max(256),
   /**
-   * Where to go afterwards. Only ever a same-origin path — an absolute URL here
-   * would turn the login form into an open redirect.
+   * Where to go afterwards. Only ever a same-origin path — anything else would
+   * turn the login form into an open redirect. See `safeNextPath` for why a
+   * leading slash on its own proves nothing.
    */
   next: z
     .string()
     .optional()
-    .transform((value) =>
-      value && value.startsWith("/") && !value.startsWith("//") ? value : POST_LOGIN_PATH,
-    ),
+    .transform((value) => safeNextPath(value, POST_LOGIN_PATH)),
 });
 
 export interface SignInState {
