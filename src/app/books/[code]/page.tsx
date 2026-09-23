@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { BookHelper } from "@/app/books/[code]/book-helper";
 import { BorrowRequest } from "@/app/books/[code]/borrow-request";
 import { ReviewForm } from "@/app/books/[code]/review-form";
+import { BookCardTile } from "@/components/library/book-card";
 import { BookReviews } from "@/components/library/book-reviews";
 import { CoverThumbnail } from "@/components/library/cover-viewer";
 import { Butterfly, LeafSprig } from "@/components/library/library-logo";
@@ -15,6 +16,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import {
   AGE_BAND_NOTE,
   ageGroupSuggestion,
+  isNamedAuthor,
   borrowCountLabel,
   statusDefinition,
 } from "@/lib/catalogue";
@@ -22,7 +24,7 @@ import { getActor } from "@/server/authz";
 import { isAppError } from "@/server/lib/errors";
 import { getBrandingSafe, getCurrentLibrary } from "@/server/lib/settings";
 import { bookHelperEnabled } from "@/server/lib/ai/groq";
-import { getBookByCode } from "@/server/services/catalogue-service";
+import { getBookByCode, listRelatedBooks, type RelatedBooks } from "@/server/services/catalogue-service";
 import { getOwnBorrowStateForCode } from "@/server/services/circulation-service";
 import {
   getOwnReviewStateForCode,
@@ -91,11 +93,16 @@ export default async function BookDetailPage({
    * and a librarian both get "none", and the controls render nothing at all
    * rather than a disabled button.
    */
-  const [borrow, reviews, ownReview] = await Promise.all([
+  const noRelated: RelatedBooks = { byAuthor: [], sameShelf: [] };
+  const [borrow, reviews, ownReview, related] = await Promise.all([
     getOwnBorrowStateForCode(decodeURIComponent(code)),
     reviewsForTitle(book.titleId),
     getOwnReviewStateForCode(decodeURIComponent(code)),
+    // A suggestion is a nicety: if it fails, the page about this book still
+    // stands, so it degrades to "no suggestions" rather than an error page.
+    listRelatedBooks(book.titleId).catch(() => noRelated),
   ]);
+  const authorLine = book.authors.filter(isNamedAuthor).join(", ");
 
   return (
     <PublicShell branding={branding}>
@@ -355,10 +362,53 @@ export default async function BookDetailPage({
           <ReviewForm code={book.code} title={book.title} mine={ownReview.mine} />
         ) : null}
 
+        {/*
+          What to read next. The author first, because "more by the person who
+          wrote the one I loved" is how children actually choose; then the same
+          shelf for the same ages. Each card is the catalogue's own card, and a
+          copy on the shelf is shown in preference to one that is out.
+        */}
+        {related.byAuthor.length > 0 ? (
+          <section aria-labelledby="more-by-author" className="mt-14">
+            <h2 id="more-by-author" className="text-2xl">
+              More by {authorLine}
+            </h2>
+            <ul className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6">
+              {related.byAuthor.map((other) => (
+                <BookCardTile key={other.code} book={other} />
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {related.sameShelf.length > 0 ? (
+          <section aria-labelledby="more-like-this" className="mt-14">
+            <h2 id="more-like-this" className="text-2xl">
+              More from the {book.categoryName} shelf
+            </h2>
+            <p className="mt-1 text-base text-ink-soft">{ageGroupSuggestion(book.ageGroup)}, like this one.</p>
+            <ul className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6">
+              {related.sameShelf.map((other) => (
+                <BookCardTile key={other.code} book={other} />
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         <div className="mt-12 flex flex-wrap gap-3">
           <ButtonLink href="/books" size="lg" icon={<Icon name="shelf" />}>
             Find another book
           </ButtonLink>
+          {isNamedAuthor(book.authors[0]) ? (
+            <ButtonLink
+              href={`/books?q=${encodeURIComponent(book.authors[0])}`}
+              variant="secondary"
+              size="lg"
+              icon={<Icon name="search" />}
+            >
+              Everything by {book.authors[0]}
+            </ButtonLink>
+          ) : null}
         </div>
       </PageBody>
     </PublicShell>

@@ -79,6 +79,20 @@ export function isAgeGroup(value: unknown): value is AgeGroup {
  * a badge beside "On the shelf" reads like a condition of borrowing, and a
  * child who reads ahead of their years would be the one to believe it.
  */
+/**
+ * Whether an entry in a book's author box names somebody.
+ *
+ * Books come in with "Unknown" when the cover does not say, and two books by
+ * "Unknown" are not by the same person — so nothing may offer "more by" such
+ * a name, or link to a search for it.
+ */
+const NOT_AN_AUTHOR = new Set(["unknown", "anonymous", "various", "n/a", "na", "-", "?"]);
+
+export function isNamedAuthor(name: string | undefined | null): name is string {
+  const cleaned = name?.trim().toLowerCase() ?? "";
+  return cleaned.length > 0 && !NOT_AN_AUTHOR.has(cleaned);
+}
+
 export function ageGroupSuggestion(value: AgeGroup): string {
   const found = AGE_GROUPS.find((group) => group.value === value);
   if (!found) throw new Error(`Unknown age group: ${value}`);

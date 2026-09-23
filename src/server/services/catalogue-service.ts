@@ -9,6 +9,7 @@ import {
   CATALOGUE_LIMITS,
   CONDITION_VALUES,
   donorAcknowledgement,
+  isNamedAuthor,
   PAGE_SIZES,
   SELECTABLE_STATUSES,
   shelfRow,
@@ -316,6 +317,12 @@ export interface CatalogueQuery {
   status?: CopyStatus;
   /** Staff only. A reader never sees an archived book at all. */
   includeArchived?: boolean;
+  /**
+   * The reader's "only books on the shelf right now". Narrows to AVAILABLE and
+   * nothing else — a reader's query never gets to name a status of its own,
+   * so there is no way to ask the public shelf for, say, LOST copies.
+   */
+  onShelfOnly?: boolean;
   /**
    * Books added to the catalogue on or after this instant, and on or before
    * `addedTo`. Both are instants, not dates: the caller has already resolved a
@@ -781,6 +788,7 @@ export async function browseCatalogue(
       search: query.search,
       categoryId: query.categoryId,
       ageGroup: query.ageGroup,
+      status: query.onShelfOnly ? "AVAILABLE" : undefined,
       sort: query.sort ?? "newest",
       page: query.page,
       includeArchived: false,
@@ -888,6 +896,145 @@ export async function getBookByCode(code: string): Promise<ReaderBookDetail> {
     rating: await ratingForTitle(copy.titleId),
     borrowCount: await borrowCountForTitle(copy.titleId),
   };
+}
+
+/** How many books each "more like this" row may show. */
+export const RELATED_BOOKS_LIMIT = 6;
+
+export interface RelatedBooks {
+  /** Other books sharing one of this book's authors. */
+  byAuthor: ReaderBookCard[];
+  /** Other books on the same shelf and written for the same ages. */
+  sameShelf: ReaderBookCard[];
+}
+
+/**
+ * What to read next, for the book page: other books by the same author, then
+ * other books from the same shelf for the same ages.
+ *
+ * One card per WORK, never per copy — three copies of a book are one book to
+ * the child choosing — and the copy shown is one on the shelf if any is, so the
+ * card says "here" whenever the book could go home today.
+ *
+ * Gated exactly like the page it sits on: `requireCatalogueAccess` first, so a
+ * shelf that is closed to visitors is closed here too, and nothing is returned
+ * about a title the caller could not already open. Archived copies never
+ * appear. No borrower, no donor and no date leaves this function — a card is
+ * the same public card the catalogue already shows.
+ */
+export async function listRelatedBooks(
+  titleId: string,
+  limit: number = RELATED_BOOKS_LIMIT,
+): Promise<RelatedBooks> {
+  const { libraryId, shelfRowSize } = await requireCatalogueAccess();
+  const size = Math.max(1, Math.min(12, Math.trunc(limit)));
+
+  const title = await prisma.bookTitle.findFirst({
+    where: { id: titleId, libraryId },
+    select: { authors: true, categoryId: true, ageGroup: true },
+  });
+  if (!title) return { byAuthor: [], sameShelf: [] };
+
+  const authors = [
+    ...new Set(
+      title.authors
+        .filter(isNamedAuthor)
+        .map((author) => author.trim().toLowerCase()),
+    ),
+  ];
+
+  const byAuthor =
+    authors.length === 0
+      ? []
+      : await relatedRows(
+          libraryId,
+          Prisma.sql`t.id <> ${titleId}
+             AND EXISTS (
+               SELECT 1 FROM unnest(t.authors) AS a(name)
+                WHERE lower(btrim(a.name)) = ANY(${authors}::text[])
+             )`,
+          size,
+        );
+
+  const exclude = [titleId, ...byAuthor.map((row) => row.title_id)];
+  const sameShelf = await relatedRows(
+    libraryId,
+    Prisma.sql`NOT (t.id = ANY(${exclude}::text[]))
+       AND t.category_id = ${title.categoryId}
+       AND t.age_group = ${title.ageGroup}::"AgeGroup"`,
+    size,
+  );
+
+  return {
+    byAuthor: byAuthor.map((row) => toReaderCard(row, shelfRowSize)),
+    sameShelf: sameShelf.map((row) => toReaderCard(row, shelfRowSize)),
+  };
+}
+
+/**
+ * One representative copy per title matching `match`, most-read first.
+ *
+ * DISTINCT ON picks the copy: an AVAILABLE one if there is one, otherwise the
+ * lowest code, so the choice is stable between page loads. The two aggregates
+ * are the same rules the shelf uses — PUBLISHED reviews only, CANCELLED loans
+ * excluded, counted across every copy of the work.
+ */
+async function relatedRows(
+  libraryId: string,
+  match: Prisma.Sql,
+  limit: number,
+): Promise<(CopyRow & { title_id: string })[]> {
+  return prisma.$queryRaw<(CopyRow & { title_id: string })[]>`
+    SELECT picked.*,
+           r.rating_average AS rating_average,
+           coalesce(r.rating_count, 0) AS rating_count,
+           coalesce(l.loan_count, 0) AS loan_count
+      FROM (
+        SELECT DISTINCT ON (t.id)
+               t.id            AS title_id,
+               c.id            AS copy_id,
+               c.copy_code     AS copy_code,
+               c.status        AS status,
+               c.condition     AS condition,
+               c.archived_at   AS archived_at,
+               c.created_at    AS created_at,
+               t.title         AS title,
+               t.authors       AS authors,
+               t.age_group     AS age_group,
+               t.cover_media_id AS cover_media_id,
+               cat.name        AS category_name,
+               cat.icon        AS category_icon,
+               NULL::text      AS donor_name,
+               NULL::text      AS donor_apartment,
+               NULL::timestamptz AS donated_at,
+               NULL::"DonorDisplayConsent" AS display_consent
+          FROM book_copy c
+          JOIN book_title t ON t.id = c.title_id
+          JOIN book_category cat ON cat.id = t.category_id
+         WHERE c.library_id = ${libraryId}
+           AND c.status <> 'ARCHIVED'
+           AND ${match}
+         ORDER BY t.id, (c.status = 'AVAILABLE') DESC, c.copy_code ASC
+      ) picked
+      LEFT JOIN LATERAL (
+        SELECT avg(br.rating) AS rating_average,
+               count(*)       AS rating_count
+          FROM book_review br
+         WHERE br.title_id = picked.title_id
+           AND br.status = 'PUBLISHED'
+      ) r ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT count(*) AS loan_count
+          FROM loan ln
+          JOIN book_copy lc ON lc.id = ln.copy_id
+         WHERE lc.title_id = picked.title_id
+           AND ln.status <> 'CANCELLED'
+      ) l ON TRUE
+     ORDER BY (picked.status = 'AVAILABLE') DESC,
+              coalesce(l.loan_count, 0) DESC,
+              lower(picked.title) ASC
+     LIMIT ${limit}
+  `;
 }
 
 // ---------------------------------------------------------------------------

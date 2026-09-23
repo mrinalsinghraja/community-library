@@ -52,6 +52,12 @@ export default async function BooksPage({
   const search = read("q");
   const categorySlug = read("shelf");
   const ageRaw = read("age");
+  /*
+   * "Only what I could take home today." A copy is either on the shelf or it
+   * is not, so this narrows to AVAILABLE and nothing else — the query string
+   * never chooses a status, it only switches this one question on.
+   */
+  const onShelfOnly = read("here") === "1";
   const page = Number.parseInt(read("page"), 10) || 1;
   /*
    * Three orderings, chosen from a fixed list. Anything else in the query
@@ -72,6 +78,7 @@ export default async function BooksPage({
       search,
       categoryId: category?.id,
       ageGroup: isAgeGroup(ageRaw) ? ageRaw : undefined,
+      onShelfOnly,
       sort,
       page,
       pageSize: PAGE_SIZES.reader,
@@ -88,7 +95,7 @@ export default async function BooksPage({
     throw error;
   }
 
-  const filtering = Boolean(search || category || ageRaw || sort !== "newest");
+  const filtering = Boolean(search || category || ageRaw || onShelfOnly || sort !== "newest");
 
   /** Keeps the age filter when a shelf chip is tapped, drops the page number. */
   const shelfHref = (slug: string): string => {
@@ -96,6 +103,7 @@ export default async function BooksPage({
     if (search) query.set("q", search);
     if (ageRaw) query.set("age", ageRaw);
     if (sort !== "newest") query.set("sort", sort);
+    if (onShelfOnly) query.set("here", "1");
     if (slug) query.set("shelf", slug);
     const string = query.toString();
     return string ? `/books?${string}` : "/books";
@@ -110,7 +118,8 @@ export default async function BooksPage({
     <PublicShell branding={branding}>
       <PageBody width="wide">
         <PageHeading eyebrow="Catalogue" title="Let’s find your next book!">
-          {result.total === 1 ? "1 book" : `${result.total} books`} on our shelves.
+          {result.total === 1 ? "1 book" : `${result.total} books`}{" "}
+          {onShelfOnly ? "on the shelf right now, ready to go home." : "on our shelves."}
         </PageHeading>
 
         {/* ------------------------------------------------------------- */}
@@ -209,6 +218,23 @@ export default async function BooksPage({
               {AGE_BAND_NOTE}
             </p>
 
+            {/*
+              A book that is out cannot be asked for, so a child picking
+              something for this week's visit wants to see only what is here.
+              A plain checkbox: it rides along in the same GET as everything
+              else, and the URL it makes can be sent to a friend.
+            */}
+            <label className="flex w-fit cursor-pointer items-center gap-3 text-base font-semibold text-ink">
+              <input
+                type="checkbox"
+                name="here"
+                value="1"
+                defaultChecked={onShelfOnly}
+                className="h-6 w-6 shrink-0 accent-[var(--color-primary)]"
+              />
+              Only books on the shelf right now
+            </label>
+
             <div className="flex flex-wrap items-center gap-4">
               <button
                 type="submit"
@@ -266,7 +292,9 @@ export default async function BooksPage({
                   </ButtonLink>
                 }
               >
-                No books on this shelf for these ages — but there are plenty next door.
+                {onShelfOnly
+                  ? "Everything like that is out with other readers just now — look again after the next visit, or try another shelf."
+                  : "No books on this shelf for these ages — but there are plenty next door."}
               </EmptyState>
             ) : (
               <EmptyState illustration={<Icon name="book" />} title="Our shelves are waiting for more adventures!">

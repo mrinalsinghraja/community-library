@@ -12,6 +12,7 @@ import {
   donorAcknowledgement,
   getBookByCode,
   getBookForStaff,
+  listRelatedBooks,
   listBooksForStaff,
   removeBookCover,
   restoreBook,
@@ -500,6 +501,27 @@ describe("filtering", () => {
     await actingAs(reader.id, "MEMBER");
     const result = await browseCatalogue({ ageGroup: "AGE_5_7" });
     expect(result.items.map((book) => book.title)).toEqual(["Story One"]);
+  });
+
+  it("shows a reader only what is on the shelf, when asked", async () => {
+    await actingAs(reader.id, "MEMBER");
+
+    const everything = await browseCatalogue({});
+    const here = await browseCatalogue({ onShelfOnly: true });
+
+    expect(everything.items.map((book) => book.title).sort()).toEqual(["Comic One", "Story One"]);
+    expect(here.items.map((book) => book.title)).toEqual(["Story One"]);
+    expect(here.total).toBe(1);
+  });
+
+  it("never lets a reader's query pick a status of its own", async () => {
+    await actingAs(reader.id, "MEMBER");
+
+    // `status` is a staff filter. Handed to the reader's service it is
+    // ignored, so the public shelf cannot be asked for "only the damaged ones".
+    const result = await browseCatalogue({ status: "DAMAGED" });
+
+    expect(result.items.map((book) => book.title).sort()).toEqual(["Comic One", "Story One"]);
   });
 
   it("filters by condition, for staff", async () => {
@@ -1035,5 +1057,98 @@ describe("finding a book on the shelf", () => {
     for (const forbidden of ["borrowerName", "borrowerId", "memberCode", "loans", "copyId", "id"]) {
       expect(keys, forbidden).not.toContain(forbidden);
     }
+  });
+});
+
+describe("what to read next", () => {
+  async function titleIdOf(code: string): Promise<string> {
+    const copy = await db.bookCopy.findFirstOrThrow({ where: { copyCode: code } });
+    return copy.titleId;
+  }
+
+  it("offers other books by the same author, one card per book, not the book itself", async () => {
+    const jungle = await addBook({ title: "The Jungle Book", author: "Rudyard Kipling" });
+    await addBook({ title: "Just So Stories", author: "rudyard kipling " });
+    await addBook({ title: "Just So Stories", author: "rudyard kipling " }); // a second copy
+    await addBook({ title: "Kim", author: "Rudyard Kipling" });
+    await addBook({ title: "Matilda", author: "Roald Dahl" });
+
+    await actingAs(reader.id, "MEMBER");
+    const related = await listRelatedBooks(await titleIdOf(jungle.copyCode));
+
+    expect(related.byAuthor.map((book) => book.title).sort()).toEqual(["Just So Stories", "Kim"]);
+    expect(related.byAuthor.every((book) => book.title !== "The Jungle Book")).toBe(true);
+  });
+
+  it("never matches two books because both say Unknown", async () => {
+    const first = await addBook({ title: "Mystery One", author: "Unknown" });
+    await addBook({ title: "Mystery Two", author: "Unknown" });
+
+    await actingAs(reader.id, "MEMBER");
+    const related = await listRelatedBooks(await titleIdOf(first.copyCode));
+
+    expect(related.byAuthor).toEqual([]);
+  });
+
+  it("fills in with the same shelf and ages, without repeating the author's books", async () => {
+    const jungle = await addBook({ title: "The Jungle Book", author: "Rudyard Kipling" });
+    await addBook({ title: "Kim", author: "Rudyard Kipling" });
+    await addBook({ title: "Charlotte's Web", author: "E. B. White" });
+    await addBook({ title: "Picture Book", author: "Someone Else", ageGroup: "AGE_5_7" });
+
+    await actingAs(reader.id, "MEMBER");
+    const related = await listRelatedBooks(await titleIdOf(jungle.copyCode));
+
+    expect(related.byAuthor.map((book) => book.title)).toEqual(["Kim"]);
+    expect(related.sameShelf.map((book) => book.title)).toEqual(["Charlotte's Web"]);
+  });
+
+  it("shows a copy that is on the shelf rather than one that is out", async () => {
+    const jungle = await addBook({ title: "The Jungle Book", author: "Rudyard Kipling" });
+    const damaged = await addBook({ title: "Kim", author: "Rudyard Kipling", status: "DAMAGED" });
+    const onShelf = await addBook({ title: "Kim", author: "Rudyard Kipling" });
+
+    await actingAs(reader.id, "MEMBER");
+    const related = await listRelatedBooks(await titleIdOf(jungle.copyCode));
+
+    expect(related.byAuthor.map((book) => book.code)).toEqual([onShelf.copyCode]);
+    expect(related.byAuthor[0].code).not.toBe(damaged.copyCode);
+  });
+
+  it("leaves archived books out entirely", async () => {
+    const jungle = await addBook({ title: "The Jungle Book", author: "Rudyard Kipling" });
+    const kim = await addBook({ title: "Kim", author: "Rudyard Kipling" });
+    await actingAs(librarian.id);
+    await archiveBook(kim.copyId, "fell apart");
+
+    await actingAs(reader.id, "MEMBER");
+    const related = await listRelatedBooks(await titleIdOf(jungle.copyCode));
+
+    expect(related.byAuthor).toEqual([]);
+  });
+
+  it("is closed to a signed-out visitor whenever the shelf is", async () => {
+    const jungle = await addBook({ title: "The Jungle Book", author: "Rudyard Kipling" });
+    await addBook({ title: "Kim", author: "Rudyard Kipling" });
+    // Earlier blocks open the shelf to visitors; this one needs it closed.
+    await db.librarySettings.update({
+      where: { libraryId: fixture.libraryId },
+      data: { catalogueVisibility: "MEMBER_ONLY" },
+    });
+
+    __setSessionHandle(null);
+    await expect(listRelatedBooks(await titleIdOf(jungle.copyCode))).rejects.toMatchObject({
+      code: "NOT_AUTHENTICATED",
+    });
+  });
+
+  it("carries nothing about who gave or who borrowed", async () => {
+    const jungle = await addBook({ title: "The Jungle Book", author: "Rudyard Kipling" });
+    await addBook({ title: "Kim", author: "Rudyard Kipling", donorName: "Secret Family", donorFlat: "Z99" });
+
+    await actingAs(reader.id, "MEMBER");
+    const related = await listRelatedBooks(await titleIdOf(jungle.copyCode));
+
+    expect(JSON.stringify(related)).not.toMatch(/Secret Family|Z99/);
   });
 });
