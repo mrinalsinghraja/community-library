@@ -208,6 +208,22 @@ export default async function HomePage() {
             </div>
 
             {/*
+              The guide, from the first screen a parent sees. Every question
+              about "what do I press" was being answered one at a time; the
+              guide answers them all with a picture of each screen.
+            */}
+            <p className="mt-5">
+              <Link
+                href="/guide"
+                className="inline-flex items-center gap-2 text-lg font-bold text-primary-deep"
+              >
+                <Icon name="book" />
+                New here? See how it works, step by step
+                <Icon name="arrowRight" />
+              </Link>
+            </p>
+
+            {/*
               Three facts, not three claims. Each one is said elsewhere on the
               page in a sentence; here they are the eyebrow a parent scans
               before deciding whether to read the sentence.
@@ -326,6 +342,15 @@ export default async function HomePage() {
               </CardBody>
             ) : null}
           </Card>
+        </div>
+
+        <div className="mt-8 flex flex-wrap items-center gap-4">
+          <ButtonLink href="/guide" variant="secondary" icon={<Icon name="book" />}>
+            The step-by-step guide, with pictures
+          </ButtonLink>
+          <p className="text-base text-ink-soft">
+            Signing in, asking for a book, keeping it longer and bringing it back.
+          </p>
         </div>
       </section>
 

@@ -3550,3 +3550,54 @@ usefulness. What was found and changed, in order of severity.
 - **Two-step sign-in for staff** and **automatic encrypted backups** both need a
   production database change or an account secret. Those are the owner's
   decisions, so they are proposed, not shipped.
+
+## ADR-075 — A guide with a picture of every screen, taken from a practice library
+
+**Status:** accepted · **Date:** 2026-09-26 · **Follows:** ADR-074
+
+The owner asked for a user manual for readers, public, reachable from the
+front page, step by step with screenshots of every transaction — for children
+and for the parents helping them.
+
+### The decision
+
+`/guide` ("How to use" in the menu, a link under the front page's sign-in
+button and a button under "How our library works"). Eleven parts, 30 steps,
+from joining to giving books: signing in, forgotten password, searching,
+asking for a book, collecting, keeping longer, telling the library a book is
+coming back, the notice board, readers of the month, AI suggestions, the AI
+Librarian, stars and reviews, the card, details, password and signing out.
+
+- **Content is data** (`src/lib/reader-guide.ts`), rendered by
+  `src/app/guide/page.tsx`. Button names are quoted exactly as the screens
+  print them, so a child can match the words.
+- **No typed numbers or names.** The loan period, borrowing limit, room and
+  card-number format come from settings, like /rules and /faq.
+- **Public and data-free.** The page reads only the library's settings — no
+  session, no reader, no book.
+
+### Where the pictures come from
+
+Not the live site. A signed-in screenshot of production would put a real
+child's name, card and books on a public page. The 30 pictures in
+`public/guide/` were taken from a local copy of this software running on a
+fresh database (`library_guide`): the demo seed's nine books, eight more
+well-known titles, and "Demo Reader". The flows in them were done for real
+through the app — asked for, given out by a dev librarian, kept longer,
+announced for return, rated — so every state shown is one the software
+actually produces. The page says so at the top.
+
+They are 780 px wide (a 390 px phone at 2×), WebP at quality 78, 1.2 MB in
+total, every one `loading="lazy"`. Static files, so they cost no function time.
+
+`tests/unit/reader-guide.test.ts` fails if a picture is missing, if its stored
+size differs from what the page draws, if a file ships that the guide does not
+use, if a number from settings is typed into the copy, if the page starts
+asking for a session, or if it leaves the menu.
+
+### Re-taking the pictures
+
+When a screen changes enough that its picture misleads, re-take it the same
+way: a local database seeded as above, the app driven through Chrome at
+390 × 844, crop to the part the step is about, convert to WebP, update the
+width and height in `reader-guide.ts`. The test will say which ones disagree.

@@ -141,6 +141,12 @@ export const READER_DESTINATIONS: readonly ReaderDestination[] = [
   { href: "/my-books", label: "My books", membersOnly: true },
   { href: "/my-card", label: "My card", membersOnly: true },
   { href: "/my-reviews", label: "What I thought", membersOnly: true },
+  /*
+   * The step-by-step guide with pictures (ADR-075). Beside "How to join"
+   * because the two are read together: one says how to get a card, the other
+   * what to do with it. Public, like every door in this list without a flag.
+   */
+  { href: "/guide", label: "How to use" },
   { href: "/how-to-join", label: "How to join" },
   { href: "/rules", label: "Our rules" },
   /*
