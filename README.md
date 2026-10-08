@@ -175,6 +175,26 @@ Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | [`docs/TESTING.md`](docs/TESTING.md) | What is tested and why those things |
 | [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) | Tokens, measured contrast, component rules |
 
+## Roadmap
+
+Not built yet, and open to contributions. Each is recorded in the docs with the
+reasoning, so check there before you start.
+
+- **Barcode or QR scanning at the desk.** Shelf labels print the book number
+  ([`docs/LABELS.md`](docs/LABELS.md)); nothing reads one back yet.
+- **A screen for managing categories.** The `category.manage` permission exists,
+  but categories are still added through the seed
+  ([`docs/PHASE-2.md`](docs/PHASE-2.md)).
+- **A multilingual interface.** Everything is in English today.
+- **More ways to reach a family.** Email is the only channel; in-app
+  notifications, WhatsApp and SMS are not built, deliberately, until a second
+  channel exists to justify an abstraction
+  ([`docs/NOTIFICATIONS.md`](docs/NOTIFICATIONS.md)).
+
+Smaller starting points are tagged
+[`good first issue`](https://github.com/mrinalsinghraja/community-library/labels/good%20first%20issue).
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) to begin.
+
 ## Feedback and contributions
 
 Running a library like this for your own community, or spotted something unclear?
