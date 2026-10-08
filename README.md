@@ -35,6 +35,20 @@ than rows. See [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md
 
 ---
 
+## A look inside
+
+A reader's view on a phone, using demo data. Every screen is in the
+[reader's guide](https://library.msrx.co.in/guide).
+
+<table>
+<tr>
+<td align="center" width="25%"><img src="public/guide/01-home.webp" alt="The library home page: a welcome, the library's name and a Sign in button" width="200"><br><sub>Home</sub></td>
+<td align="center" width="25%"><img src="public/guide/08-catalogue-results.webp" alt="Catalogue results showing three books, each marked On the shelf, with a shelf number and row" width="200"><br><sub>Find a book</sub></td>
+<td align="center" width="25%"><img src="public/guide/09-book-page.webp" alt="A book page showing its shelf, age range, availability and where to find it on the shelf" width="200"><br><sub>Where it sits on the shelf</sub></td>
+<td align="center" width="25%"><img src="public/guide/23-my-card.webp" alt="A reader's library card for a demo reader, showing loan limits and borrowing rules" width="200"><br><sub>A reader's card</sub></td>
+</tr>
+</table>
+
 ## What this is
 
 - **Free.** No membership fee, no borrowing fee, no fines. There is no payment
