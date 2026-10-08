@@ -1,5 +1,9 @@
 # Community Children's Library Platform
 
+[![MIT licence](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![Live at library.msrx.co.in](https://img.shields.io/badge/live-library.msrx.co.in-2ea44f.svg)](https://library.msrx.co.in)
+[![Built with Next.js and PostgreSQL](https://img.shields.io/badge/Next.js-PostgreSQL-black.svg)](docs/ARCHITECTURE.md)
+
 A small, free library management system for a residential community's children's
 library. Built for readers aged 5 to 16, run by volunteers, and designed so
 the children themselves can eventually operate it.
@@ -46,7 +50,7 @@ than rows. See [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md
 ## Quick start
 
 ```bash
-git clone <repository-url> && cd community-library
+git clone https://github.com/mrinalsinghraja/community-library.git && cd community-library
 nvm use                 # Node 24 (see .nvmrc)
 npm install
 cp .env.example .env    # then fill in DATABASE_URL, DIRECT_URL and AUTH_SECRET
@@ -123,10 +127,20 @@ Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | [`docs/PHASE-1.md`](docs/PHASE-1.md) | Identity, registration, account lifecycle |
 | [`docs/PHASE-1.1.md`](docs/PHASE-1.1.md) | Child photographs, and consent vs guardian verification |
 | [`docs/PHASE-2.md`](docs/PHASE-2.md) | The catalogue |
+| [`docs/PHASE-3.md`](docs/PHASE-3.md) | Circulation: issue, return, renew, overdue |
+| [`docs/PHASE-4.md`](docs/PHASE-4.md) | Reminders, and a child asking to keep a book |
 | [`docs/CATALOGUE.md`](docs/CATALOGUE.md) | Every field, and what Version 1 refuses to store |
 | [`docs/MEDIA.md`](docs/MEDIA.md) | Uploads, authorization, the deletion lifecycle |
+| [`docs/CIRCULATION.md`](docs/CIRCULATION.md) | Issuing, returning and renewing: the four rules |
+| [`docs/BORROW_REQUESTS.md`](docs/BORROW_REQUESTS.md) | A child asks for a book, a librarian answers |
+| [`docs/RENEWAL_REQUESTS.md`](docs/RENEWAL_REQUESTS.md) | A child asks to keep a book, a librarian decides |
+| [`docs/NOTIFICATIONS.md`](docs/NOTIFICATIONS.md) | What the library tells a family, and when |
+| [`docs/BOOK_HELPER.md`](docs/BOOK_HELPER.md) | The AI book helper and what it costs to run safely |
+| [`docs/LABELS.md`](docs/LABELS.md) | Printing shelf labels |
+| [`docs/REPORTS.md`](docs/REPORTS.md) | Reports and exports for the desk |
 | [`docs/GUARDIAN_VERIFICATION.md`](docs/GUARDIAN_VERIFICATION.md) | What a tickbox is worth — **legal review required** |
 | [`docs/IDENTITY.md`](docs/IDENTITY.md) | Who exists, how they are told apart, roles |
+| [`docs/ROLES.md`](docs/ROLES.md) | The three roles and who may do what |
 | [`docs/AUTHENTICATION.md`](docs/AUTHENTICATION.md) | Sessions, tokens, password policy |
 | [`docs/REGISTRATION.md`](docs/REGISTRATION.md) | Join → approve → activate |
 | [`docs/CONSENT.md`](docs/CONSENT.md) | Versioned parental consent — **legal review required** |
@@ -136,14 +150,22 @@ Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md) | ADRs, with the reasoning and the alternatives |
 | [`docs/DATABASE.md`](docs/DATABASE.md) | Schema, constraints, migration workflow |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | Controls, threat notes, children's data and consent |
+| [`docs/SETUP.md`](docs/SETUP.md) | Local setup: requirements and first run |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub, Neon, Vercel, custom domain |
 | [`docs/PRODUCTION.md`](docs/PRODUCTION.md) | Going live: the order, the two settings that now refuse, the checklist |
 | [`docs/PILOT_TESTING.md`](docs/PILOT_TESTING.md) | Smoke test, the small pilot, and the child test |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | The runbook for whoever is holding the library on a Saturday |
 | [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md) | Every variable, what it does, how to generate it |
 | [`docs/SETTINGS.md`](docs/SETTINGS.md) | Every setting, its range, and what a change does not touch |
 | [`docs/PHASE-5.md`](docs/PHASE-5.md) | Administration: settings, branding, audit viewer |
 | [`docs/TESTING.md`](docs/TESTING.md) | What is tested and why those things |
 | [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) | Tokens, measured contrast, component rules |
+
+## Feedback and contributions
+
+Running a library like this for your own community, or spotted something unclear?
+[Open an issue](https://github.com/mrinalsinghraja/community-library/issues) — questions, bug reports and
+documentation fixes are all welcome. Run `npm run verify` before sending a pull request.
 
 ## Licence and ownership
 
