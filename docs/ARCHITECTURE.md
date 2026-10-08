@@ -5,6 +5,24 @@ boundaries, no microservices, no queues, no extra infrastructure.
 
 ---
 
+## At a glance
+
+```mermaid
+flowchart TD
+    B["Browser"] --> P["src/proxy.ts<br/>session cookie present? CSP nonce<br/>(a tidiness gate, not authorization)"]
+    P --> RSC["Pages: React Server Components<br/>getActor() reads the session and permissions<br/>renders only what this person may see"]
+    P --> ACT["Server actions: mutations<br/>zod parses the input"]
+    ACT --> SVC["Services: all business rules<br/>1. requirePermission()<br/>2. scope by libraryId<br/>3. write + audit row, one transaction"]
+    RSC --> SVC
+    SVC --> REPO["Repositories and src/server/lib<br/>settings, codes, email, uploads, rate limits"]
+    REPO --> DB[("PostgreSQL via Prisma")]
+```
+
+Pages and actions never reach the database directly; a lint rule keeps it that
+way. The sections below explain each step.
+
+---
+
 ## 1. Layers
 
 ```
