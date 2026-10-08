@@ -16,7 +16,7 @@ the children themselves can eventually operate it.
 
 **First deployment:** [Mana Jardin Children's Library](https://library.msrx.co.in) — live, with real readers.
 
-**This one is yours to take.** It is [MIT licensed](#licence-and-ownership): clone it, rebrand it and run it for your own community, commercial use included. It is the only MSRX project published this way — the rest are free to *use* but their source is private.
+**This one is yours to take.** It is [MIT licensed](#licence-and-ownership): clone it, [rebrand it](docs/REBRANDING.md) and run it for your own community, commercial use included. It is the only MSRX project published this way — the rest are free to *use* but their source is private.
 
 **Status:** in service. Phases 0–5 built the foundation — identity, guardian
 verification, catalogue, circulation, reminders and renewal requests, and a
@@ -165,6 +165,7 @@ Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | [`docs/DATABASE.md`](docs/DATABASE.md) | Schema, constraints, migration workflow |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | Controls, threat notes, children's data and consent |
 | [`docs/SETUP.md`](docs/SETUP.md) | Local setup: requirements and first run |
+| [`docs/REBRANDING.md`](docs/REBRANDING.md) | Making the library your own community's: name, colours, loan rules, logo |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub, Neon, Vercel, custom domain |
 | [`docs/PRODUCTION.md`](docs/PRODUCTION.md) | Going live: the order, the two settings that now refuse, the checklist |
 | [`docs/PILOT_TESTING.md`](docs/PILOT_TESTING.md) | Smoke test, the small pilot, and the child test |
