@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask a question or read the guide
+    url: https://github.com/mrinalsinghraja/community-library/blob/main/README.md#documentation
+    about: The README links to setup, deployment and operations guides. Open a blank issue if your question is not answered there.

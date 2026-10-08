@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an improvement or something new
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before you write this, please read the rules in [CONTRIBUTING.md](https://github.com/mrinalsinghraja/community-library/blob/main/CONTRIBUTING.md#rules-that-are-not-negotiable). Some things are ruled out on purpose: payments, analytics and tracking, fines, and donor rankings.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Who is affected (a child, a parent, a volunteer), and what is hard for them today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you considered instead?
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Can you help?
+      options:
+        - label: I would like to try building this myself
