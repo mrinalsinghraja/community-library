@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import type { ReviewStatus } from "@prisma/client";
+import type { ReviewStatus } from "@/server/services/review-service";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";

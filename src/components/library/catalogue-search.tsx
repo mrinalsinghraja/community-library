@@ -1,5 +1,5 @@
 import Link from "@/components/ui/app-link";
-import type { BookCategory } from "@prisma/client";
+import type { BookCategory } from "@/server/services/catalogue-service";
 
 import { Icon } from "@/components/ui/icon";
 
