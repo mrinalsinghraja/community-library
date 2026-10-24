@@ -38,22 +38,25 @@
     "@date-fns/tz": "^1.5.0",
     "@node-rs/argon2": "^2.1.0",
     "@prisma/client": "6.19.3",
-    "@vercel/blob": "^2.8.0",
+    "@vercel/blob": "^2.8.2",
     "@zxcvbn-ts/core": "^4.2.0",
     "@zxcvbn-ts/language-common": "^4.1.3",
     "date-fns": "^4.4.0",
     "next": "16.4.2",
     "next-auth": "5.0.0-beta.32",
-    "nodemailer": "^9.1.1",
+    "nodemailer": "^10.2.1",
     "pdf-lib": "^1.17.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "^0.0.1",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "overrides": {
-    "nodemailer": "^9.1.1",
-    "deepmerge-ts": "^8.0.2"
+    "nodemailer": "^10.2.1",
+    "deepmerge-ts": "^8.0.2",
+    "@vercel/cli-config": {
+      "zod": "4.6.7"
+    }
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
