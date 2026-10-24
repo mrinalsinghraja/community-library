@@ -1094,7 +1094,7 @@ model BookReview {
   title     BookTitle @relation(fields: [titleId], references: [id], onDelete: Cascade)
   member    AppUser   @relation("ReviewAuthor", fields: [memberUserId], references: [id], onDelete: Cascade)
   loan      Loan?     @relation(fields: [loanId], references: [id], onDelete: SetNull)
-  decidedBy AppUser?  @relation("ReviewDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedBy AppUser?  @relation("ReviewDecider", fields: [decidedById], references: [id], onDelete: SetNull, map: "book_review_decided_by_fkey")
 
   @@unique([memberUserId, titleId], map: "book_review_one_per_member_title")
   @@index([libraryId, titleId])
@@ -1149,8 +1149,10 @@ model Loan {
   @@index([libraryId, status, dueAt])
   @@index([memberUserId, status])
   @@index([copyId])
-  /// Partial in the migration: only announced loans are ever looked up this way.
-  @@index([libraryId, returnAnnouncedAt])
+  // loan_library_id_return_announced_at_idx on (library_id, return_announced_at)
+  // WHERE return_announced_at IS NOT NULL lives in the migration SQL only: a
+  // partial index is not expressible here, and declaring it as a plain @@index
+  // made `prisma migrate diff` report drift on every CI run.
   @@map("loan")
 }
 

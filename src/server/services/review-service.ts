@@ -2,6 +2,9 @@ import "server-only";
 
 import type { ReviewAttribution, ReviewStatus } from "@prisma/client";
 
+// Re-exported so components can name them without importing Prisma.
+export type { ReviewAttribution, ReviewStatus };
+
 import {
   NO_RATINGS,
   REVIEW_MAX_CHARS,
