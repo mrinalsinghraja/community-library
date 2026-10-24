@@ -1,6 +1,9 @@
 import "server-only";
 
 import { Prisma, type AgeGroup, type BookCategory, type CopyCondition, type CopyStatus, type DonorDisplayConsent } from "@prisma/client";
+
+// Re-exported so components can name it without importing Prisma.
+export type { BookCategory };
 import { z } from "zod";
 
 import {
