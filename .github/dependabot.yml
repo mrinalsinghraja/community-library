@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # A release has to survive three days in the wild before it is proposed, which
+    # is how a compromised publish gets caught by somebody else first.
+    cooldown:
+      default-days: 3
+    groups:
+      # Patch bumps arrive as one PR; the auto-merge workflow only touches that one.
+      patch-updates:
+        update-types: [patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
