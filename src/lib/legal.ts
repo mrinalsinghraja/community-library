@@ -269,7 +269,7 @@ export function termsDocument(context: LegalContext): LegalDocument {
         heading: "What we can and cannot promise",
         paragraphs: [
           "This is a free library run by volunteers, using software written by one person in his own time. Nothing here is sold and nothing is charged for, so there is no service anybody has bought and no guarantee that the site will be working when you want it.",
-          "The site is offered as it is. To the fullest extent the law allows, neither the library nor the person who wrote the software is liable for any indirect or consequential loss arising from using it, and where liability cannot lawfully be excluded it is limited to one thousand Indian rupees (\u20b91,000). Nothing here limits liability for death or personal injury caused by negligence, for fraud, or for anything else Indian law does not allow to be excluded.",
+          "The site is offered as it is. To the fullest extent the law allows, neither the library nor the person who wrote the software is liable for any indirect or consequential loss arising from using it. The library and the person who wrote the software accept zero liability for any loss, damage, cost or claim of any kind arising from using it, direct or indirect, and you use it entirely at your own risk. The only exceptions are those Indian law does not allow to be excluded, such as fraud.",
           "None of that changes how the library behaves. If something goes wrong with a child's record, tell a librarian and it will be put right.",
         ],
       },
