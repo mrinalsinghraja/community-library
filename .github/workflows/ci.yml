@@ -89,7 +89,20 @@ jobs:
         run: npm run lint
 
       - name: Unit tests
-        run: npm run test
+        run: npx vitest run --project unit --reporter=default --reporter=json --outputFile.json=test-results.json
+
+      # A green run must mean real tests ran. Fails if the suite shrinks below the
+      # floor (for example an emptied suite or --passWithNoTests). Raise it as tests grow.
+      - name: Test count floor
+        env:
+          MIN_TESTS: "1000"
+        run: |
+          node -e "
+            const r = require('./test-results.json');
+            const min = Number(process.env.MIN_TESTS);
+            console.log('tests run: ' + r.numTotalTests + ', passed: ' + r.numPassedTests + ', floor: ' + min);
+            if (r.numTotalTests < min || r.numPassedTests !== r.numTotalTests) process.exit(1);
+          "
 
       - name: Database tests
         run: npm run test:db
