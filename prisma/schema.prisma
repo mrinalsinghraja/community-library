@@ -416,14 +416,14 @@ model LibrarySettings {
   /// When reminders are sent, as whole days from a loan's due date.
   ///
   /// Negative is before the date and positive is after it, so the default
-  /// [-2, 0, 3, 7] means: two days before it is due, on the day, then three and
-  /// seven days after. A library that wants no nudges after the date sets
-  /// [-2, 0]; one that wants nothing at all turns `overdue_reminders_enabled`
-  /// off. Duplicates and ordering do not matter — each value is one occurrence,
-  /// claimed once per loan per due date.
+  /// [-7, -1] means: a week before it is due, then the day before. After the
+  /// due date a book still out is asked about every 7th day (7, 14, 21, …)
+  /// by rule, not by this list — see `isReminderOccurrence`. Duplicates and
+  /// ordering do not matter — each value is one occurrence, claimed once per
+  /// loan per due date.
   ///
-  /// Implemented in Phase 4. See docs/NOTIFICATIONS.md.
-  overdueReminderOffsets Int[] @default([-2, 0, 3, 7]) @map("overdue_reminder_offsets")
+  /// Implemented in Phase 4; schedule changed October 2026. See docs/NOTIFICATIONS.md.
+  overdueReminderOffsets Int[] @default([-7, -1]) @map("overdue_reminder_offsets")
 
   // Identifiers
   copyCodePrefix    String @default("LIB-B") @map("copy_code_prefix")

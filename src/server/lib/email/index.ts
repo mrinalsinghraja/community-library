@@ -5,8 +5,14 @@ import { env } from "@/server/env";
 import { getCurrentLibrary } from "@/server/lib/settings";
 import { createEmailProvider } from "@/server/lib/email/providers";
 import * as templates from "@/server/lib/email/templates";
-import { TEMPLATE_IDS } from "@/server/lib/email/templates";
-import type { EmailContext, EmailMessage, EmailProvider } from "@/server/lib/email/types";
+import { TEMPLATE_IDS, type EmailBook } from "@/server/lib/email/templates";
+import type {
+  EmailContext,
+  EmailMessage,
+  EmailProvider,
+  InlineImage,
+} from "@/server/lib/email/types";
+import { readBookCoverForEmail } from "@/server/services/media-service";
 
 /**
  * EmailService — the only thing services call.
@@ -44,6 +50,49 @@ async function context(): Promise<EmailContext & { libraryId: string }> {
   };
 }
 
+/** A book as a loan email needs it, before its cover is resolved. */
+export interface LoanEmailBook {
+  title: string;
+  copyCode: string;
+  dueOn: string;
+  coverMediaId: string | null;
+}
+
+/**
+ * Turns books into template cards plus the cover pictures that travel with
+ * the message. Covers are fetched only when the transport can carry them, and
+ * a cover that cannot be read simply leaves its card without a picture.
+ */
+async function withCovers(
+  libraryId: string,
+  books: LoanEmailBook[],
+  prefix: string,
+  images: InlineImage[],
+): Promise<EmailBook[]> {
+  const carry = provider().supportsInlineImages === true;
+  const cards: EmailBook[] = [];
+
+  for (const [index, book] of books.entries()) {
+    let coverCid: string | null = null;
+    if (carry && book.coverMediaId) {
+      const cover = await readBookCoverForEmail(book.coverMediaId, libraryId);
+      if (cover) {
+        coverCid = `${prefix}-${index}@library`;
+        const extension = cover.mimeType.split("/")[1] ?? "jpg";
+        images.push({
+          cid: coverCid,
+          filename: `cover-${index + 1}.${extension}`,
+          contentType: cover.mimeType,
+          content: cover.bytes,
+        });
+      }
+    }
+    cards.push({ title: book.title, copyCode: book.copyCode, dueOn: book.dueOn, coverCid });
+  }
+
+  return cards;
+}
+
 interface DispatchOptions {
   to: string;
   template: string;
@@ -62,6 +111,16 @@ async function dispatchWithEvent(
   libraryId: string,
   options: DispatchOptions,
 ): Promise<DispatchOutcome> {
+  /*
+   * Replies go to the librarian. An explicit EMAIL_REPLY_TO wins; otherwise the
+   * library's own contact address from settings, so a family pressing Reply
+   * reaches a person rather than an unread sending mailbox.
+   */
+  if (!message.replyTo) {
+    const replyTo = env.EMAIL_REPLY_TO || (await getCurrentLibrary()).settings.contactEmail;
+    if (replyTo) message = { ...message, replyTo };
+  }
+
   const event = await prisma.emailEvent.create({
     data: {
       libraryId,
@@ -172,7 +231,11 @@ export const EmailService = {
     memberUserId: string;
   }): Promise<boolean> {
     const ctx = await context();
+    const { settings } = await getCurrentLibrary();
     const rendered = templates.activation(ctx, {
+      borrowingPeriodDays: settings.borrowingPeriodDays,
+      maxActiveLoans: settings.maxActiveLoans,
+      venueName: settings.venueName,
       guardianName: params.guardianName,
       childName: params.childName,
       memberCode: params.memberCode,
@@ -345,21 +408,65 @@ export const EmailService = {
     subject: string;
     sentence: string;
     childName: string;
-    title: string;
-    copyCode: string;
+    books: LoanEmailBook[];
     openingNote?: string | null;
     template: typeof TEMPLATE_IDS.LOAN_DUE_SOON | typeof TEMPLATE_IDS.LOAN_OVERDUE;
+    /** The first loan in the message; every claim records the same delivery. */
     loanId: string;
   }): Promise<{ ok: boolean; eventId: string }> {
     const ctx = await context();
-    const rendered = templates.loanReminder(ctx, params);
+    const inlineImages: InlineImage[] = [];
+    const books = await withCovers(ctx.libraryId, params.books, "reminder", inlineImages);
+    const rendered = templates.loanReminder(ctx, {
+      subject: params.subject,
+      sentence: params.sentence,
+      childName: params.childName,
+      books,
+      overdue: params.template === TEMPLATE_IDS.LOAN_OVERDUE,
+      openingNote: params.openingNote,
+    });
 
     return dispatchWithEvent(
-      { to: params.to, template: params.template, ...rendered },
+      { to: params.to, template: params.template, inlineImages, ...rendered },
       ctx.libraryId,
       {
         to: params.to,
         template: params.template,
+        relatedEntityType: "loan",
+        relatedEntityId: params.loanId,
+      },
+    );
+  },
+
+  /**
+   * Thank-you when the librarian hands a book over, with its cover and the
+   * date it is due back. Lists the child's other books at home too.
+   */
+  async sendLoanIssued(params: {
+    to: string;
+    guardianName: string | null;
+    childName: string;
+    issued: LoanEmailBook[];
+    alsoOut: LoanEmailBook[];
+    loanId: string;
+  }): Promise<boolean> {
+    const ctx = await context();
+    const inlineImages: InlineImage[] = [];
+    const issued = await withCovers(ctx.libraryId, params.issued, "issued", inlineImages);
+    const alsoOut = await withCovers(ctx.libraryId, params.alsoOut, "also", inlineImages);
+    const rendered = templates.loanIssued(ctx, {
+      guardianName: params.guardianName,
+      childName: params.childName,
+      issued,
+      alsoOut,
+    });
+
+    return dispatch(
+      { to: params.to, template: TEMPLATE_IDS.LOAN_ISSUED, inlineImages, ...rendered },
+      ctx.libraryId,
+      {
+        to: params.to,
+        template: TEMPLATE_IDS.LOAN_ISSUED,
         relatedEntityType: "loan",
         relatedEntityId: params.loanId,
       },

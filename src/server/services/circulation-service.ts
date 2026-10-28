@@ -26,6 +26,7 @@ import { getActor, requireActor, requireAnyPermission, requirePermission, type A
 import { AUDIT_ACTIONS, recordAudit } from "@/server/lib/audit";
 import { ConflictError, NotFoundError, RuleViolationError, ValidationError } from "@/server/lib/errors";
 import { getCurrentLibrary } from "@/server/lib/settings";
+import { notifyLoanIssued } from "@/server/services/notification-service";
 
 /**
  * Circulation: the moment a book leaves the room in a child's bag, and the
@@ -476,7 +477,9 @@ export async function issueBook(input: {
   const { settings } = await getCurrentLibrary();
 
   try {
-    return await prisma.$transaction((tx) => issueLockedLoan(tx, actor, settings, input));
+    const loan = await prisma.$transaction((tx) => issueLockedLoan(tx, actor, settings, input));
+    await notifyLoanIssued(loan.loanId);
+    return loan;
   } catch (error) {
     // A refusal is the interesting event when a family later asks why a child
     // came home empty handed — and it is the only trace an attempted bypass of
@@ -2353,6 +2356,27 @@ export async function decideBorrowRequest(input: {
   decision: "APPROVE" | "DECLINE";
   reason?: string;
 }): Promise<{ decision: "APPROVE" | "DECLINE"; readerName: string; title: string; dueAt: Date | null }> {
+  const outcome = await decideBorrowRequestLocked(input);
+  if (outcome.loanId) await notifyLoanIssued(outcome.loanId);
+  return {
+    decision: outcome.decision,
+    readerName: outcome.readerName,
+    title: outcome.title,
+    dueAt: outcome.dueAt,
+  };
+}
+
+async function decideBorrowRequestLocked(input: {
+  requestId: string;
+  decision: "APPROVE" | "DECLINE";
+  reason?: string;
+}): Promise<{
+  decision: "APPROVE" | "DECLINE";
+  readerName: string;
+  title: string;
+  dueAt: Date | null;
+  loanId: string | null;
+}> {
   const actor = await requirePermission("loan.issue");
   const { settings } = await getCurrentLibrary();
 
@@ -2433,6 +2457,7 @@ export async function decideBorrowRequest(input: {
           readerName: request.reader_name,
           title: request.title,
           dueAt: null,
+          loanId: null,
         };
       }
 
@@ -2472,6 +2497,7 @@ export async function decideBorrowRequest(input: {
         readerName: loan.readerName,
         title: loan.title,
         dueAt: loan.dueAt,
+        loanId: loan.loanId,
       };
     });
   } catch (error) {

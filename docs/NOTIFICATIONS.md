@@ -70,6 +70,13 @@ stays on the desk's list; nobody's inbox is used to chase it.
 
 ## 3. When
 
+> **Since 28 October 2026 (ADR-076):** a week before the due date, the day
+> before, then **every 7th day after it until the book comes back**. The first
+> two are `overdue_reminder_offsets` (default `[-7, -1]`); the weekly part is
+> `isReminderOccurrence` in `src/lib/notifications.ts`, not configuration, and
+> is not capped. Books for one child due the same day share one message (each
+> keeps its own claim). The older default described below was `[-2, 0, 3, 7]`.
+
 `library_settings.overdue_reminder_offsets`, as whole days from the due date.
 Negative is before, positive is after. The default is `[-2, 0, 3, 7]`:
 

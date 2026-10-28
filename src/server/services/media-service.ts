@@ -538,6 +538,54 @@ async function coverAppearsOnDonorPage(
   return credited !== null;
 }
 
+/**
+ * A book cover's bytes for an email, with no viewer at all.
+ *
+ * An inbox cannot authenticate, so a cover in a message has to travel inside
+ * it. Only BOOK_COVER objects are readable here — a book cover is the one kind
+ * of media this library already shows to every signed-in reader, and nothing
+ * else (a child's photograph above all) may ever reach this path. The small
+ * thumbnail is preferred; an original over `EMAIL_COVER_MAX_BYTES` is left out
+ * rather than mailed to a phone on mobile data. Returns null instead of
+ * throwing: a missing cover must never stop the message.
+ */
+export const EMAIL_COVER_MAX_BYTES = 300 * 1024;
+
+export async function readBookCoverForEmail(
+  mediaId: string,
+  libraryId: string,
+): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
+  try {
+    const media = await prisma.mediaObject.findFirst({
+      where: {
+        id: mediaId,
+        libraryId,
+        purpose: UPLOAD_PURPOSES.BOOK_COVER,
+        pendingDeletionAt: null,
+      },
+      select: {
+        storageKey: true,
+        mimeType: true,
+        byteSize: true,
+        purpose: true,
+        checksumSha256: true,
+        thumbStorageKey: true,
+        thumbMimeType: true,
+        thumbByteSize: true,
+        thumbChecksumSha256: true,
+      },
+    });
+    if (!media) return null;
+
+    const read = await readBytes(media, "thumb");
+    if (read.byteSize > EMAIL_COVER_MAX_BYTES) return null;
+    return { bytes: read.bytes, mimeType: read.mimeType };
+  } catch (error) {
+    console.error(`[email] cover ${mediaId} could not be read:`, error);
+    return null;
+  }
+}
+
 async function readBytes(
   media: {
     storageKey: string;

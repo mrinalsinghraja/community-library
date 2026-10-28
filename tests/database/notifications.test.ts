@@ -96,6 +96,12 @@ async function loanDueIn(memberUserId: string, days: number) {
   const issuedAt = new Date(dueAt.getTime() - 14 * 86_400_000);
 
   await db.loan.update({ where: { id: issued.loanId }, data: { dueAt, issuedAt } });
+
+  // Issuing sends the family a thank-you (tested on its own below). This file
+  // counts reminders, so it is set aside here.
+  const reminders = mail.sent.filter((message) => message.template !== "loan_issued");
+  mail.sent.splice(0, mail.sent.length, ...reminders);
+
   return { loanId: issued.loanId, copyId: copy.id, dueAt };
 }
 

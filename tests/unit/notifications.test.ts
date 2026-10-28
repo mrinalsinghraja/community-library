@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_REMINDER_OFFSET_DAYS,
   memberMayBeReminded,
+  isReminderOccurrence,
+  joinTitles,
   normaliseReminderOffsets,
   notificationKindForOffset,
   NOTIFIABLE_MEMBER_STATUSES,
@@ -96,12 +98,12 @@ describe("who is written to", () => {
 });
 
 describe("what a reminder says", () => {
-  const base = { childName: "Aarav", title: "The Jungle Book", timezone: TZ, now: NOW };
+  const base = { childName: "Aarav", titles: ["The Jungle Book"], timezone: TZ, now: NOW };
 
   it("names the date rather than counting days late", () => {
     const late = reminderSentence({ ...base, dueAt: dueOn("2026-08-10") });
 
-    expect(late).toContain("due back on 10 August");
+    expect(late).toContain("due back on Monday 10 August");
     expect(late).toMatch(/please send it in/i);
     // The things this library decided never to say to a family.
     expect(late).not.toMatch(/\bdays? (late|overdue)\b/i);
@@ -113,10 +115,10 @@ describe("what a reminder says", () => {
 
   it("says today and tomorrow in words", () => {
     expect(reminderSentence({ ...base, dueAt: dueOn("2026-08-17") })).toContain(
-      "due back today, 17 August",
+      "due back today, Monday 17 August",
     );
     expect(reminderSentence({ ...base, dueAt: dueOn("2026-08-18") })).toContain(
-      "due back tomorrow, 18 August",
+      "due back tomorrow, Tuesday 18 August",
     );
   });
 
@@ -129,11 +131,64 @@ describe("what a reminder says", () => {
   });
 
   it("writes a subject that says which book without alarming a inbox", () => {
-    expect(reminderSubject({ childName: "Aarav", title: "Matilda", kind: "DUE_SOON" })).toBe(
-      "Aarav's library book is due soon: Matilda",
+    expect(reminderSubject({ childName: "Aarav", titles: ["Matilda"], kind: "DUE_SOON" })).toBe(
+      "Aarav's library book is due back soon: Matilda",
     );
-    expect(reminderSubject({ childName: "Aarav", title: "Matilda", kind: "OVERDUE" })).toBe(
-      "A library book to come back: Matilda",
+    expect(reminderSubject({ childName: "Aarav", titles: ["Matilda"], kind: "OVERDUE" })).toBe(
+      "Library book return is due: Matilda",
     );
+    expect(
+      reminderSubject({ childName: "Aarav", titles: ["Matilda", "Holes"], kind: "DUE_SOON" }),
+    ).toBe("Aarav's library book is due back soon: 2 books");
+  });
+
+  it("names two books borrowed together in one sentence", () => {
+    const sentence = reminderSentence({
+      ...base,
+      titles: ["Matilda", "Holes"],
+      dueAt: dueOn("2026-08-18"),
+    });
+    expect(sentence).toContain("Matilda and Holes");
+    expect(sentence).toContain("they are due back tomorrow");
+  });
+
+  it("asks a late book back without a count, a threat or a promise", () => {
+    const late = reminderSentence({ ...base, titles: ["Matilda", "Holes"], dueAt: dueOn("2026-08-03") });
+    expect(late).toContain("were due back on Monday 3 August");
+    expect(late).toContain("The return is now due");
+    expect(late).not.toMatch(/\b(overdue|fines?|fees?|penalty|charges?|owe|must)\b/i);
+  });
+});
+
+describe("the reminder schedule", () => {
+  // Owner's schedule, October 2026: 7 days before, 1 day before, then weekly.
+  const offsets = normaliseReminderOffsets([-7, -1]);
+
+  it("writes a week before and the day before, and not in between", () => {
+    expect(isReminderOccurrence(-7, offsets)).toBe(true);
+    expect(isReminderOccurrence(-1, offsets)).toBe(true);
+    for (const quiet of [-6, -5, -4, -3, -2, 0, 1, 2, 3, 6]) {
+      expect(isReminderOccurrence(quiet, offsets)).toBe(false);
+    }
+  });
+
+  it("asks once a week after the due date for as long as the book is out", () => {
+    for (const week of [7, 14, 21, 28, 91, 364]) {
+      expect(isReminderOccurrence(week, offsets)).toBe(true);
+      expect(notificationKindForOffset(week)).toBe("OVERDUE");
+    }
+    for (const between of [8, 13, 15, 20, 92]) {
+      expect(isReminderOccurrence(between, offsets)).toBe(false);
+    }
+  });
+
+  it("never treats a week before as a weekly repeat", () => {
+    expect(isReminderOccurrence(-14, offsets)).toBe(false);
+  });
+
+  it("joins titles the way a person would", () => {
+    expect(joinTitles(["A"])).toBe("A");
+    expect(joinTitles(["A", "B"])).toBe("A and B");
+    expect(joinTitles(["A", "B", "C"])).toBe("A, B and C");
   });
 });

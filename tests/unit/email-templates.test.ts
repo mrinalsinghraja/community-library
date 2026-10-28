@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import * as templates from "@/server/lib/email/templates";
@@ -26,6 +29,9 @@ const ALL = [
     memberCode: "TST-R0042",
     activationUrl: "https://library.example.org/activate/TOKENVALUE",
     expiresInDays: 7,
+    borrowingPeriodDays: 14,
+    maxActiveLoans: 2,
+    venueName: "Yoga Room",
   }),
   templates.staffInvitation(CONTEXT, {
     name: "Priya",
@@ -88,6 +94,41 @@ describe("the activation email", () => {
     memberCode: "TST-R0042",
     activationUrl: "https://library.example.org/activate/TOKENVALUE",
     expiresInDays: 7,
+    borrowingPeriodDays: 14,
+    maxActiveLoans: 2,
+    venueName: "Yoga Room",
+  });
+
+  it("welcomes the family and explains how the library works", () => {
+    expect(rendered.subject).toContain("Welcome");
+    expect(rendered.text).toContain("Sign-in ID (library card number): TST-R0042");
+    expect(rendered.text).toContain("SIGNING IN FOR THE FIRST TIME");
+    expect(rendered.text).toContain("Ask the librarian for this book");
+    expect(rendered.text).toContain("I want to return this book");
+    expect(rendered.text).toContain("up to 2 books at a time, for 14 days");
+    expect(rendered.text).toContain("the Yoga Room");
+    expect(rendered.text).toContain("https://library.example.org/guide");
+    expect(rendered.text).toContain("Happy reading!");
+  });
+
+  it("shows screenshots from static files, never from the media route", () => {
+    const images = [...rendered.html.matchAll(/<img[^>]+src="([^"]+)"/g)].map((m) => m[1]!);
+    const shots = images.filter((src) => src.includes("/email/"));
+    expect(shots.length).toBeGreaterThanOrEqual(3);
+    for (const src of images) {
+      expect(src).not.toContain("/api/media");
+      expect(src.startsWith("https://library.example.org/")).toBe(true);
+    }
+    for (const src of shots) {
+      const file = src.replace("https://library.example.org/", "public/");
+      expect(existsSync(join(process.cwd(), file)), file).toBe(true);
+    }
+  });
+
+  it("puts the set-up button before the guide", () => {
+    expect(rendered.html.indexOf("Set up the account")).toBeLessThan(
+      rendered.html.indexOf("Signing in for the first time"),
+    );
   });
 
   it("is addressed to the guardian, not to the child", () => {
@@ -218,5 +259,81 @@ describe("the library's mark on every message", () => {
       expect(rendered.text).not.toContain("library-mark");
       expect(rendered.text).not.toContain("<img");
     }
+  });
+});
+
+describe("the borrowing thank-you", () => {
+  const book = (title: string, coverCid: string | null) => ({
+    title,
+    copyCode: "TST-B0001",
+    dueOn: "Friday 14 November 2026",
+    coverCid,
+  });
+
+  const rendered = templates.loanIssued(CONTEXT, {
+    guardianName: "Asha",
+    childName: "Aarav",
+    issued: [book("Matilda", "issued-0@library")],
+    alsoOut: [book("Holes", null)],
+  });
+
+  it("thanks the family, names the book and its return date", () => {
+    expect(rendered.subject).toBe("Thank you for borrowing Matilda — due back Friday 14 November 2026");
+    expect(rendered.text).toContain("Aarav has just borrowed Matilda");
+    expect(rendered.text).toContain("please return by Friday 14 November 2026");
+    expect(rendered.text).toContain("Happy Reading!");
+  });
+
+  it("carries the cover inline and lists the other book at home", () => {
+    expect(rendered.html).toContain('src="cid:issued-0@library"');
+    expect(rendered.text).toContain("Also at home with Aarav");
+    expect(rendered.text).toContain("Holes");
+  });
+
+  it("tells the family how to reach the librarian", () => {
+    expect(rendered.text).toContain("library@example.invalid");
+  });
+
+  it("escapes a title", () => {
+    const hostile = templates.loanIssued(CONTEXT, {
+      guardianName: null,
+      childName: "Aarav",
+      issued: [book("<img src=x onerror=alert(1)>", null)],
+      alsoOut: [],
+    });
+    expect(hostile.html).not.toContain("<img src=x");
+  });
+});
+
+describe("the reminder", () => {
+  const books = [
+    { title: "Matilda", copyCode: "TST-B0001", dueOn: "Friday 14 November 2026", coverCid: "r-0@library" },
+    { title: "Holes", copyCode: "TST-B0002", dueOn: "Friday 14 November 2026", coverCid: null },
+  ];
+
+  it("lists every book in one message, with covers", () => {
+    const rendered = templates.loanReminder(CONTEXT, {
+      subject: "s",
+      sentence: "Aarav borrowed Matilda and Holes.",
+      childName: "Aarav",
+      books,
+      overdue: false,
+    });
+    expect(rendered.html).toContain('src="cid:r-0@library"');
+    expect(rendered.text).toContain("Matilda (TST-B0001)");
+    expect(rendered.text).toContain("Holes (TST-B0002)");
+  });
+
+  it("asks a late book back and points at the librarian, with no consequence", () => {
+    const rendered = templates.loanReminder(CONTEXT, {
+      subject: "s",
+      sentence: "Aarav borrowed Matilda.",
+      childName: "Aarav",
+      books: books.slice(0, 1),
+      overdue: true,
+    });
+    expect(rendered.text).toContain("If there is any problem with the book");
+    expect(rendered.text).toContain("library@example.invalid");
+    expect(rendered.text).not.toMatch(/\b(fines?|fees?|penalty|charges?|nothing to pay)\b/i);
   });
 });

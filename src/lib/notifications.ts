@@ -95,6 +95,23 @@ export function notificationKindForOffset(offsetDays: number): LoanNotificationK
  */
 export const MAX_REMINDER_OFFSET_DAYS = 90;
 
+/**
+ * After the due date, a book that has not come back is asked about once a
+ * week — on the 7th day, the 14th, the 21st, for as long as it is out. Owner's
+ * decision, October 2026: the configured offsets cover the run-up to the date
+ * (a week before, the day before), and this rule covers everything after it.
+ *
+ * Not capped at `MAX_REMINDER_OFFSET_DAYS`: that cap guards the configured
+ * list against typos, and this cadence is not configured. Each week is its own
+ * occurrence, claimed once, so a week can never be sent twice.
+ */
+export const OVERDUE_REPEAT_EVERY_DAYS = 7;
+
+export function isReminderOccurrence(offsetDays: number, offsets: readonly number[]): boolean {
+  if (offsets.includes(offsetDays)) return true;
+  return offsetDays > 0 && offsetDays % OVERDUE_REPEAT_EVERY_DAYS === 0;
+}
+
 export function normaliseReminderOffsets(offsets: readonly number[]): number[] {
   const cleaned = offsets
     .filter((value) => Number.isInteger(value) && Math.abs(value) <= MAX_REMINDER_OFFSET_DAYS)
@@ -106,6 +123,12 @@ export function normaliseReminderOffsets(offsets: readonly number[]): number[] {
 // Wording
 // ---------------------------------------------------------------------------
 
+/** "The BFG", "The BFG and Matilda", "The BFG, Matilda and Holes". */
+export function joinTitles(titles: readonly string[]): string {
+  if (titles.length <= 1) return titles[0] ?? "";
+  return `${titles.slice(0, -1).join(", ")} and ${titles.at(-1)}`;
+}
+
 /**
  * The one sentence that carries the message, written for the guardian.
  *
@@ -115,36 +138,40 @@ export function normaliseReminderOffsets(offsets: readonly number[]): number[] {
  */
 export function reminderSentence(params: {
   childName: string;
-  title: string;
+  titles: readonly string[];
   dueAt: Date;
   timezone: string;
   now?: Date;
 }): string {
-  const { childName, title, dueAt, timezone } = params;
-  const on = formatInTimezone(dueAt, timezone, "d MMMM");
+  const { childName, dueAt, timezone } = params;
+  const title = joinTitles(params.titles);
+  const plural = params.titles.length > 1;
+  const it = plural ? "they" : "it";
+  const on = formatInTimezone(dueAt, timezone, "EEEE d MMMM");
   const offset = offsetFromDueDate(dueAt, timezone, params.now ?? new Date());
 
   if (offset > 0) {
     // Names the date, not the number of days. "Six days late" is a count
     // somebody is keeping; "due back on 13 August" is a fact.
-    return `${childName} borrowed ${title} from the library, and it was due back on ${on}. Please send it in with them whenever you can.`;
+    return `${childName} borrowed ${title} from the library, and ${it} ${plural ? "were" : "was"} due back on ${on}. The return is now due — please send ${plural ? "them" : "it"} in with ${childName} whenever you can.`;
   }
   if (offset === 0) {
-    return `${childName} borrowed ${title} from the library, and it is due back today, ${on}.`;
+    return `${childName} borrowed ${title} from the library, and ${it} ${plural ? "are" : "is"} due back today, ${on}.`;
   }
   if (offset === -1) {
-    return `${childName} borrowed ${title} from the library, and it is due back tomorrow, ${on}.`;
+    return `${childName} borrowed ${title} from the library, and ${it} ${plural ? "are" : "is"} due back tomorrow, ${on}.`;
   }
-  return `${childName} borrowed ${title} from the library, and it is due back on ${on}.`;
+  return `${childName} borrowed ${title} from the library, and ${it} ${plural ? "are" : "is"} due back on ${on}.`;
 }
 
 /** Subject line. Short, specific, and never alarming in a notification list. */
 export function reminderSubject(params: {
   childName: string;
-  title: string;
+  titles: readonly string[];
   kind: LoanNotificationKind;
 }): string {
+  const title = params.titles.length > 1 ? `${params.titles.length} books` : (params.titles[0] ?? "");
   return params.kind === "OVERDUE"
-    ? `A library book to come back: ${params.title}`
-    : `${params.childName}'s library book is due soon: ${params.title}`;
+    ? `Library book return is due: ${title}`
+    : `${params.childName}'s library book is due back soon: ${title}`;
 }

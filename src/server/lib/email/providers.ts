@@ -23,6 +23,7 @@ export const MAIL_CAPTURE_DIR = ".mail";
  */
 export class CaptureEmailProvider implements EmailProvider {
   readonly name = "console";
+  readonly supportsInlineImages = true;
 
   async send(message: EmailMessage): Promise<EmailSendResult> {
     const id = `${Date.now()}-${message.template}`;
@@ -30,7 +31,11 @@ export class CaptureEmailProvider implements EmailProvider {
     try {
       await mkdir(MAIL_CAPTURE_DIR, { recursive: true });
 
-      await writeFile(join(MAIL_CAPTURE_DIR, `${id}.html`), message.html, "utf8");
+      await writeFile(
+        join(MAIL_CAPTURE_DIR, `${id}.html`),
+        inlineImagesAsDataUris(message),
+        "utf8",
+      );
       await writeFile(
         join(MAIL_CAPTURE_DIR, `${id}.json`),
         JSON.stringify(
@@ -62,6 +67,21 @@ export class CaptureEmailProvider implements EmailProvider {
 }
 
 /**
+ * A browser opening a captured `.html` file has no attachments to resolve
+ * `cid:` against, so `/dev/mail` would show a broken box where each cover is.
+ * Captured mail swaps them for data URIs; real mail never does, because Gmail
+ * strips data URIs.
+ */
+export function inlineImagesAsDataUris(message: EmailMessage): string {
+  let html = message.html;
+  for (const image of message.inlineImages ?? []) {
+    const uri = `data:${image.contentType};base64,${Buffer.from(image.content).toString("base64")}`;
+    html = html.split(`cid:${image.cid}`).join(uri);
+  }
+  return html;
+}
+
+/**
  * Whether to open the socket in TLS immediately.
  *
  * Explicit setting wins. Otherwise 465 is the implicit-TLS port and everything
@@ -76,14 +96,19 @@ export function smtpUsesImplicitTls(secure: boolean | null, port: number): boole
 /**
  * SMTP, via nodemailer. Loaded lazily so the dependency is not pulled in unused.
  *
- * Kept as the escape hatch for any relay with a hostname, but it is not the
- * transport this deployment reaches for first: a serverless function pays a TCP
- * handshake, a TLS negotiation and an AUTH round trip on every single message,
- * and it holds an outbound socket open in an environment designed to be killed
- * mid-flight. `BrevoEmailProvider` does the same job in one POST.
+ * This is the production transport since October 2026: the library writes as
+ * its own Gmail address, through Gmail's own servers (smtp.gmail.com:465 with
+ * an App Password), so the message is signed by Google and passes DMARC as
+ * the address families recognise. Sending a @gmail.com From through any other
+ * relay cannot do that. The cost is a TCP + TLS + AUTH round trip per message,
+ * which is why every step has a timeout well inside a function's lifetime.
+ *
+ * It is also the only transport that carries book covers, as inline (`cid:`)
+ * attachments.
  */
 export class SmtpEmailProvider implements EmailProvider {
   readonly name = "smtp";
+  readonly supportsInlineImages = true;
 
   async send(message: EmailMessage): Promise<EmailSendResult> {
     const { createTransport } = await import("nodemailer");
@@ -97,6 +122,9 @@ export class SmtpEmailProvider implements EmailProvider {
       port: env.SMTP_PORT,
       secure: smtpUsesImplicitTls(env.SMTP_SECURE, env.SMTP_PORT),
       auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASSWORD } : undefined,
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
 
     try {
@@ -107,6 +135,13 @@ export class SmtpEmailProvider implements EmailProvider {
         subject: message.subject,
         text: message.text,
         html: message.html,
+        attachments: (message.inlineImages ?? []).map((image) => ({
+          cid: image.cid,
+          filename: image.filename,
+          contentType: image.contentType,
+          content: Buffer.from(image.content),
+          contentDisposition: "inline" as const,
+        })),
       });
       return { ok: true, providerMessageId: info.messageId };
     } catch (error) {

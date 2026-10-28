@@ -41,13 +41,15 @@ message or a status code, never the echoed payload.
 | Template | To | Sent when |
 |---|---|---|
 | `registration_received` | guardian | a registration is submitted |
-| `activation` | guardian | a registration is approved |
+| `activation` | guardian | a registration is approved — the family's welcome, with sign-in ID, first sign-in, how to borrow and return, screenshots and links |
 | `staff_invitation` | staff member | a staff account is created |
 | `registration_rejected` | guardian | a registration is rejected |
 | `password_reset` | guardian (or staff themselves) | a reset is requested |
 | `password_changed` | guardian | the password changed |
 | `account_suspended` | guardian | an account is paused |
 | `account_reactivated` | guardian | an account is un-paused |
+| `loan_issued` | guardian | a librarian hands a book over (desk issue or approved ask) — thank-you with cover and return date |
+| `loan_due_soon` / `loan_overdue` | guardian | the reminder schedule, see NOTIFICATIONS.md |
 | `important_notification` | anyone | general-purpose |
 
 **Tone: written to the parent, never to the child.** A six-year-old is not
@@ -81,9 +83,18 @@ internet.
 
 ## 5. Production
 
-The transport is **Brevo, over its HTTP API** (`EMAIL_PROVIDER=brevo`). `smtp`
-and `resend` remain and are tested; nothing about the services above changes if
-the choice changes.
+**Since 28 October 2026 (ADR-076) the transport is the library's own Gmail over
+SMTP** — `EMAIL_PROVIDER=smtp`, `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`,
+`SMTP_USER` = the Gmail address, `SMTP_PASSWORD` = a Google **App Password**
+(Google Account → Security → 2-Step Verification → App passwords), and
+`EMAIL_FROM="Mana Jardin Children's Library <manajardinchildrenlibrary@gmail.com>"`.
+Google signs the mail, so it passes DMARC as the address families recognise,
+and replies land in the same inbox. It is also the only transport that carries
+book covers inline. Replies default to `EMAIL_REPLY_TO`, else the library's
+contact email from settings.
+
+Brevo, below, was the transport before that and remains a one-variable
+fallback (`EMAIL_PROVIDER=brevo`).
 
 Why HTTP and not a socket: every send happens inside a serverless function. An
 HTTP request either returns or does not. An SMTP send has to open a TCP

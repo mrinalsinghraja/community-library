@@ -3601,3 +3601,53 @@ When a screen changes enough that its picture misleads, re-take it the same
 way: a local database seeded as above, the app driven through Chrome at
 390 × 844, crop to the part the step is about, convert to WebP, update the
 width and height in `reader-guide.ts`. The test will say which ones disagree.
+
+---
+
+## ADR-076 — The library writes as its own Gmail, and says more to families
+
+**Date:** 28 October 2026. **Owner's request.**
+
+### What changed
+
+1. **Sender.** All mail — activation, password reset, reminders, everything —
+   now goes out as `manajardinchildrenlibrary@gmail.com`, through Gmail's own
+   SMTP servers (`EMAIL_PROVIDER=smtp`, `smtp.gmail.com:465`, a Google App
+   Password). Replies go to the same address: `EMAIL_REPLY_TO` if set,
+   otherwise `library_settings.contact_email`, which is set to it too.
+   Brevo stays wired as a fallback; switching back is one variable.
+   *Why not Brevo with a Gmail From:* a @gmail.com From sent by any other
+   server is not signed by Google, so Gmail flags or junks it — the same
+   alignment problem §5 of EMAIL.md describes. Sending through Gmail itself is
+   the only way to be that address honestly. Limit ~500 messages a day.
+2. **Welcome email.** `activation` is now the family's welcome: sign-in ID
+   (card number) in a box, the set-up button first, then first sign-in,
+   borrowing, keeping longer and returning, four screenshots, and links to
+   the guide, catalogue, My books, card, rules and questions. Screenshots are
+   JPEG copies of guide pictures in `public/email/` (WebP does not draw in
+   every mail client), versioned and `immutable` for Gmail's image proxy.
+3. **Borrowing thank-you** (`loan_issued`). Sent after a loan commits, from
+   both paths — the desk's issue and approving a child's ask — through
+   `notifyLoanIssued`, which never throws. Shows the cover, the return date,
+   any other book already at home, and "Happy Reading!".
+4. **Reminder schedule.** A week before the due date, the day before, then
+   every 7th day after it (7, 14, 21 …) until the book comes back. The first
+   two are `overdue_reminder_offsets` (default now `[-7, -1]`; migration
+   `20261028120000` moves libraries still on the old default). The weekly part
+   is code, `isReminderOccurrence`. Books for one child due the same day go in
+   one message; each loan keeps its own claim. Overdue mail asks the family to
+   contact the librarian about any problem — and still names no consequence.
+5. **Covers in mail.** A cover is behind an authorization check, so an inbox
+   cannot fetch it by URL. It travels inside the message as an inline (`cid:`)
+   attachment, read by `readBookCoverForEmail` — BOOK_COVER only, thumbnail
+   preferred, nothing over 300 KB. Only transports that declare
+   `supportsInlineImages` (SMTP, capture) carry them; the others send the card
+   without a picture rather than a broken one.
+
+### What did not change
+
+No password in any message; the only secret is a single-use link. Reminders
+are still off until a Super Admin turns them on at `/admin/settings`. The
+"nothing to pay" line in the old reminder was removed: it was a promise, and
+the library publishes none (see the consequences policy).
+

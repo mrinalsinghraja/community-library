@@ -16,6 +16,21 @@ export interface EmailMessage {
   /** Template identifier, recorded on the delivery log. */
   template: string;
   replyTo?: string;
+  /**
+   * Pictures carried inside the message and referenced from the HTML as
+   * `cid:<cid>`. Only book covers use this: a cover lives behind an
+   * authorization check, so an inbox could never fetch it by URL. Providers
+   * that cannot carry them say so with `supportsInlineImages`, and the message
+   * is then rendered without pictures rather than with broken ones.
+   */
+  inlineImages?: InlineImage[];
+}
+
+export interface InlineImage {
+  cid: string;
+  filename: string;
+  contentType: string;
+  content: Uint8Array;
 }
 
 export interface EmailSendResult {
@@ -26,6 +41,8 @@ export interface EmailSendResult {
 
 export interface EmailProvider {
   readonly name: string;
+  /** True when `EmailMessage.inlineImages` reach the recipient. */
+  readonly supportsInlineImages?: boolean;
   send(message: EmailMessage): Promise<EmailSendResult>;
 }
 

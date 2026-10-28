@@ -2,7 +2,9 @@ import "server-only";
 
 import { Prisma, type LoanNotificationKind, type UserStatus } from "@prisma/client";
 
+import { formatInTimezone } from "@/lib/dates";
 import {
+  isReminderOccurrence,
   memberMayBeReminded,
   normaliseReminderOffsets,
   notificationKindForOffset,
@@ -74,8 +76,10 @@ interface DueLoanRow {
   due_at: Date;
   child_name: string;
   member_status: UserStatus;
+  member_user_id: string;
   title: string;
   copy_code: string;
+  cover_media_id: string | null;
   guardian_email: string | null;
 }
 
@@ -99,8 +103,10 @@ async function activeLoansWithRecipients(libraryId: string): Promise<DueLoanRow[
            l.due_at        AS due_at,
            u.display_name  AS child_name,
            u.status        AS member_status,
+           u.id            AS member_user_id,
            t.title         AS title,
            c.copy_code     AS copy_code,
+           t.cover_media_id AS cover_media_id,
            (SELECT g.email
               FROM guardian_member gm
               JOIN guardian g ON g.id = gm.guardian_id
@@ -172,13 +178,25 @@ export async function sendCirculationReminders(
   const loans = await activeLoansWithRecipients(library.id);
   const result: ReminderRunResult = { ...EMPTY_RESULT, enabled: true };
 
+  /*
+   * Claimed loans are grouped into one message per child, per due date, per
+   * occurrence: two books borrowed on the same visit share a due date, and a
+   * family should get one email naming both, not two arriving a second apart.
+   * Each loan keeps its own claim, so the one-message-per-occurrence guarantee
+   * is still per loan.
+   */
+  const batches = new Map<
+    string,
+    { to: string; offset: number; kind: LoanNotificationKind; loans: { row: DueLoanRow; claimId: string }[] }
+  >();
+
   for (const loan of loans) {
     // A family that has left is not written to about a book. The desk's list
     // still shows the loan; a person deals with it.
     if (!memberMayBeReminded(loan.member_status)) continue;
 
     const offset = offsetFromDueDate(loan.due_at, settings.timezone, now);
-    if (!offsets.includes(offset)) continue;
+    if (!isReminderOccurrence(offset, offsets)) continue;
 
     result.due += 1;
 
@@ -204,35 +222,52 @@ export async function sendCirculationReminders(
       continue;
     }
 
+    const day = formatInTimezone(loan.due_at, settings.timezone, "yyyy-MM-dd");
+    const key = `${loan.guardian_email}|${loan.member_user_id}|${day}|${offset}`;
+    const batch = batches.get(key) ?? { to: loan.guardian_email, offset, kind, loans: [] };
+    batch.loans.push({ row: loan, claimId });
+    batches.set(key, batch);
+  }
+
+  for (const batch of batches.values()) {
+    const first = batch.loans[0]!.row;
+    const titles = batch.loans.map(({ row }) => row.title);
+
     const outcome = await EmailService.sendLoanReminder({
-      to: loan.guardian_email,
-      subject: reminderSubject({ childName: loan.child_name, title: loan.title, kind }),
+      to: batch.to,
+      subject: reminderSubject({ childName: first.child_name, titles, kind: batch.kind }),
       sentence: reminderSentence({
-        childName: loan.child_name,
-        title: loan.title,
-        dueAt: loan.due_at,
+        childName: first.child_name,
+        titles,
+        dueAt: first.due_at,
         timezone: settings.timezone,
         now,
       }),
-      childName: loan.child_name,
-      title: loan.title,
-      copyCode: loan.copy_code,
+      childName: first.child_name,
+      books: batch.loans.map(({ row }) => ({
+        title: row.title,
+        copyCode: row.copy_code,
+        dueOn: formatInTimezone(row.due_at, settings.timezone, "EEEE d MMMM yyyy"),
+        coverMediaId: row.cover_media_id,
+      })),
       openingNote: null,
-      template: kind === "OVERDUE" ? TEMPLATE_IDS.LOAN_OVERDUE : TEMPLATE_IDS.LOAN_DUE_SOON,
-      loanId: loan.loan_id,
+      template: batch.kind === "OVERDUE" ? TEMPLATE_IDS.LOAN_OVERDUE : TEMPLATE_IDS.LOAN_DUE_SOON,
+      loanId: first.loan_id,
     });
 
-    await prisma.loanNotification.update({
-      where: { id: claimId },
-      data: {
-        status: outcome.ok ? "SENT" : "FAILED",
-        sentAt: outcome.ok ? new Date() : null,
-        emailEventId: outcome.eventId,
-      },
-    });
+    for (const { claimId } of batch.loans) {
+      await prisma.loanNotification.update({
+        where: { id: claimId },
+        data: {
+          status: outcome.ok ? "SENT" : "FAILED",
+          sentAt: outcome.ok ? new Date() : null,
+          emailEventId: outcome.eventId,
+        },
+      });
 
-    if (outcome.ok) result.sent += 1;
-    else result.failed += 1;
+      if (outcome.ok) result.sent += 1;
+      else result.failed += 1;
+    }
   }
 
   /*
@@ -265,4 +300,81 @@ export async function sendCirculationReminders(
   }
 
   return result;
+}
+
+/**
+ * The thank-you that goes to the family when a librarian hands a book over —
+ * at the desk or by approving the child's own ask.
+ *
+ * Runs after the loan has committed and never throws: a mail server being
+ * down must not make a librarian think a book was not issued. Sent whatever
+ * the reminders switch says, because it answers something a person just did,
+ * like an activation link, rather than arriving unprompted.
+ */
+export async function notifyLoanIssued(loanId: string): Promise<boolean> {
+  try {
+    const { settings } = await getCurrentLibrary();
+
+    const [loan] = await prisma.$queryRaw<
+      {
+        member_user_id: string;
+        member_status: UserStatus;
+        child_name: string;
+        guardian_email: string | null;
+        guardian_name: string | null;
+      }[]
+    >`
+      SELECT u.id AS member_user_id,
+             u.status AS member_status,
+             u.display_name AS child_name,
+             g.email AS guardian_email,
+             g.full_name AS guardian_name
+        FROM loan l
+        JOIN app_user u ON u.id = l.member_user_id
+        LEFT JOIN LATERAL (
+          SELECT g.email, g.full_name
+            FROM guardian_member gm
+            JOIN guardian g ON g.id = gm.guardian_id
+           WHERE gm.member_user_id = u.id
+           ORDER BY gm.is_primary DESC, gm.created_at ASC
+           LIMIT 1
+        ) g ON TRUE
+       WHERE l.id = ${loanId}
+    `;
+    if (!loan?.guardian_email || !memberMayBeReminded(loan.member_status)) return false;
+
+    const books = await prisma.$queryRaw<
+      { loan_id: string; title: string; copy_code: string; cover_media_id: string | null; due_at: Date }[]
+    >`
+      SELECT l.id AS loan_id, t.title, c.copy_code, t.cover_media_id, l.due_at
+        FROM loan l
+        JOIN book_copy c ON c.id = l.copy_id
+        JOIN book_title t ON t.id = c.title_id
+       WHERE l.member_user_id = ${loan.member_user_id}
+         AND l.status = 'ACTIVE'
+       ORDER BY l.issued_at DESC
+    `;
+
+    const asBook = (row: (typeof books)[number]) => ({
+      title: row.title,
+      copyCode: row.copy_code,
+      dueOn: formatInTimezone(row.due_at, settings.timezone, "EEEE d MMMM yyyy"),
+      coverMediaId: row.cover_media_id,
+    });
+
+    const issued = books.filter((row) => row.loan_id === loanId).map(asBook);
+    if (issued.length === 0) return false;
+
+    return await EmailService.sendLoanIssued({
+      to: loan.guardian_email,
+      guardianName: loan.guardian_name,
+      childName: loan.child_name,
+      issued,
+      alsoOut: books.filter((row) => row.loan_id !== loanId).map(asBook),
+      loanId,
+    });
+  } catch (error) {
+    console.error(`[email] loan-issued message for ${loanId} failed:`, error);
+    return false;
+  }
 }

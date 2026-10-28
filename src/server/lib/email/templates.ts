@@ -100,6 +100,80 @@ function paragraph(text: string): string {
   return `<p style="margin:0 0 14px;">${escapeHtml(text)}</p>`;
 }
 
+function subheading(text: string): string {
+  return `<h2 style="margin:26px 0 10px;font-size:17px;line-height:1.35;color:#1F6F5C;">${escapeHtml(text)}</h2>`;
+}
+
+function steps(items: string[]): string {
+  const rows = items
+    .map((item) => `<li style="margin:0 0 8px;">${escapeHtml(item)}</li>`)
+    .join("");
+  return `<ol style="margin:0 0 14px;padding-left:22px;">${rows}</ol>`;
+}
+
+/**
+ * A screenshot from the reader's guide.
+ *
+ * Static JPEG copies under `/public/email/`, not the guide's WebP originals:
+ * several mail clients still cannot draw WebP. Versioned names and an
+ * `immutable` cache header, for the same Gmail-proxy reasons as the masthead.
+ * The pictures show the practice library the guide was photographed in, never
+ * a real reader.
+ */
+function screenshot(context: EmailContext, file: string, alt: string): string {
+  const src = `${escapeHtml(context.appUrl)}/email/${file}`;
+  return `<p style="margin:0 0 18px;"><img src="${src}" width="280" alt="${escapeHtml(alt)}" style="display:block;border:1px solid #E3D9C9;border-radius:12px;max-width:100%;height:auto;" /></p>`;
+}
+
+function link(href: string, label: string): string {
+  return `<a href="${escapeHtml(href)}" style="color:#1F6F5C;font-weight:700;">${escapeHtml(label)}</a>`;
+}
+
+/** One book in a loan email. `coverCid` is set only when the cover travels with the message. */
+export interface EmailBook {
+  title: string;
+  copyCode: string;
+  /** Already formatted in the library's timezone, e.g. "Friday 14 November 2026". */
+  dueOn: string;
+  coverCid: string | null;
+}
+
+/**
+ * Books as a column of cards: cover on the left, words on the right. A table,
+ * because that is the one layout every mail client draws the same way.
+ */
+function bookCards(books: EmailBook[]): string {
+  const cards = books
+    .map((book) => {
+      const cover = book.coverCid
+        ? `<img src="cid:${escapeHtml(book.coverCid)}" width="72" alt="Cover of ${escapeHtml(book.title)}" style="display:block;border:0;border-radius:6px;max-width:72px;height:auto;" />`
+        : `<div style="width:72px;height:96px;border-radius:6px;background:#E8F1EE;"></div>`;
+      return `<tr>
+      <td width="84" valign="top" style="padding:12px 12px 12px 0;">${cover}</td>
+      <td valign="top" style="padding:12px 0;">
+        <p style="margin:0 0 4px;font-weight:700;font-size:16px;">${escapeHtml(book.title)}</p>
+        <p style="margin:0 0 4px;font-size:13px;color:#5C4F42;">Book number ${escapeHtml(book.copyCode)}</p>
+        <p style="margin:0;font-size:14px;">Please return by <strong>${escapeHtml(book.dueOn)}</strong></p>
+      </td>
+    </tr>`;
+    })
+    .join("");
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0 18px;border-top:1px solid #E3D9C9;border-bottom:1px solid #E3D9C9;">${cards}</table>`;
+}
+
+function bookLines(books: EmailBook[]): string[] {
+  return books.map((book) => `  • ${book.title} (${book.copyCode}) — please return by ${book.dueOn}`);
+}
+
+function contactLine(
+  context: EmailContext,
+  lead = "If anything is wrong, or you need the book for longer",
+): string {
+  return context.contactEmail
+    ? `${lead}, just reply to this email or write to the librarian at ${context.contactEmail}.`
+    : `${lead}, just reply to this email or have a word with the librarian.`;
+}
+
 // ---------------------------------------------------------------------------
 // Templates
 // ---------------------------------------------------------------------------
@@ -116,6 +190,7 @@ export const TEMPLATE_IDS = {
   ACCOUNT_SUSPENDED: "account_suspended",
   ACCOUNT_REACTIVATED: "account_reactivated",
   IMPORTANT_NOTIFICATION: "important_notification",
+  LOAN_ISSUED: "loan_issued",
   LOAN_DUE_SOON: "loan_due_soon",
   LOAN_OVERDUE: "loan_overdue",
   DELIVERY_TEST: "delivery_test",
@@ -188,9 +263,17 @@ export function registrationReceived(
 }
 
 /**
- * The most important email in the system. If this does not arrive, a family
- * cannot join — which is why delivery is logged and a librarian can reissue
- * the link from the desk.
+ * The most important email in the system, and the family's welcome.
+ *
+ * If this does not arrive, a family cannot join — which is why delivery is
+ * logged and a librarian can reissue the link from the desk. It is also the
+ * one moment a parent is certainly reading, so it carries the whole "how this
+ * library works" in short: the sign-in ID, the first sign-in, how to ask for a
+ * book, how it comes back, and where everything else lives. The set-up button
+ * stays first, because nothing else works until it is pressed.
+ *
+ * Numbers (loan period, book limit) and the room come from settings, never
+ * from this file.
  */
 export function activation(
   context: EmailContext,
@@ -200,40 +283,113 @@ export function activation(
     memberCode: string;
     activationUrl: string;
     expiresInDays: number;
+    borrowingPeriodDays: number;
+    maxActiveLoans: number;
+    venueName: string;
   },
 ): RenderedTemplate {
-  const heading = `${params.childName}'s library account is ready`;
+  const app = context.appUrl;
+  const room = `the ${params.venueName}`;
+  const bookWord = params.maxActiveLoans === 1 ? "book" : "books";
+  const heading = `Welcome to ${context.libraryName}, ${params.childName}!`;
+
+  const firstSignIn = [
+    "Press the button below and choose a password, together with your child.",
+    `Go to ${app}/login and choose “I am a reader”.`,
+    `Type the library card number ${params.memberCode} and the password you chose.`,
+    "That is it — you are on your own page, with My books and Find a book.",
+  ];
+  const borrowing = [
+    `Find a book in the catalogue at ${app}/books and press “Ask the librarian for this book”.`,
+    `Come to ${room} at a visiting time. The librarian hands the book over, and you get an email saying when it is due back.`,
+    `A reader can have up to ${params.maxActiveLoans} ${bookWord} at a time, for ${params.borrowingPeriodDays} days.`,
+  ];
+  const returning = [
+    "Need more time? On My books, press “Ask to Keep Longer”.",
+    "Finished? Press “I want to return this book”, then bring the book back to the library room.",
+    "We send a reminder a week before a book is due, and again the day before.",
+  ];
+
   const body =
     paragraph(`Dear ${params.guardianName},`) +
     paragraph(
-      `Good news — ${params.childName} is now a member of ${context.libraryName}. Their library card number is ${params.memberCode}.`,
+      `Good news — ${params.childName} is now a member of ${context.libraryName}. Here is everything you need to get started.`,
     ) +
-    paragraph(
-      "One last step: please help them choose a password for signing in. Use the button below.",
-    ) +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 8px;background:#F3EBDD;border-radius:12px;"><tr><td style="padding:16px 18px;">
+      <p style="margin:0 0 4px;font-size:13px;color:#5C4F42;">Sign-in ID (library card number)</p>
+      <p style="margin:0;font-size:22px;font-weight:700;letter-spacing:0.04em;font-family:Menlo,Consolas,monospace;">${escapeHtml(params.memberCode)}</p>
+    </td></tr></table>` +
     button(params.activationUrl, "Set up the account") +
     paragraph(
       `This link works once and expires in ${params.expiresInDays} days. If it stops working, just ask the librarian for a fresh one.`,
     ) +
+    subheading("Signing in for the first time") +
+    steps(firstSignIn) +
+    screenshot(context, "welcome-sign-in-v1.jpg", "The sign-in page, with “I am a reader” chosen and a card number typed in.") +
     paragraph(
-      "Please choose the password together with your child, and keep it somewhere safe. Nobody at the library can see it — if it is forgotten, we send you a new link rather than telling you the old one.",
-    );
+      "Nobody at the library can see the password. If it is forgotten, press “Forgotten your password?” on the sign-in page and we will email you a link to choose a new one.",
+    ) +
+    subheading("Borrowing a book") +
+    steps(borrowing) +
+    screenshot(context, "welcome-ask-v1.jpg", "A book’s page with the “Ask the librarian for this book” button circled.") +
+    subheading("Keeping it longer, and bringing it back") +
+    steps(returning) +
+    screenshot(context, "welcome-my-books-v1.jpg", "A borrowed book on the reader’s own shelf, with the date it is due back.") +
+    screenshot(context, "welcome-return-v1.jpg", "The “I want to return this book” button.") +
+    subheading("Useful links") +
+    `<ul style="margin:0 0 14px;padding-left:22px;">
+      <li style="margin:0 0 6px;">${link(`${app}/guide`, "How to use the library")} — every screen, step by step</li>
+      <li style="margin:0 0 6px;">${link(`${app}/books`, "Find a book")} — search by title, author, shelf or age</li>
+      <li style="margin:0 0 6px;">${link(`${app}/my-books`, "My books")} — what you have, and when it is due</li>
+      <li style="margin:0 0 6px;">${link(`${app}/my-card`, "Library card")} — show it, or save a copy</li>
+      <li style="margin:0 0 6px;">${link(`${app}/rules`, "Library rules")} and ${link(`${app}/faq`, "questions")}</li>
+    </ul>` +
+    paragraph(
+      "There is more to discover once you are in: star ratings and reviews, the AI Librarian who answers questions about a book, “what to read next” suggestions, and Readers of the month.",
+    ) +
+    paragraph(
+      context.contactEmail
+        ? `Questions? Just reply to this email, or write to the librarian at ${context.contactEmail}.`
+        : "Questions? Just reply to this email, or have a word with the librarian.",
+    ) +
+    paragraph("Happy reading!");
+
+  const text = [
+    `Dear ${params.guardianName},`,
+    "",
+    `${params.childName} is now a member of ${context.libraryName}.`,
+    "",
+    `Sign-in ID (library card number): ${params.memberCode}`,
+    "",
+    "Please help them choose a password for signing in:",
+    params.activationUrl,
+    `This link works once and expires in ${params.expiresInDays} days.`,
+    "",
+    "SIGNING IN FOR THE FIRST TIME",
+    ...firstSignIn.map((line, index) => `  ${index + 1}. ${line}`),
+    "",
+    "BORROWING A BOOK",
+    ...borrowing.map((line, index) => `  ${index + 1}. ${line}`),
+    "",
+    "KEEPING IT LONGER, AND BRINGING IT BACK",
+    ...returning.map((line, index) => `  ${index + 1}. ${line}`),
+    "",
+    "USEFUL LINKS",
+    `  How to use the library: ${app}/guide`,
+    `  Find a book: ${app}/books`,
+    `  My books: ${app}/my-books`,
+    `  Library card: ${app}/my-card`,
+    `  Rules: ${app}/rules`,
+    "",
+    "Nobody at the library can see the password. If it is forgotten, we send a new link rather than telling you the old one.",
+    "",
+    "Happy reading!",
+  ].join("\n");
 
   return {
-    subject: `${params.childName}'s library account is ready`,
+    subject: `Welcome to ${context.libraryName} — ${params.childName}'s account is ready`,
     html: layout(context, heading, body),
-    text: [
-      `Dear ${params.guardianName},`,
-      "",
-      `${params.childName} is now a member of ${context.libraryName}. Their library card number is ${params.memberCode}.`,
-      "",
-      "Please help them choose a password for signing in:",
-      params.activationUrl,
-      "",
-      `This link works once and expires in ${params.expiresInDays} days.`,
-      "",
-      "Nobody at the library can see the password. If it is forgotten, we send a new link rather than telling you the old one.",
-    ].join("\n"),
+    text,
   };
 }
 
@@ -459,22 +615,87 @@ export function accountReactivated(
 }
 
 /**
+ * The librarian has just handed a book over.
+ *
+ * A thank-you, with the cover so the family can see which book came home, and
+ * the date it is due back. It lists every book the child has out, not only the
+ * new one, because "one or two books" is the normal visit and a second email
+ * ten minutes later should not leave the first book's date in a different
+ * message.
+ */
+export function loanIssued(
+  context: EmailContext,
+  params: {
+    guardianName: string | null;
+    childName: string;
+    /** The book(s) just handed over. */
+    issued: EmailBook[];
+    /** Anything else the child already has at home. */
+    alsoOut: EmailBook[];
+  },
+): RenderedTemplate {
+  const many = params.issued.length > 1;
+  const titles = params.issued.map((book) => book.title).join(" and ");
+  const heading = `Thank you for borrowing ${many ? "these books" : "this book"}!`;
+  const greeting = params.guardianName ? `Dear ${params.guardianName},` : "Hello,";
+  const opening = `${params.childName} has just borrowed ${titles} from ${context.libraryName}. Thank you, and we hope ${many ? "they are" : "it is"} a wonderful read.`;
+
+  const body =
+    paragraph(greeting) +
+    paragraph(opening) +
+    bookCards(params.issued) +
+    (params.alsoOut.length > 0
+      ? paragraph(`Also at home with ${params.childName}:`) + bookCards(params.alsoOut)
+      : "") +
+    paragraph(
+      "We will send a reminder a week before the return date, and again the day before. Need more time? Press “Ask to Keep Longer” on My books.",
+    ) +
+    `<p style="margin:0 0 14px;">See your books any time on ${link(`${context.appUrl}/my-books`, "My books")}.</p>` +
+    paragraph(contactLine(context)) +
+    `<p style="margin:18px 0 0;font-size:18px;font-weight:700;color:#1F6F5C;">Happy Reading!</p>`;
+
+  return {
+    subject: `Thank you for borrowing ${params.issued.length === 1 ? params.issued[0]!.title : `${params.issued.length} books`} — due back ${params.issued[0]!.dueOn}`,
+    html: layout(context, heading, body),
+    text: [
+      greeting,
+      "",
+      opening,
+      "",
+      ...bookLines(params.issued),
+      ...(params.alsoOut.length > 0
+        ? ["", `Also at home with ${params.childName}:`, ...bookLines(params.alsoOut)]
+        : []),
+      "",
+      "We will send a reminder a week before the return date, and again the day before.",
+      `My books: ${context.appUrl}/my-books`,
+      "",
+      contactLine(context),
+      "",
+      "Happy Reading!",
+    ].join("\n"),
+  };
+}
+
+/**
  * A book is due back soon, or was due back and has not arrived.
  *
  * One template for both, because they are the same message at different points
  * on the same timeline and splitting them would invite the second one to grow a
  * sterner voice. What changes is the sentence, which is composed in
  * `src/lib/notifications.ts` where the tone rules live and where a test can
- * read it.
+ * read it. Every book on the same date for the same child travels in one
+ * message, with its cover.
  *
  * What this message deliberately does NOT contain:
  *
- *   • any other child, any other family, any other book
+ *   • any other child, any other family
  *   • a count of days late, or any number a family could feel scored by
  *   • a consequence — this library does not threaten one, and does not
- *   • a link that does anything. There is no action to take on a screen; the
- *     book comes back to a room, not to a URL, and a reminder carrying a login
- *     link would be one more link for somebody to phish.
+ *     promise there is none either
+ *   • a link that does anything. The book comes back to a room, not to a URL,
+ *     and a reminder carrying a login link would be one more link for somebody
+ *     to phish. My books is named, not linked with a token.
  */
 export function loanReminder(
   context: EmailContext,
@@ -483,23 +704,24 @@ export function loanReminder(
     /** The whole message, already worded by `reminderSentence`. */
     sentence: string;
     childName: string;
-    title: string;
-    copyCode: string;
+    books: EmailBook[];
+    overdue: boolean;
     /** Optional, and only if the library published one. */
     openingNote?: string | null;
   },
 ): RenderedTemplate {
-  const heading = "A library book to come home";
-
-  const detail = `${params.title} (${params.copyCode})`;
-  const closing =
-    "There is nothing to pay and nothing to do online — just pop it in the bag on the next library day.";
+  const heading = params.overdue ? "A library book to come back" : "A library book due back soon";
+  const closing = params.overdue
+    ? `Please bring ${params.books.length > 1 ? "them" : "it"} to the library room on the next visiting day. ${contactLine(context, "If there is any problem with the book")}`
+    : `Please bring ${params.books.length > 1 ? "them" : "it"} to the library room by then. Need more time? Press “Ask to Keep Longer” on My books.`;
 
   const body =
     paragraph(params.sentence) +
-    paragraph(`The book is ${detail}.`) +
+    bookCards(params.books) +
     paragraph(closing) +
-    (params.openingNote ? paragraph(params.openingNote) : "");
+    (params.overdue ? "" : paragraph(contactLine(context))) +
+    (params.openingNote ? paragraph(params.openingNote) : "") +
+    paragraph("Thank you, and happy reading!");
 
   return {
     subject: params.subject,
@@ -507,10 +729,13 @@ export function loanReminder(
     text: [
       params.sentence,
       "",
-      `The book is ${detail}.`,
+      ...bookLines(params.books),
       "",
       closing,
+      ...(params.overdue ? [] : ["", contactLine(context)]),
       ...(params.openingNote ? ["", params.openingNote] : []),
+      "",
+      "Thank you, and happy reading!",
     ].join("\n"),
   };
 }
