@@ -181,7 +181,14 @@ export const EmailService = {
     registrationId: string;
   }): Promise<boolean> {
     const ctx = await context();
-    const rendered = templates.registrationReceived(ctx, params);
+    const { settings } = await getCurrentLibrary();
+    const rendered = templates.registrationReceived(ctx, {
+      guardianName: params.guardianName,
+      childName: params.childName,
+      borrowingPeriodDays: settings.borrowingPeriodDays,
+      maxActiveLoans: settings.maxActiveLoans,
+      venueName: settings.venueName,
+    });
 
     return dispatch(
       { to: params.to, template: TEMPLATE_IDS.REGISTRATION_RECEIVED, ...rendered },
@@ -562,7 +569,10 @@ export async function activeStaffEmail(to: string): Promise<string | null> {
   return staff?.email ?? null;
 }
 
-export async function sendEmailSamples(to: string): Promise<{ template: string; ok: boolean }[]> {
+export async function sendEmailSamples(
+  to: string,
+  only?: readonly string[],
+): Promise<{ template: string; ok: boolean }[]> {
   const ctx = await context();
   const { settings } = await getCurrentLibrary();
   const dead = `${ctx.appUrl}/sample-link-not-real`;
@@ -589,7 +599,13 @@ export async function sendEmailSamples(to: string): Promise<{ template: string; 
     rendered.push({ template, rendered: { ...r, inlineImages: [] } });
 
   plain(TEMPLATE_IDS.DELIVERY_TEST, templates.deliveryTest(ctx, { requestedBy: "Staff", sentAt: new Date().toISOString() }));
-  plain(TEMPLATE_IDS.REGISTRATION_RECEIVED, templates.registrationReceived(ctx, { guardianName: guardian, childName: child }));
+  plain(TEMPLATE_IDS.REGISTRATION_RECEIVED, templates.registrationReceived(ctx, {
+    guardianName: guardian,
+    childName: child,
+    borrowingPeriodDays: settings.borrowingPeriodDays,
+    maxActiveLoans: settings.maxActiveLoans,
+    venueName: settings.venueName,
+  }));
   plain(TEMPLATE_IDS.GUARDIAN_VERIFICATION, templates.guardianVerification(ctx, { guardianName: guardian, childName: child, verificationUrl: dead, expiresInHours: 72 }));
   plain(TEMPLATE_IDS.ACTIVATION, templates.activation(ctx, {
     guardianName: guardian,
@@ -641,6 +657,7 @@ export async function sendEmailSamples(to: string): Promise<{ template: string; 
 
   const results: { template: string; ok: boolean }[] = [];
   for (const { template, rendered: r } of rendered) {
+    if (only && only.length > 0 && !only.includes(template)) continue;
     const id = `sample_${template}`;
     const outcome = await dispatchWithEvent(
       { to, template: id, subject: `[Sample] ${r.subject}`, html: r.html, text: r.text, inlineImages: r.inlineImages },

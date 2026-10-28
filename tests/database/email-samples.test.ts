@@ -23,12 +23,12 @@ const mail = new FakeEmailProvider();
 let fixture: Fixture;
 const SECRET = "test-cron-secret-value";
 
-function call(to: unknown, auth = `Bearer ${SECRET}`) {
+function call(to: unknown, auth = `Bearer ${SECRET}`, only?: string[]) {
   return POST(
     new NextRequest("http://localhost/api/email-samples", {
       method: "POST",
       headers: { authorization: auth, "content-type": "application/json" },
-      body: JSON.stringify({ to }),
+      body: JSON.stringify({ to, only }),
     }),
   );
 }
@@ -85,5 +85,14 @@ describe("email samples", () => {
     expect(mail.sent.map((m) => m.template)).toEqual(
       expect.arrayContaining(["sample_activation", "sample_loan_issued", "sample_loan_overdue_weekly", "sample_loan_due_soon_7_days_before"]),
     );
+  });
+
+  it("sends only the templates asked for", async () => {
+    const staff = await createStaff(fixture.libraryId, "LIBRARIAN");
+    await call(staff.email, `Bearer ${SECRET}`, ["registration_received", "loan_issued"]);
+    expect(mail.sent.map((m) => m.template).sort()).toEqual([
+      "sample_loan_issued",
+      "sample_registration_received",
+    ]);
   });
 });

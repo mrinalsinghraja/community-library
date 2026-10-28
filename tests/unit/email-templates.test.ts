@@ -22,7 +22,13 @@ const CONTEXT: EmailContext = {
 };
 
 const ALL = [
-  templates.registrationReceived(CONTEXT, { guardianName: "Asha", childName: "Aarav" }),
+  templates.registrationReceived(CONTEXT, {
+    guardianName: "Asha",
+    childName: "Aarav",
+    borrowingPeriodDays: 14,
+    maxActiveLoans: 2,
+    venueName: "Yoga Room",
+  }),
   templates.activation(CONTEXT, {
     guardianName: "Asha",
     childName: "Aarav",
@@ -79,6 +85,9 @@ describe("every template", () => {
     const rendered = templates.registrationReceived(CONTEXT, {
       guardianName: '<script>alert("x")</script>',
       childName: "Bobby </p><img src=x onerror=alert(1)>",
+      borrowingPeriodDays: 14,
+      maxActiveLoans: 2,
+      venueName: "Yoga Room",
     });
 
     expect(rendered.html).not.toContain("<script>");
@@ -335,5 +344,43 @@ describe("the reminder", () => {
     expect(rendered.text).toContain("If there is any problem with the book");
     expect(rendered.text).toContain("library@example.invalid");
     expect(rendered.text).not.toMatch(/\b(fines?|fees?|penalty|charges?|nothing to pay)\b/i);
+  });
+});
+
+describe("the registration-received email", () => {
+  const rendered = templates.registrationReceived(CONTEXT, {
+    guardianName: "Asha",
+    childName: "Aarav",
+    borrowingPeriodDays: 14,
+    maxActiveLoans: 2,
+    venueName: "Yoga Room",
+  });
+
+  it("says what happens next, with questions and links", () => {
+    expect(rendered.subject).toContain("what happens next");
+    expect(rendered.text).toContain("WHAT HAPPENS NEXT");
+    expect(rendered.text).toContain("QUESTIONS PARENTS ASK");
+    expect(rendered.text).toContain("Up to 2 books at a time, for 14 days");
+    expect(rendered.text).toContain("the Yoga Room");
+    for (const path of ["/guide", "/faq", "/rules", "/books", "/privacy"]) {
+      expect(rendered.text).toContain(`https://library.example.org${path}`);
+    }
+  });
+
+  it("carries no link that does anything to an account", () => {
+    expect(rendered.text).not.toMatch(/\/(activate|reset|verify)\//);
+  });
+
+  it("shows screenshots that exist as static files", () => {
+    const shots = [...rendered.html.matchAll(/<img[^>]+src="([^"]+\/email\/[^"]+)"/g)].map((m) => m[1]!);
+    expect(shots.length).toBeGreaterThanOrEqual(3);
+    for (const src of shots) {
+      const file = src.replace("https://library.example.org/", "public/");
+      expect(existsSync(join(process.cwd(), file)), file).toBe(true);
+    }
+  });
+
+  it("promises nothing about lost or late books", () => {
+    expect(rendered.text).not.toMatch(/\b(fines?|fees?|penalty|charged?|nothing happens)\b/i);
   });
 });

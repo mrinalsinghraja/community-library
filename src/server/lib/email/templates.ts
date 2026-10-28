@@ -241,29 +241,127 @@ export function deliveryTest(
   };
 }
 
+/** Questions and answers, as a short list a parent can scan. */
+function faq(items: { q: string; a: string }[]): string {
+  return items
+    .map(
+      (item) =>
+        `<p style="margin:0 0 4px;font-weight:700;">${escapeHtml(item.q)}</p><p style="margin:0 0 14px;color:#3D3329;">${escapeHtml(item.a)}</p>`,
+    )
+    .join("");
+}
+
+/**
+ * The family has just sent the joining form.
+ *
+ * It answers the question every parent has at this point — "what happens
+ * now?" — so they are not left wondering: the steps from here to a first book,
+ * with pictures of the screens, the common questions, and where to read more.
+ * Nothing in it asks them to do anything yet; the next action is ours.
+ *
+ * Numbers and the room come from settings. No promise about how long approval
+ * takes, and none about what happens if a book is late or lost.
+ */
 export function registrationReceived(
   context: EmailContext,
-  params: { guardianName: string; childName: string },
+  params: {
+    guardianName: string;
+    childName: string;
+    borrowingPeriodDays: number;
+    maxActiveLoans: number;
+    venueName: string;
+  },
 ): RenderedTemplate {
-  const heading = "We have your library registration";
+  const app = context.appUrl;
+  const room = `the ${params.venueName}`;
+  const bookWord = params.maxActiveLoans === 1 ? "book" : "books";
+  const heading = "We have your library registration — here is what happens next";
+
+  const next = [
+    "A librarian reads the registration. They are volunteers, so it is usually the same day but can take a little longer at a weekend.",
+    `Once it is approved, we email you ${params.childName}'s library card number (the sign-in ID) and a link to choose a password.`,
+    `Sign in at ${app}/login with the card number and that password.`,
+    `Find a book online, press “Ask the librarian for this book”, then collect it from ${room} at a visiting time.`,
+  ];
+  const questions = [
+    {
+      q: "How many books, and for how long?",
+      a: `Up to ${params.maxActiveLoans} ${bookWord} at a time, for ${params.borrowingPeriodDays} days. The return date is always on your child's My books page, and we email a reminder a week before and the day before.`,
+    },
+    {
+      q: "What if we need longer?",
+      a: "Press “Ask to Keep Longer” on My books, or just ask the librarian.",
+    },
+    {
+      q: "Can we take a book straight off the shelf?",
+      a: "Books are handed over by the librarian, so the library always knows where each one is. Ask online first, or ask in the room.",
+    },
+    {
+      q: "How does a book come back?",
+      a: "Press “I want to return this book” on My books, then hand it to the librarian in the library room.",
+    },
+    {
+      q: "My child forgot their password.",
+      a: "Press “Forgotten your password?” on the sign-in page. The link comes to your email, never to the child. Nobody at the library can see a password.",
+    },
+    {
+      q: "What if a book is lost or damaged?",
+      a: "Tell the librarian, and tell them early.",
+    },
+  ];
+
   const body =
     paragraph(`Dear ${params.guardianName},`) +
     paragraph(
-      `Thank you for registering ${params.childName} for ${context.libraryName}. Our librarian will look at the details and get back to you shortly.`,
+      `Thank you for registering ${params.childName} for ${context.libraryName}. There is nothing you need to do right now — the next step is ours. Membership is free, and it always will be.`,
     ) +
+    subheading("What happens next") +
+    steps(next) +
+    screenshot(context, "register-steps-v1.jpg", "The joining steps: a librarian reads it, choose a password, come and borrow a book.") +
+    subheading("Have a look at the books now") +
+    `<p style="margin:0 0 14px;">You can browse the whole catalogue before the account is ready: ${link(`${app}/books`, "find a book")}.</p>` +
+    screenshot(context, "register-catalogue-v1.jpg", "Book cards in the catalogue, each showing whether it is on the shelf.") +
+    subheading("Borrowing, once you are in") +
+    screenshot(context, "welcome-ask-v1.jpg", "A book’s page with the “Ask the librarian for this book” button circled.") +
+    subheading("Questions parents ask") +
+    faq(questions) +
+    subheading("Useful links") +
+    `<ul style="margin:0 0 14px;padding-left:22px;">
+      <li style="margin:0 0 6px;">${link(`${app}/guide`, "How to use the library")} — every screen, step by step, with pictures</li>
+      <li style="margin:0 0 6px;">${link(`${app}/faq`, "All questions and answers")}</li>
+      <li style="margin:0 0 6px;">${link(`${app}/rules`, "Library rules")}</li>
+      <li style="margin:0 0 6px;">${link(`${app}/books`, "The catalogue")}</li>
+      <li style="margin:0 0 6px;">${link(`${app}/privacy`, "What we hold about your child, and why")}</li>
+    </ul>` +
     paragraph(
-      "There is nothing else you need to do right now. Membership is free, and it always will be.",
-    );
+      context.contactEmail
+        ? `Questions? Just reply to this email, or write to the librarian at ${context.contactEmail}.`
+        : "Questions? Just reply to this email, or have a word with the librarian.",
+    ) +
+    paragraph("See you in the library room soon!");
 
   return {
-    subject: `We have your registration for ${params.childName}`,
+    subject: `We have your registration for ${params.childName} — what happens next`,
     html: layout(context, heading, body),
     text: [
       `Dear ${params.guardianName},`,
       "",
-      `Thank you for registering ${params.childName} for ${context.libraryName}. Our librarian will look at the details and get back to you shortly.`,
+      `Thank you for registering ${params.childName} for ${context.libraryName}. There is nothing you need to do right now — the next step is ours. Membership is free, and it always will be.`,
       "",
-      "There is nothing else you need to do right now. Membership is free, and it always will be.",
+      "WHAT HAPPENS NEXT",
+      ...next.map((line, index) => `  ${index + 1}. ${line}`),
+      "",
+      `Browse the catalogue now: ${app}/books`,
+      "",
+      "QUESTIONS PARENTS ASK",
+      ...questions.flatMap((item) => [`  ${item.q}`, `  ${item.a}`, ""]),
+      "USEFUL LINKS",
+      `  How to use the library: ${app}/guide`,
+      `  All questions: ${app}/faq`,
+      `  Rules: ${app}/rules`,
+      `  Privacy: ${app}/privacy`,
+      "",
+      "See you in the library room soon!",
     ].join("\n"),
   };
 }

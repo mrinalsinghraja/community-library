@@ -32,8 +32,12 @@ export async function POST(request: NextRequest) {
   if (ok === null) return NextResponse.json({ error: "Not configured" }, { status: 503 });
   if (!ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const body = (await request.json().catch(() => null)) as { to?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { to?: unknown; only?: unknown } | null;
   const to = typeof body?.to === "string" ? body.to.trim() : "";
+  // Optional: just these templates, e.g. ["registration_received"].
+  const only = Array.isArray(body?.only)
+    ? body.only.filter((value): value is string => typeof value === "string")
+    : undefined;
 
   const recipient = await activeStaffEmail(to);
   if (!recipient) {
@@ -43,7 +47,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const results = await sendEmailSamples(recipient);
+  const results = await sendEmailSamples(recipient, only);
   return NextResponse.json(
     { sent: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length, results },
     { headers: { "Cache-Control": "no-store" } },
