@@ -1,6 +1,9 @@
 import "server-only";
 
-import type { EmailContext, RenderedTemplate } from "@/server/lib/email/types";
+import type { EmailContext, InlineImage, RenderedTemplate } from "@/server/lib/email/types";
+
+/** A rendered message plus the pictures that travel inside it. */
+export type RenderedTemplateWithImages = RenderedTemplate & { inlineImages: InlineImage[] };
 
 /**
  * Email templates.

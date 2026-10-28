@@ -2,6 +2,8 @@ import "server-only";
 
 import { prisma } from "@/server/db";
 import { env } from "@/server/env";
+import { formatInTimezone } from "@/lib/dates";
+import { reminderSentence, reminderSubject } from "@/lib/notifications";
 import { getCurrentLibrary } from "@/server/lib/settings";
 import { createEmailProvider } from "@/server/lib/email/providers";
 import * as templates from "@/server/lib/email/templates";
@@ -524,6 +526,124 @@ export const EmailService = {
     return { ok: false, error: event?.error ?? undefined, provider: provider().name };
   },
 };
+
+/**
+ * One copy of every email the library sends, to a member of staff, so a person
+ * can see exactly what families receive (ADR-076).
+ *
+ * Every value is made up: a sample reader, sample guardian, and links that
+ * point at `/sample-link-not-real` rather than a token — nothing in these
+ * messages can open an account. Book titles and covers are real ones from the
+ * catalogue, which every reader can already see. Subjects start "[Sample]".
+ *
+ * The caller must first resolve the recipient with `activeStaffEmail`; this
+ * function never decides who may receive samples.
+ */
+/** The address of an ACTIVE staff account in this library matching `to`, or null. */
+export async function activeStaffEmail(to: string): Promise<string | null> {
+  if (!to) return null;
+  const { library } = await getCurrentLibrary();
+  const staff = await prisma.appUser.findFirst({
+    where: {
+      libraryId: library.id,
+      kind: "STAFF",
+      status: "ACTIVE",
+      email: { equals: to, mode: "insensitive" },
+    },
+    select: { email: true },
+  });
+  return staff?.email ?? null;
+}
+
+export async function sendEmailSamples(to: string): Promise<{ template: string; ok: boolean }[]> {
+  const ctx = await context();
+  const { settings } = await getCurrentLibrary();
+  const dead = `${ctx.appUrl}/sample-link-not-real`;
+  const child = "Sample Reader";
+  const guardian = "Sample Parent";
+  const due = (days: number) =>
+    formatInTimezone(new Date(Date.now() + days * 86_400_000), settings.timezone, "EEEE d MMMM yyyy");
+
+  const titles = await prisma.bookTitle.findMany({
+    where: { libraryId: ctx.libraryId, coverMediaId: { not: null } },
+    orderBy: { createdAt: "asc" },
+    take: 2,
+    select: { title: true, coverMediaId: true, copies: { take: 1, select: { copyCode: true } } },
+  });
+  const book = (index: number, days: number): LoanEmailBook => ({
+    title: titles[index]?.title ?? `Sample book ${index + 1}`,
+    copyCode: titles[index]?.copies[0]?.copyCode ?? `SAMPLE-B000${index + 1}`,
+    dueOn: due(days),
+    coverMediaId: titles[index]?.coverMediaId ?? null,
+  });
+
+  const rendered: { template: string; rendered: templates.RenderedTemplateWithImages }[] = [];
+  const plain = (template: string, r: { subject: string; html: string; text: string }) =>
+    rendered.push({ template, rendered: { ...r, inlineImages: [] } });
+
+  plain(TEMPLATE_IDS.DELIVERY_TEST, templates.deliveryTest(ctx, { requestedBy: "Staff", sentAt: new Date().toISOString() }));
+  plain(TEMPLATE_IDS.REGISTRATION_RECEIVED, templates.registrationReceived(ctx, { guardianName: guardian, childName: child }));
+  plain(TEMPLATE_IDS.GUARDIAN_VERIFICATION, templates.guardianVerification(ctx, { guardianName: guardian, childName: child, verificationUrl: dead, expiresInHours: 72 }));
+  plain(TEMPLATE_IDS.ACTIVATION, templates.activation(ctx, {
+    guardianName: guardian,
+    childName: child,
+    memberCode: `${settings.memberCodePrefix}0000`,
+    activationUrl: dead,
+    expiresInDays: 7,
+    borrowingPeriodDays: settings.borrowingPeriodDays,
+    maxActiveLoans: settings.maxActiveLoans,
+    venueName: settings.venueName,
+  }));
+  plain(TEMPLATE_IDS.STAFF_INVITATION, templates.staffInvitation(ctx, { name: "Sample Librarian", roleName: "a Librarian", activationUrl: dead, expiresInDays: 7 }));
+  plain(TEMPLATE_IDS.REGISTRATION_REJECTED, templates.registrationRejected(ctx, { guardianName: guardian, childName: child }));
+  plain(TEMPLATE_IDS.PASSWORD_RESET, templates.passwordReset(ctx, { childName: child, resetUrl: dead, expiresInHours: 2 }));
+  plain(TEMPLATE_IDS.PASSWORD_CHANGED, templates.passwordChanged(ctx, { childName: child }));
+  plain(TEMPLATE_IDS.ACCOUNT_SUSPENDED, templates.accountSuspended(ctx, { childName: child }));
+  plain(TEMPLATE_IDS.ACCOUNT_REACTIVATED, templates.accountReactivated(ctx, { childName: child }));
+  plain(TEMPLATE_IDS.IMPORTANT_NOTIFICATION, templates.importantNotification(ctx, { heading: "Library closed on Sunday", body: "The library room is closed this Sunday. Visiting times are back to normal from Monday." }));
+
+  const withImages = async (
+    template: string,
+    prefix: string,
+    books: LoanEmailBook[],
+    make: (cards: EmailBook[]) => { subject: string; html: string; text: string },
+  ) => {
+    const inlineImages: InlineImage[] = [];
+    const cards = await withCovers(ctx.libraryId, books, prefix, inlineImages);
+    rendered.push({ template, rendered: { ...make(cards), inlineImages } });
+  };
+
+  await withImages(TEMPLATE_IDS.LOAN_ISSUED, "issued", [book(0, settings.borrowingPeriodDays), book(1, settings.borrowingPeriodDays)], (cards) =>
+    templates.loanIssued(ctx, { guardianName: guardian, childName: child, issued: cards.slice(0, 1), alsoOut: cards.slice(1) }),
+  );
+  for (const [offset, kind] of [[-7, "DUE_SOON"], [-1, "DUE_SOON"], [7, "OVERDUE"]] as const) {
+    const books = [book(0, -offset)];
+    const titlesHere = books.map((b) => b.title);
+    const dueAt = new Date(Date.now() - offset * 86_400_000);
+    const label = offset === -7 ? "_7_days_before" : offset === -1 ? "_1_day_before" : "_weekly";
+    await withImages(`${kind === "OVERDUE" ? TEMPLATE_IDS.LOAN_OVERDUE : TEMPLATE_IDS.LOAN_DUE_SOON}${label}`, `r${offset}`, books, (cards) =>
+      templates.loanReminder(ctx, {
+        subject: reminderSubject({ childName: child, titles: titlesHere, kind }),
+        sentence: reminderSentence({ childName: child, titles: titlesHere, dueAt, timezone: settings.timezone }),
+        childName: child,
+        books: cards,
+        overdue: kind === "OVERDUE",
+      }),
+    );
+  }
+
+  const results: { template: string; ok: boolean }[] = [];
+  for (const { template, rendered: r } of rendered) {
+    const id = `sample_${template}`;
+    const outcome = await dispatchWithEvent(
+      { to, template: id, subject: `[Sample] ${r.subject}`, html: r.html, text: r.text, inlineImages: r.inlineImages },
+      ctx.libraryId,
+      { to, template: id },
+    );
+    results.push({ template, ok: outcome.ok });
+  }
+  return results;
+}
 
 /** Which transport this deployment is actually using. Shown on the settings page. */
 export function activeEmailProviderName(): string {
