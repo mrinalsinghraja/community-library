@@ -4,7 +4,7 @@ import { prisma } from "@/server/db";
 import { env } from "@/server/env";
 import { formatInTimezone } from "@/lib/dates";
 import { reminderSentence, reminderSubject } from "@/lib/notifications";
-import { getCurrentLibrary } from "@/server/lib/settings";
+import { catalogueIsPubliclyVisible, getCurrentLibrary } from "@/server/lib/settings";
 import { createEmailProvider } from "@/server/lib/email/providers";
 import * as templates from "@/server/lib/email/templates";
 import { TEMPLATE_IDS, type EmailBook } from "@/server/lib/email/templates";
@@ -72,10 +72,15 @@ async function withCovers(
   images: InlineImage[],
 ): Promise<EmailBook[]> {
   const carry = provider().supportsInlineImages === true;
+  // A transport that cannot carry pictures links them instead, but only while
+  // the catalogue is public — the cover route answers on exactly that switch.
+  const link = !carry && (await catalogueIsPubliclyVisible());
+  const appUrl = env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
   const cards: EmailBook[] = [];
 
   for (const [index, book] of books.entries()) {
     let coverCid: string | null = null;
+    let coverUrl: string | null = null;
     if (carry && book.coverMediaId) {
       const cover = await readBookCoverForEmail(book.coverMediaId, libraryId);
       if (cover) {
@@ -88,8 +93,10 @@ async function withCovers(
           content: cover.bytes,
         });
       }
+    } else if (link && book.coverMediaId) {
+      coverUrl = `${appUrl}/api/email-cover/${book.coverMediaId}.webp`;
     }
-    cards.push({ title: book.title, copyCode: book.copyCode, dueOn: book.dueOn, coverCid });
+    cards.push({ title: book.title, copyCode: book.copyCode, dueOn: book.dueOn, coverCid, coverUrl });
   }
 
   return cards;

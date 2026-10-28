@@ -13,6 +13,7 @@ import {
   requestBorrow,
 } from "@/server/services/circulation-service";
 import { sendCirculationReminders } from "@/server/services/notification-service";
+import { GET as emailCover } from "@/app/api/email-cover/[file]/route";
 import { FakeEmailProvider } from "./fake-email";
 import { FakeStorageDriver } from "./fake-storage";
 import {
@@ -70,6 +71,27 @@ async function withCover(copyId: string) {
     },
   });
   await db.bookTitle.update({ where: { id: copy.titleId }, data: { coverMediaId: media.id } });
+}
+
+async function coverIdOf(copyId: string): Promise<string> {
+  const copy = await db.bookCopy.findUniqueOrThrow({
+    where: { id: copyId },
+    select: { title: { select: { coverMediaId: true } } },
+  });
+  return copy.title.coverMediaId!;
+}
+
+function fetchCover(file: string) {
+  return emailCover(new Request(`http://localhost/api/email-cover/${file}`), {
+    params: Promise.resolve({ file }),
+  });
+}
+
+async function setCatalogue(visibility: "PUBLIC" | "MEMBER_ONLY") {
+  await db.librarySettings.update({
+    where: { libraryId: fixture.libraryId },
+    data: { catalogueVisibility: visibility },
+  });
 }
 
 async function issue(memberUserId: string) {
@@ -259,5 +281,83 @@ describe("the reminder schedule", () => {
     const claims = await db.loanNotification.findMany();
     expect(claims).toHaveLength(2);
     expect(new Set(claims.map((claim) => claim.emailEventId)).size).toBe(1);
+  });
+});
+
+describe("covers when the transport cannot carry them", () => {
+  const linking = new FakeEmailProvider();
+
+  it("links the public cover URL instead, while the catalogue is public", async () => {
+    __setEmailProviderForTests(linking);
+    try {
+      await setCatalogue("PUBLIC");
+      const reader = await readerWithGuardian();
+      const copy = await createBookCopy(fixture.libraryId);
+      await withCover(copy.id);
+      await actingAs(librarian.id);
+      await issueBook({ memberUserId: reader.id, copyId: copy.id });
+
+      const sent = linking.lastTo("loan_issued")!;
+      expect(sent.inlineImages ?? []).toHaveLength(0);
+      expect(sent.html).toContain(`/api/email-cover/${await coverIdOf(copy.id)}.webp`);
+    } finally {
+      linking.reset();
+      __setEmailProviderForTests(mail);
+    }
+  });
+
+  it("leaves the picture out when the catalogue is for members only", async () => {
+    __setEmailProviderForTests(linking);
+    try {
+      await setCatalogue("MEMBER_ONLY");
+      const reader = await readerWithGuardian();
+      const copy = await createBookCopy(fixture.libraryId);
+      await withCover(copy.id);
+      await actingAs(librarian.id);
+      await issueBook({ memberUserId: reader.id, copyId: copy.id });
+
+      expect(linking.lastTo("loan_issued")!.html).not.toContain("/api/email-cover/");
+    } finally {
+      linking.reset();
+      __setEmailProviderForTests(mail);
+    }
+  });
+});
+
+describe("the email cover route", () => {
+  it("serves a book cover, publicly cacheable, while the catalogue is public", async () => {
+    await setCatalogue("PUBLIC");
+    const copy = await createBookCopy(fixture.libraryId);
+    await withCover(copy.id);
+
+    const response = await fetchCover(`${await coverIdOf(copy.id)}.webp`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toMatch(/^public/);
+    expect(response.headers.get("content-type")).toBe("image/jpeg");
+  });
+
+  it("answers nothing while the catalogue is for members only", async () => {
+    await setCatalogue("MEMBER_ONLY");
+    const copy = await createBookCopy(fixture.libraryId);
+    await withCover(copy.id);
+    expect((await fetchCover(`${await coverIdOf(copy.id)}.webp`)).status).toBe(404);
+  });
+
+  it("never serves anything that is not a book cover", async () => {
+    await setCatalogue("PUBLIC");
+    const key = "photos/child.jpg";
+    await storage.put(key, new Uint8Array([1, 2, 3]), "image/jpeg", "PRIVATE");
+    const photo = await db.mediaObject.create({
+      data: {
+        libraryId: fixture.libraryId,
+        storageKey: key,
+        mimeType: "image/jpeg",
+        byteSize: 3,
+        checksumSha256: "1".repeat(64),
+        purpose: UPLOAD_PURPOSES.CHILD_PHOTO,
+      },
+    });
+    expect((await fetchCover(`${photo.id}.webp`)).status).toBe(404);
+    expect((await fetchCover("not-an-id.webp")).status).toBe(404);
   });
 });

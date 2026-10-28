@@ -139,6 +139,8 @@ export interface EmailBook {
   /** Already formatted in the library's timezone, e.g. "Friday 14 November 2026". */
   dueOn: string;
   coverCid: string | null;
+  /** Used when the cover cannot travel inside the message: a public cover URL. */
+  coverUrl?: string | null;
 }
 
 /**
@@ -148,8 +150,9 @@ export interface EmailBook {
 function bookCards(books: EmailBook[]): string {
   const cards = books
     .map((book) => {
-      const cover = book.coverCid
-        ? `<img src="cid:${escapeHtml(book.coverCid)}" width="72" alt="Cover of ${escapeHtml(book.title)}" style="display:block;border:0;border-radius:6px;max-width:72px;height:auto;" />`
+      const src = book.coverCid ? `cid:${book.coverCid}` : (book.coverUrl ?? null);
+      const cover = src
+        ? `<img src="${escapeHtml(src)}" width="72" alt="Cover of ${escapeHtml(book.title)}" style="display:block;border:0;border-radius:6px;max-width:72px;height:auto;" />`
         : `<div style="width:72px;height:96px;border-radius:6px;background:#E8F1EE;"></div>`;
       return `<tr>
       <td width="84" valign="top" style="padding:12px 12px 12px 0;">${cover}</td>
