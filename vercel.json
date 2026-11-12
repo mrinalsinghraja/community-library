@@ -1,4 +1,5 @@
 {
+  "ignoreCommand": "git rev-parse -q --verify HEAD^ >/dev/null && ! git diff --name-only HEAD^ HEAD | grep -qvE '(^|/)(docs|e2e|tests?|__tests__|[.]github|[.]claude)/|^(README|CHANGELOG)[.]md$|^LICENSE$|[.](test|spec)[.][a-z]+$'",
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": [
     "sin1"
