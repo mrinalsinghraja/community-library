@@ -13,7 +13,7 @@ export const db = new PrismaClient();
 export async function resetDatabase(): Promise<void> {
   await db.$executeRawUnsafe(`
     TRUNCATE TABLE
-      audit_log, email_event, announcement, login_attempt,
+      usage_daily, usage_visitor, audit_log, email_event, announcement, login_attempt,
       auth_token, "session", media_object,
       renewal_request, loan_event, loan,
       donation, book_copy, book_title, book_category,

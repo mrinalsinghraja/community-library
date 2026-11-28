@@ -114,7 +114,7 @@ export const config = {
      * here would add nothing but a redirect an API caller cannot follow.
      */
     {
-      source: "/((?!api/media|api/reports|_next/static|_next/image|favicon.ico|avatars|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)",
+      source: "/((?!api/media|api/reports|api/usage|_next/static|_next/image|favicon.ico|avatars|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)",
       missing: [{ type: "header", key: "next-router-prefetch" }],
     },
   ],

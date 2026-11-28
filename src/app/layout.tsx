@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 
+import { UsageBeacon } from "@/components/usage-beacon";
 import { getBrandingSafe } from "@/server/lib/settings";
 
 import "./globals.css";
@@ -116,6 +117,7 @@ export default async function RootLayout({
           Skip to the main part of the page
         </a>
         {children}
+        <UsageBeacon />
       </body>
     </html>
   );

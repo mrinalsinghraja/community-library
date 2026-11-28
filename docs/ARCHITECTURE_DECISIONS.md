@@ -3651,3 +3651,47 @@ are still off until a Super Admin turns them on at `/admin/settings`. The
 "nothing to pay" line in the old reminder was removed: it was a promise, and
 the library publishes none (see the consequences policy).
 
+
+
+## ADR-077 — Anonymous usage counts and the /report page
+
+**Status:** accepted, 28 November 2026.
+
+### Why
+
+The library's traffic grew and the owner wanted to see which parts are used,
+from where, and how many people a day, for the last 90 days. Vercel's own
+analytics are not readable from here and say nothing about features, and a
+third-party tracker is ruled out by the privacy notice and the CSP.
+
+### What
+
+1. **Counting.** A tiny client component (`UsageBeacon`) sends the path to
+   `POST /api/usage/hit` on each page view. Only a name from `FEATURE_LABELS`
+   is ever stored: `featureForPath` looks at the first path segment, so ids,
+   card numbers and tokens in later segments never reach a table. Robots are
+   dropped; browsers sending Do Not Track or Global Privacy Control are not
+   counted.
+2. **Place.** From the host's request headers (`x-vercel-ip-country`,
+   `-country-region`, `-city`), never from the page. For India the region is the
+   state code, mapped to a name when reported.
+3. **Tables.** `usage_daily` (day, feature, place, hits) and `usage_visitor`
+   (day, scrambled device, feature, place). The scrambled device is an HMAC of
+   day + connection + browser keyed with `AUTH_SECRET`: it changes at midnight,
+   cannot be followed across days and cannot be turned back into an address.
+   No address, cookie, account or user agent is stored.
+4. **Retention.** 90 days, pruned by the daily job (`pruneOldUsage`).
+5. **/report.** One shared password in `REPORT_PASSWORD`. Unset means the page
+   is closed to everyone. The cookie is a signed expiry bound to the password,
+   so changing the password ends every session. Wrong guesses are throttled
+   (5 per 15 minutes per address). Charts are plain SVG, each with a table view
+   and CSV download. Not indexed, not linked.
+6. **Disclosure.** The privacy notice no longer says "no analytics"; it says no
+   third-party analytics and has an "Anonymous visit counts" section.
+
+### Limits
+
+Counting started when this shipped; earlier traffic cannot be recovered. City is
+from the connection's address, so mobile users may show the provider's hub. A
+user is one device on one day, not one person. Anyone can inflate a count by
+calling the endpoint; it is a gauge, not an audit.

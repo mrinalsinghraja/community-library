@@ -6,6 +6,7 @@ import { pruneExpiredSessions } from "@/server/auth/session-store";
 import { pruneOldLoginAttempts } from "@/server/lib/rate-limit";
 import { runRetentionPass, type RetentionResult } from "@/server/lib/retention";
 import { sweepPendingMedia } from "@/server/services/media-service";
+import { pruneOldUsage } from "@/server/services/usage-service";
 import {
   sendCirculationReminders,
   type ReminderRunResult,
@@ -40,6 +41,8 @@ export interface MaintenanceResult {
   mediaFailed: number;
   mediaNeedsAttention: number;
   retention: RetentionResult;
+  /** Anonymous usage counts past the 90-day window (ADR-077). */
+  usageRowsRemoved: number;
   reminders: ReminderRunResult;
 }
 
@@ -125,6 +128,14 @@ export async function runDailyMaintenance(): Promise<MaintenanceResult> {
     retention = { photosRemoved: 0, readersArchived: 0, guardiansRedacted: 0, policyUnset: true };
   }
 
+  // Anonymous usage counts keep 90 days. Isolated: the report can wait a night.
+  let usageRowsRemoved = 0;
+  try {
+    usageRowsRemoved = await pruneOldUsage();
+  } catch (error) {
+    console.error("[maintenance] usage prune failed:", error);
+  }
+
   /*
    * The media sweep is the reconciliation half of the photo lifecycle: it
    * collects uploads nobody claimed, photographs the retention pass has just
@@ -165,6 +176,7 @@ export async function runDailyMaintenance(): Promise<MaintenanceResult> {
     mediaFailed: media.failed,
     mediaNeedsAttention: media.needsAttention,
     retention,
+    usageRowsRemoved,
     reminders,
   };
 }

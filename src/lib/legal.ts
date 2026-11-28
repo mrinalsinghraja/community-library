@@ -49,7 +49,7 @@ export interface LegalDocument {
  * that follows the clock is a lie that renews itself daily, and it is the one
  * fact on a policy page a reader is entitled to rely on.
  */
-export const LEGAL_LAST_UPDATED = "26 August 2026";
+export const LEGAL_LAST_UPDATED = "28 November 2026";
 
 export interface LegalContext {
   libraryName: string;
@@ -136,8 +136,15 @@ export function privacyDocument(
           "A full date of birth. Only the year.",
           "A home address beyond the flat number, a school, or any government identifier.",
           "Any payment detail. Nothing here costs anything.",
-          "Any tracking of what a child reads on the site. There are no analytics, no advertising pixels and no third-party trackers on the pages children use.",
+          "Any tracking of what an individual child reads. Nothing on the site follows a child, or any account, from page to page. There are no third-party analytics, no advertising pixels and no third-party trackers on the pages children use.",
           "A child's password. It is stored as a one-way hash, so nobody at the library — including the administrator — can read it or tell it to anyone.",
+        ],
+      },
+      {
+        heading: "Anonymous visit counts",
+        paragraphs: [
+          "To see how much the library is used, the site keeps daily totals: how many times each part of the site was opened, and from which country, state and city the visit came, as worked out from the connection. It is used only to understand whether the library is being found and used.",
+          "These totals hold no name, no account, no cookie and no internet address. To count each device once a day, the site makes a one-way scrambled code from the day, the connection and the browser; it changes every midnight, so nobody can be followed from one day to the next, and it cannot be turned back into an address. Nothing is counted for a browser that asks not to be tracked. The totals are kept for 90 days and then removed, and they are seen only by the library's administrator behind a password.",
         ],
       },
       {

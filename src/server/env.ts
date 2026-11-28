@@ -88,6 +88,13 @@ const serverEnvSchema = z.object({
   // --- Jobs -----------------------------------------------------------------
   CRON_SECRET: z.string().optional(),
 
+  // --- Usage report ---------------------------------------------------------
+  /**
+   * The password for /report (ADR-077). Unset means the page refuses everyone,
+   * so the report can never be open by accident. Set it with `vercel env add`.
+   */
+  REPORT_PASSWORD: z.string().optional(),
+
   // --- Password hardening ---------------------------------------------------
   /**
    * Opt in to checking new passwords against the Have I Been Pwned corpus via

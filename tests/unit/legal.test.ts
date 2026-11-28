@@ -167,8 +167,10 @@ describe("the privacy notice matches what the code does", () => {
     expect(text).toMatch(/Nothing changes until the administrator approves it/i);
   });
 
-  it("claims no analytics, and none are present", () => {
-    expect(text).toMatch(/no analytics/i);
+  it("claims no third-party analytics, and none are present; the own counts are disclosed", () => {
+    expect(text).toMatch(/no third-party analytics/i);
+    expect(text).toMatch(/anonymous visit counts/i);
+    expect(text).toMatch(/kept for 90 days/i);
     const packageJson = readFileSync(join(process.cwd(), "package.json"), "utf8");
     for (const tracker of ["@vercel/analytics", "posthog", "gtag", "google-analytics", "mixpanel"]) {
       expect(packageJson).not.toContain(tracker);

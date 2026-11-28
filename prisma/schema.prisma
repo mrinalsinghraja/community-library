@@ -1675,3 +1675,40 @@ model ReaderRecommendation {
   @@index([libraryId, generatedAt])
   @@map("reader_recommendation")
 }
+
+/// Anonymous daily page-view totals, one row per day, part of the site,
+/// and coarse place. Holds no address, no cookie, no account and no device
+/// (ADR-077). Kept for 90 days, then removed by the daily job.
+model UsageDaily {
+  id        String @id @default(uuid(7))
+  libraryId String @map("library_id")
+  day       DateTime @db.Date
+  feature   String
+  /// ISO country code, or "??" when the connection did not say.
+  country   String
+  /// Region/state code as the host reports it (for India, e.g. "KA"), or "".
+  region    String
+  city      String
+  hits      Int    @default(0)
+
+  @@unique([libraryId, day, feature, country, region, city], map: "usage_daily_key")
+  @@index([libraryId, day])
+  @@map("usage_daily")
+}
+
+/// Counts each device once per day per part of the site. `visitorHash` is a
+/// keyed one-way scramble of the day, connection and browser, so it changes
+/// every midnight and cannot be followed from one day to the next.
+model UsageVisitor {
+  libraryId   String @map("library_id")
+  day         DateTime @db.Date
+  visitorHash String @map("visitor_hash")
+  feature     String
+  country     String
+  region      String
+  city        String
+
+  @@id([libraryId, day, visitorHash, feature])
+  @@index([libraryId, day])
+  @@map("usage_visitor")
+}
